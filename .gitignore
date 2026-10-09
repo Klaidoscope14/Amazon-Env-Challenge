@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.aws-sam/
+.env
+.env.local
+*.js.map
+*.d.ts.map
+.DS_Store
+.next/
+out/
+coverage/

@@ -1,0 +1,14 @@
+# SAM deploy configuration
+# Run: cd infrastructure && sam deploy --guided (first time)
+# Then: cd infrastructure && sam deploy (subsequent deploys)
+
+version = 0.1
+
+[default.deploy.parameters]
+stack_name = "breathesafe-campus"
+resolve_s3 = true
+s3_prefix = "breathesafe-campus"
+region = "ap-south-1"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+parameter_overrides = "DataMode=demo Stage=prod"

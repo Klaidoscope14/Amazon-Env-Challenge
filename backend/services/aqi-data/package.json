@@ -1,0 +1,20 @@
+{
+  "name": "@breathesafe/aqi-data",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/handler.js",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.650.0",
+    "@aws-sdk/util-dynamodb": "^3.650.0",
+    "@breathesafe/shared": "file:../../shared"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^26.6.5",
+    "typescript": "^5.5.0"
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "good": {
+    "aqi": 42,
+    "dominantPollutant": "PM2.5",
+    "pollutants": { "pm25": 28, "pm10": 45, "no2": 18, "so2": 8, "co": 0.6, "o3": 22 },
+    "source": "CPCB",
+    "stationName": "ITO, Delhi",
+    "timestamp": "DEMO_TIMESTAMP",
+    "dataMode": "demo"
+  },
+  "satisfactory": {
+    "aqi": 78,
+    "dominantPollutant": "PM2.5",
+    "pollutants": { "pm25": 55, "pm10": 82, "no2": 32, "so2": 12, "co": 1.1, "o3": 35 },
+    "source": "CPCB",
+    "stationName": "ITO, Delhi",
+    "timestamp": "DEMO_TIMESTAMP",
+    "dataMode": "demo"
+  },
+  "moderate": {
+    "aqi": 167,
+    "dominantPollutant": "PM2.5",
+    "pollutants": { "pm25": 120, "pm10": 180, "no2": 55, "so2": 22, "co": 2.3, "o3": 48 },
+    "source": "CPCB",
+    "stationName": "ITO, Delhi",
+    "timestamp": "DEMO_TIMESTAMP",
+    "dataMode": "demo"
+  },
+  "poor": {
+    "aqi": 268,
+    "dominantPollutant": "PM2.5",
+    "pollutants": { "pm25": 210, "pm10": 290, "no2": 78, "so2": 35, "co": 4.1, "o3": 55 },
+    "source": "CPCB",
+    "stationName": "ITO, Delhi",
+    "timestamp": "DEMO_TIMESTAMP",
+    "dataMode": "demo"
+  },
+  "veryPoor": {
+    "aqi": 352,
+    "dominantPollutant": "PM2.5",
+    "pollutants": { "pm25": 310, "pm10": 390, "no2": 95, "so2": 48, "co": 6.2, "o3": 62 },
+    "source": "CPCB",
+    "stationName": "ITO, Delhi",
+    "timestamp": "DEMO_TIMESTAMP",
+    "dataMode": "demo"
+  },
+  "severe": {
+    "aqi": 438,
+    "dominantPollutant": "PM2.5",
+    "pollutants": { "pm25": 420, "pm10": 480, "no2": 120, "so2": 62, "co": 8.5, "o3": 70 },
+    "source": "CPCB",
+    "stationName": "ITO, Delhi",
+    "timestamp": "DEMO_TIMESTAMP",
+    "dataMode": "demo"
+  }
+}

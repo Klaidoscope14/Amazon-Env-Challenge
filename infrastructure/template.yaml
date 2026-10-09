@@ -1,0 +1,223 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: BreatheSafe Campus - Air Quality Action Engine
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Timeout: 30
+    MemorySize: 256
+    Architectures:
+      - arm64
+    Environment:
+      Variables:
+        AQI_TABLE_NAME: !Ref AQIReadingsTable
+        ALERTS_TABLE_NAME: !Ref AlertsDecisionsTable
+        DATA_MODE: !Ref DataMode
+
+Parameters:
+  DataMode:
+    Type: String
+    Default: demo
+    AllowedValues:
+      - live
+      - demo
+    Description: Set to 'live' for real CPCB/OpenAQ data, 'demo' for labelled fixtures
+  CpcbApiKey:
+    Type: String
+    Default: 'none'
+    Description: API key for CPCB data.gov.in (set to actual key for live mode)
+  Stage:
+    Type: String
+    Default: prod
+    AllowedValues:
+      - prod
+      - dev
+
+Resources:
+
+  # ============================================
+  # API Gateway
+  # ============================================
+  BreatheSafeApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Stage
+      Cors:
+        AllowMethods: "'GET,POST,PATCH,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+      Description: BreatheSafe Campus REST API
+
+  # ============================================
+  # DynamoDB Tables
+  # ============================================
+  AQIReadingsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub breathesafe-aqi-readings-${Stage}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: TTL
+        Enabled: true
+
+  AlertsDecisionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub breathesafe-alerts-decisions-${Stage}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+
+  # ============================================
+  # Lambda Functions
+  # ============================================
+  FetchAQIFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub breathesafe-fetch-aqi-${Stage}
+      CodeUri: ../backend/
+      Handler: handler.handler
+      Description: Fetches and caches AQI data from CPCB/OpenAQ
+      Environment:
+        Variables:
+          CPCB_API_KEY: !Ref CpcbApiKey
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AQIReadingsTable
+      Events:
+        GetAQI:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/aqi/current
+            Method: GET
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        EntryPoints:
+          - services/aqi-data/src/handler.ts
+        External:
+          - '@aws-sdk/*'
+        Loader:
+          - .json=json
+
+  GetRecommendationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub breathesafe-recommendation-${Stage}
+      CodeUri: ../backend/
+      Handler: handler.handler
+      Description: Evaluates AQI data against CPCB rules and returns recommendations
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref AQIReadingsTable
+      Events:
+        GetRecommendation:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/recommendations/current
+            Method: GET
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        EntryPoints:
+          - services/recommendation/src/handler.ts
+        External:
+          - '@aws-sdk/*'
+
+  AlertsCRUDFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub breathesafe-alerts-${Stage}
+      CodeUri: ../backend/
+      Handler: handler.handler
+      Description: Alert creation, decision recording, and history
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AlertsDecisionsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref AQIReadingsTable
+      Events:
+        CreateAlert:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/alerts
+            Method: POST
+        GetAlerts:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/alerts
+            Method: GET
+        RecordDecision:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/alerts/{alertId}/decision
+            Method: PATCH
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        EntryPoints:
+          - services/alerts/src/handler.ts
+        External:
+          - '@aws-sdk/*'
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${BreatheSafeApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}
+  AQIEndpoint:
+    Description: AQI data endpoint
+    Value: !Sub https://${BreatheSafeApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/api/v1/aqi/current
+  RecommendationEndpoint:
+    Description: Recommendation endpoint
+    Value: !Sub https://${BreatheSafeApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/api/v1/recommendations/current
+  AlertsEndpoint:
+    Description: Alerts endpoint
+    Value: !Sub https://${BreatheSafeApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/api/v1/alerts
+  AQITableName:
+    Description: DynamoDB AQI readings table
+    Value: !Ref AQIReadingsTable
+  AlertsTableName:
+    Description: DynamoDB alerts/decisions table
+    Value: !Ref AlertsDecisionsTable
