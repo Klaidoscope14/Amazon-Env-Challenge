@@ -3,17 +3,22 @@ import { AQIReading } from "../../../../shared/src/types.js";
 const OPENAQ_API_URL = "https://api.openaq.org/v2/latest";
 
 export async function fetchFromOpenAQ(
-  campus: string
+  campus: string,
+  apiKey?: string,
+  city: string = "Delhi"
 ): Promise<AQIReading | null> {
   try {
     const url = new URL(OPENAQ_API_URL);
-    url.searchParams.set("city", "Delhi");
+    url.searchParams.set("city", city);
     url.searchParams.set("country", "IN");
     url.searchParams.set("limit", "5");
     url.searchParams.set("parameter", "pm25");
 
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (apiKey) headers["X-API-Key"] = apiKey;
+
     const response = await fetch(url.toString(), {
-      headers: { Accept: "application/json" },
+      headers,
       signal: AbortSignal.timeout(10000),
     });
 
@@ -34,7 +39,7 @@ export async function fetchFromOpenAQ(
     };
 
     if (!data.results || data.results.length === 0) {
-      console.warn("OpenAQ returned no results for Delhi");
+      console.warn(`OpenAQ returned no results for ${city}`);
       return null;
     }
 

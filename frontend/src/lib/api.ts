@@ -1,4 +1,4 @@
-import { AQIReading, Recommendation, Alert } from "./types";
+import { AQIReading, Recommendation, Alert, TrendResponse } from "./types";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -23,10 +23,12 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
 
 export async function getAQI(
   campus: string,
-  scenario?: string
+  scenario?: string,
+  city?: string
 ): Promise<AQIReading> {
   const params = new URLSearchParams({ campus });
   if (scenario) params.set("scenario", scenario);
+  if (city) params.set("city", city);
   return fetchApi<AQIReading>(`/api/v1/aqi/current?${params}`);
 }
 
@@ -70,4 +72,52 @@ export async function recordDecision(
       body: JSON.stringify({ decision }),
     }
   );
+}
+
+export async function getTrends(
+  campus: string,
+  hours: number = 24
+): Promise<TrendResponse> {
+  return fetchApi<TrendResponse>(
+    `/api/v1/trends?campus=${campus}&hours=${hours}`
+  );
+}
+
+export async function authSignUp(data: {
+  email: string;
+  password: string;
+  name: string;
+  institution?: string;
+  role?: string;
+}): Promise<{ message: string; email: string }> {
+  return fetchApi("/api/v1/auth/signup", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function authConfirm(data: {
+  email: string;
+  code: string;
+}): Promise<{ message: string }> {
+  return fetchApi("/api/v1/auth/confirm", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function authSignIn(data: {
+  email: string;
+  password: string;
+}): Promise<{
+  message: string;
+  accessToken: string;
+  idToken: string;
+  refreshToken: string;
+  expiresIn: number;
+}> {
+  return fetchApi("/api/v1/auth/signin", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }

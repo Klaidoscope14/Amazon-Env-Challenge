@@ -27,6 +27,17 @@ Parameters:
     Type: String
     Default: 'none'
     Description: API key for CPCB data.gov.in (set to actual key for live mode)
+  OpenAqApiKey:
+    Type: String
+    Default: 'none'
+    Description: API key for OpenAQ (fallback data source)
+  BedrockEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Enable Amazon Bedrock AI narratives in recommendations
   Stage:
     Type: String
     Default: prod
@@ -35,6 +46,54 @@ Parameters:
       - dev
 
 Resources:
+
+  # ============================================
+  # Cognito User Pool
+  # ============================================
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub breathesafe-users-${Stage}
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: false
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+      Schema:
+        - Name: name
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+        - Name: institution
+          AttributeDataType: String
+          Mutable: true
+        - Name: role
+          AttributeDataType: String
+          Mutable: true
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub breathesafe-web-${Stage}
+      UserPoolId: !Ref UserPool
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      AccessTokenValidity: 1
+      IdTokenValidity: 1
+      RefreshTokenValidity: 30
+      TokenValidityUnits:
+        AccessToken: hours
+        IdToken: hours
+        RefreshToken: days
 
   # ============================================
   # API Gateway
@@ -100,6 +159,7 @@ Resources:
       Environment:
         Variables:
           CPCB_API_KEY: !Ref CpcbApiKey
+          OPENAQ_API_KEY: !Ref OpenAqApiKey
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref AQIReadingsTable
@@ -132,10 +192,19 @@ Resources:
       FunctionName: !Sub breathesafe-recommendation-${Stage}
       CodeUri: ../backend/
       Handler: handler.handler
-      Description: Evaluates AQI data against CPCB rules and returns recommendations
+      Timeout: 60
+      Description: Evaluates AQI data against CPCB rules and returns AI-enhanced recommendations
+      Environment:
+        Variables:
+          BEDROCK_ENABLED: !Ref BedrockEnabled
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref AQIReadingsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0
       Events:
         GetRecommendation:
           Type: Api
@@ -202,6 +271,130 @@ Resources:
         External:
           - '@aws-sdk/*'
 
+  # ============================================
+  # Trends & Scheduled Fetching
+  # ============================================
+  TrendsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub breathesafe-trends-${Stage}
+      CodeUri: ../backend/
+      Handler: handler.handler
+      Description: Returns historical AQI trend data from DynamoDB
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref AQIReadingsTable
+      Events:
+        GetTrends:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/trends
+            Method: GET
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        EntryPoints:
+          - services/trends/src/handler.ts
+        External:
+          - '@aws-sdk/*'
+
+  ScheduledFetchRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub breathesafe-fetch-schedule-${Stage}
+      Description: Fetch AQI data every 15 minutes to keep cache warm
+      ScheduleExpression: rate(15 minutes)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt FetchAQIFunction.Arn
+          Id: ScheduledAQIFetch
+          Input: |
+            {
+              "httpMethod": "GET",
+              "path": "/api/v1/aqi/current",
+              "queryStringParameters": { "campus": "delhi", "city": "Delhi" },
+              "headers": {},
+              "body": null
+            }
+
+  ScheduledFetchPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref FetchAQIFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ScheduledFetchRule.Arn
+
+  AuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub breathesafe-auth-${Stage}
+      CodeUri: ../backend/
+      Handler: handler.handler
+      Description: Authentication - signup, signin, user profile
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPool
+          USER_POOL_CLIENT_ID: !Ref UserPoolClient
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminUpdateUserAttributes
+              Resource: !GetAtt UserPool.Arn
+      Events:
+        SignUp:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/auth/signup
+            Method: POST
+        ConfirmSignUp:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/auth/confirm
+            Method: POST
+        SignIn:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/auth/signin
+            Method: POST
+        RefreshToken:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/auth/refresh
+            Method: POST
+        GetProfile:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/auth/profile
+            Method: GET
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        EntryPoints:
+          - services/auth/src/handler.ts
+        External:
+          - '@aws-sdk/*'
+
 Outputs:
   ApiUrl:
     Description: API Gateway endpoint URL
@@ -215,6 +408,15 @@ Outputs:
   AlertsEndpoint:
     Description: Alerts endpoint
     Value: !Sub https://${BreatheSafeApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/api/v1/alerts
+  TrendsEndpoint:
+    Description: AQI trends endpoint
+    Value: !Sub https://${BreatheSafeApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/api/v1/trends
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref UserPool
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref UserPoolClient
   AQITableName:
     Description: DynamoDB AQI readings table
     Value: !Ref AQIReadingsTable

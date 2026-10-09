@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { getAlerts, recordDecision } from "@/lib/api";
-import { DEFAULT_CAMPUS, DECISION_OPTIONS } from "@/lib/constants";
+import { DECISION_OPTIONS } from "@/lib/constants";
+import { useLocation } from "@/lib/useLocation";
+import { useAuth } from "@/lib/auth";
 import StatusBadge from "@/components/StatusBadge";
 import DataBadge from "@/components/DataBadge";
 
@@ -28,10 +31,13 @@ function DecisionRecorder({
   const [showForm, setShowForm] = useState(false);
   const [customDecision, setCustomDecision] = useState("");
   const queryClient = useQueryClient();
+  const { isAuthenticated } = useAuth();
+
+  const location = useLocation();
 
   const mutation = useMutation({
     mutationFn: (decision: string) =>
-      recordDecision(alertId, decision, DEFAULT_CAMPUS),
+      recordDecision(alertId, decision, location.campus),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["alerts"] });
       setShowForm(false);
@@ -44,6 +50,17 @@ function DecisionRecorder({
         <p className="text-xs text-blue-600 font-medium">Decision Recorded</p>
         <p className="text-sm text-blue-900 mt-0.5">{currentDecision}</p>
       </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Link
+        href="/login?redirect=/alerts"
+        className="mt-3 inline-block text-sm text-gray-400 hover:text-blue-600"
+      >
+        Sign in to record decisions
+      </Link>
     );
   }
 
@@ -97,9 +114,12 @@ function DecisionRecorder({
 }
 
 export default function AlertsPage() {
+  const location = useLocation();
+
   const alertsQuery = useQuery({
-    queryKey: ["alerts", DEFAULT_CAMPUS],
-    queryFn: () => getAlerts(DEFAULT_CAMPUS),
+    queryKey: ["alerts", location.campus],
+    queryFn: () => getAlerts(location.campus),
+    enabled: !location.isDetecting,
   });
 
   return (

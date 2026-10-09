@@ -4,13 +4,14 @@ const CPCB_API_URL = "https://api.data.gov.in/resource/3b01bcb8-0b14-4abf-b6f2-c
 
 export async function fetchFromCPCB(
   campus: string,
-  apiKey: string
+  apiKey: string,
+  city: string = "Delhi"
 ): Promise<AQIReading | null> {
   try {
     const url = new URL(CPCB_API_URL);
     url.searchParams.set("api-key", apiKey);
     url.searchParams.set("format", "json");
-    url.searchParams.set("filters[city]", "Delhi");
+    url.searchParams.set("filters[city]", city);
     url.searchParams.set("limit", "5");
 
     const response = await fetch(url.toString(), {
@@ -27,7 +28,7 @@ export async function fetchFromCPCB(
     };
 
     if (!data.records || data.records.length === 0) {
-      console.warn("CPCB returned no records for Delhi");
+      console.warn(`CPCB returned no records for ${city}`);
       return null;
     }
 

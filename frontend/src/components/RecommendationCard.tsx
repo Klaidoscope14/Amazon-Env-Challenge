@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { Recommendation } from "@/lib/types";
+import { useAuth } from "@/lib/auth";
 import StatusBadge from "./StatusBadge";
 import DataBadge from "./DataBadge";
 
@@ -15,6 +17,7 @@ export default function RecommendationCard({
   onIssueAlert,
 }: RecommendationCardProps) {
   const [showEvidence, setShowEvidence] = useState(false);
+  const { isAuthenticated } = useAuth();
 
   if (recommendation.dataQuality === "unavailable") {
     return (
@@ -51,6 +54,20 @@ export default function RecommendationCard({
       <p className="text-lg font-medium text-gray-900 mt-4">
         {recommendation.action}
       </p>
+
+      {recommendation.aiNarrative && (
+        <div className="mt-3 rounded-lg bg-indigo-50 border border-indigo-100 px-4 py-3">
+          <div className="flex items-center gap-1.5 mb-1">
+            <svg className="w-3.5 h-3.5 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+            </svg>
+            <span className="text-xs font-medium text-indigo-600">
+              AI Insight (Amazon Bedrock)
+            </span>
+          </div>
+          <p className="text-sm text-indigo-900">{recommendation.aiNarrative}</p>
+        </div>
+      )}
 
       <button
         onClick={() => setShowEvidence(!showEvidence)}
@@ -115,14 +132,22 @@ export default function RecommendationCard({
         <p className="text-xs text-gray-400 max-w-md">
           {recommendation.disclaimer}
         </p>
-        {recommendation.statusLevel >= 3 && (
-          <button
-            onClick={onIssueAlert}
-            className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors shrink-0 ml-4"
-          >
-            Issue Alert
-          </button>
-        )}
+        {recommendation.statusLevel >= 3 &&
+          (isAuthenticated ? (
+            <button
+              onClick={onIssueAlert}
+              className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors shrink-0 ml-4"
+            >
+              Issue Alert
+            </button>
+          ) : (
+            <Link
+              href="/login?redirect=/"
+              className="px-4 py-2 bg-gray-200 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-300 transition-colors shrink-0 ml-4"
+            >
+              Sign in to issue alert
+            </Link>
+          ))}
       </div>
     </div>
   );

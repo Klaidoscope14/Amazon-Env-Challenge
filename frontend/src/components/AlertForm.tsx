@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createAlert } from "@/lib/api";
-import { AUDIENCE_OPTIONS, DEFAULT_CAMPUS } from "@/lib/constants";
+import { AUDIENCE_OPTIONS } from "@/lib/constants";
+import { useLocation } from "@/lib/useLocation";
+import { useAuth } from "@/lib/auth";
 import type { Recommendation } from "@/lib/types";
 
 interface AlertFormProps {
@@ -21,15 +23,17 @@ export default function AlertForm({
     ? `AQI is ${recommendation.evidence.aqi} (${recommendation.status}). ${recommendation.action}`
     : "";
 
+  const { user } = useAuth();
   const [audience, setAudience] = useState("all");
   const [message, setMessage] = useState(defaultMessage);
-  const [adminName, setAdminName] = useState("");
+  const [adminName, setAdminName] = useState(user?.name || "");
   const queryClient = useQueryClient();
+  const location = useLocation();
 
   const mutation = useMutation({
     mutationFn: () =>
       createAlert({
-        campus: DEFAULT_CAMPUS,
+        campus: location.campus,
         audience,
         message,
         adminName: adminName || "Campus Admin",

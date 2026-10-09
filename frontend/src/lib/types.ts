@@ -22,6 +22,7 @@ export interface Recommendation {
   status: AQIStatus;
   statusLevel: number;
   action: string;
+  aiNarrative?: string;
   evidence: {
     aqi: number;
     dominantPollutant: string;
@@ -38,6 +39,19 @@ export interface Recommendation {
   };
   dataQuality: "live" | "cached" | "demo" | "stale" | "unavailable";
   disclaimer: string;
+}
+
+export interface TrendPoint {
+  timestamp: string;
+  aqi: number;
+  dominantPollutant: string;
+  source: string;
+}
+
+export interface TrendResponse {
+  campus: string;
+  points: TrendPoint[];
+  period: string;
 }
 
 export interface Alert {

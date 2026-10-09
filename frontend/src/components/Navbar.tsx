@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CAMPUS_DISPLAY_NAME } from "@/lib/constants";
+import { useAuth } from "@/lib/auth";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard" },
@@ -12,13 +12,14 @@ const NAV_ITEMS = [
 
 export default function Navbar() {
   const pathname = usePathname();
+  const { user, isLoading, signOut } = useAuth();
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-2">
-            <span className="text-xl">🌬️</span>
+            <span className="text-xl">&#127788;&#65039;</span>
             <div>
               <span className="font-bold text-gray-900">BreatheSafe</span>
               <span className="text-gray-400 font-light ml-1">Campus</span>
@@ -41,8 +42,35 @@ export default function Navbar() {
             ))}
           </nav>
 
-          <div className="text-right hidden sm:block">
-            <p className="text-xs text-gray-500">{CAMPUS_DISPLAY_NAME}</p>
+          <div className="flex items-center gap-3">
+            {isLoading ? (
+              <div className="h-8 w-20 bg-gray-100 rounded-lg animate-pulse" />
+            ) : user ? (
+              <div className="flex items-center gap-2">
+                <div className="hidden sm:block text-right">
+                  <p className="text-sm font-medium text-gray-900">{user.name}</p>
+                  {user.institution && (
+                    <p className="text-xs text-gray-500">{user.institution}</p>
+                  )}
+                </div>
+                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium">
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+                <button
+                  onClick={signOut}
+                  className="text-xs text-gray-500 hover:text-gray-700 ml-1"
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Sign In
+              </Link>
+            )}
           </div>
         </div>
 

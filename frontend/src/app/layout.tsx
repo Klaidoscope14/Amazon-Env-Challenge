@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Providers from "@/components/Providers";
@@ -18,6 +18,11 @@ export const metadata: Metadata = {
   title: "BreatheSafe Campus — Air Quality Action Engine",
   description:
     "From AQI reading to campus action. Explainable, auditable air-quality decision support for schools and colleges.",
+  manifest: "/manifest.json",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#2563eb",
 };
 
 export default function RootLayout({

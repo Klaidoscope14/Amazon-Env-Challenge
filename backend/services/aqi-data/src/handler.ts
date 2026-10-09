@@ -14,12 +14,14 @@ const dynamodb = new DynamoDBClient({});
 const TABLE_NAME = process.env.AQI_TABLE_NAME!;
 const DATA_MODE = process.env.DATA_MODE || "demo";
 const CPCB_API_KEY = process.env.CPCB_API_KEY || "";
+const OPENAQ_API_KEY = process.env.OPENAQ_API_KEY || "";
 const CACHE_FRESH_MS = 5 * 60 * 1000;
 
 export async function handler(
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> {
   const campus = event.queryStringParameters?.campus || "dtu-delhi";
+  const city = event.queryStringParameters?.city || "Delhi";
   const scenario = event.queryStringParameters?.scenario;
 
   try {
@@ -36,9 +38,9 @@ export async function handler(
         return respond(200, reading);
       }
 
-      reading = await fetchFromCPCB(campus, CPCB_API_KEY);
+      reading = await fetchFromCPCB(campus, CPCB_API_KEY, city);
       if (!reading) {
-        reading = await fetchFromOpenAQ(campus);
+        reading = await fetchFromOpenAQ(campus, OPENAQ_API_KEY, city);
       }
 
       if (reading) {

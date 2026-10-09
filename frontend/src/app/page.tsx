@@ -3,26 +3,37 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { getAQI, getRecommendation } from "@/lib/api";
-import { DEFAULT_CAMPUS, CAMPUS_DISPLAY_NAME } from "@/lib/constants";
+import { getAQI, getRecommendation, getTrends } from "@/lib/api";
+import { useLocation } from "@/lib/useLocation";
 import AqiHeroCard from "@/components/AqiHeroCard";
 import RecommendationCard from "@/components/RecommendationCard";
+import TrendChart from "@/components/TrendChart";
 import AlertForm from "@/components/AlertForm";
 
 export default function DashboardPage() {
   const [showAlertForm, setShowAlertForm] = useState(false);
   const [alertSent, setAlertSent] = useState(false);
   const [scenario, setScenario] = useState("poor");
+  const location = useLocation();
 
   const aqiQuery = useQuery({
-    queryKey: ["aqi", DEFAULT_CAMPUS, scenario],
-    queryFn: () => getAQI(DEFAULT_CAMPUS, scenario),
+    queryKey: ["aqi", location.campus, scenario, location.city],
+    queryFn: () => getAQI(location.campus, scenario, location.city),
+    enabled: !location.isDetecting,
   });
 
   const recQuery = useQuery({
-    queryKey: ["recommendation", DEFAULT_CAMPUS, scenario],
-    queryFn: () => getRecommendation(DEFAULT_CAMPUS),
+    queryKey: ["recommendation", location.campus, scenario],
+    queryFn: () => getRecommendation(location.campus),
     enabled: !!aqiQuery.data,
+  });
+
+  const [trendHours, setTrendHours] = useState(24);
+
+  const trendQuery = useQuery({
+    queryKey: ["trends", location.campus, trendHours],
+    queryFn: () => getTrends(location.campus, trendHours),
+    enabled: !location.isDetecting,
   });
 
   return (
@@ -30,10 +41,20 @@ export default function DashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            {CAMPUS_DISPLAY_NAME}
+            {location.displayName}
+            {location.isDetecting && (
+              <span className="text-sm font-normal text-gray-400 ml-2">
+                detecting location...
+              </span>
+            )}
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             Campus Air Quality Dashboard
+            {location.error && (
+              <span className="text-yellow-600 ml-2">
+                ({location.error} &mdash; showing Delhi)
+              </span>
+            )}
           </p>
         </div>
 
@@ -71,7 +92,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {aqiQuery.isPending && (
+      {(aqiQuery.isPending || location.isDetecting) && (
         <div className="rounded-2xl border border-gray-200 bg-white p-6 animate-pulse">
           <div className="h-4 bg-gray-200 rounded w-1/4 mb-4" />
           <div className="h-16 bg-gray-200 rounded w-1/3 mb-4" />
@@ -107,6 +128,14 @@ export default function DashboardPage() {
         <RecommendationCard
           recommendation={recQuery.data}
           onIssueAlert={() => setShowAlertForm(true)}
+        />
+      )}
+
+      {trendQuery.data && (
+        <TrendChart
+          trends={trendQuery.data}
+          selectedHours={trendHours}
+          onHoursChange={setTrendHours}
         />
       )}
 
