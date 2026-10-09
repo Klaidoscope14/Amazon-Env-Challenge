@@ -1,0 +1,478 @@
+PRODUCT REQUIREMENTS DOCUMENT (PRD)
+BreatheSafe Campus — An Air-Quality Action Engine
+Hackathon: WeMakeDevs AWS Environmental Hacks / Bharat Builds Tour
+Version: 1.0
+Date: 10 October 2026
+Status: Hackathon MVP specification
+
+======================================================================
+1. PRODUCT SUMMARY
+======================================================================
+
+BreatheSafe Campus helps schools, colleges, hostels, and campus administrators respond to changing air-quality conditions. Rather than being only an AQI dashboard, it turns environmental data into clear, time-sensitive actions: review outdoor activities, notify relevant groups, and communicate why an action is recommended.
+
+The hackathon MVP will focus on one campus or a small set of example locations. It will show current/recent air-quality readings when available, a short-term risk estimate only when supported by data, an explanation of the recommendation, and a simple alert/decision log.
+
+Core principle: BreatheSafe Campus provides decision support, not medical advice. It must not claim that a location or activity is medically safe, and it must clearly label measured, forecast, estimated, and simulated data.
+
+======================================================================
+2. PROBLEM STATEMENT
+======================================================================
+
+Air-quality information is often presented as numbers, charts, or city-level maps. Students and campus administrators may still be unsure what to do with that information in practical settings.
+
+Examples:
+- Should an outdoor assembly be reviewed when pollution is elevated?
+- Which campus locations appear to have higher estimated exposure?
+- How can an administrator notify students or staff quickly?
+- What evidence led to a recommendation, and was the alert sent?
+
+BreatheSafe Campus aims to bridge the gap between environmental data and understandable, auditable campus actions.
+
+======================================================================
+3. GOALS AND SUCCESS CRITERIA
+======================================================================
+
+Primary goals:
+1. Convert air-quality information into simple, explainable actions.
+2. Provide a usable campus-level interface for students and administrators.
+3. Demonstrate a complete, working AWS-backed data workflow.
+4. Build a compelling, honest demo within the hackathon timeframe.
+
+Hackathon success criteria:
+- A judge can understand the problem and value within 30 seconds.
+- The demo completes one end-to-end scenario without manual code edits.
+- Every recommendation shows relevant pollutant/data, timestamp, source or data status, and reason.
+- The interface distinguishes observed data from forecasts, estimates, and demo/simulated data.
+- At least one meaningful AWS service is used in the running product, not merely mentioned in the presentation.
+- The product remains useful if forecast data is unavailable by showing the latest available reading and an explicit data-status message.
+
+Non-goals for the MVP:
+- Medical diagnosis or individual health-risk prediction.
+- Guaranteed street-level pollution accuracy.
+- Replacing official government alerts or public-health guidance.
+- A full mobile app, wearable integration, or school-management suite.
+- A production-grade notification infrastructure.
+- Claims of validated forecasting accuracy without evaluation data.
+
+======================================================================
+4. TARGET USERS
+======================================================================
+
+Primary user — Campus administrator:
+- Wants a quick overview of conditions and recommended actions.
+- Needs to issue an alert and record a decision.
+- Needs to understand why a recommendation was generated.
+
+Secondary user — Student or staff member:
+- Wants a simple current-risk summary and relevant campus alerts.
+- Needs clear, practical information rather than technical AQI charts.
+
+Optional reviewer — Hackathon judge:
+- Needs to understand the impact, workflow, AWS architecture, and limitations through a short demo.
+
+======================================================================
+5. CORE USER STORIES
+======================================================================
+
+Administrator:
+- As an administrator, I want to see the latest air-quality status for my campus so I can assess whether attention is needed.
+- As an administrator, I want an evidence-backed recommendation so I understand why an outdoor activity should be reviewed.
+- As an administrator, I want to send or simulate an alert to a defined campus audience and see its status.
+- As an administrator, I want to record the decision taken for accountability and later review.
+- As an administrator, I want to see when data is stale or unavailable so I do not rely on misleading information.
+
+Student/staff:
+- As a student or staff member, I want to see the latest campus alert and its reason in plain language.
+- As a user, I want to know whether the information is measured, forecast, estimated, or simulated.
+
+======================================================================
+6. MVP FEATURES — MUST HAVE
+======================================================================
+
+6.1 Campus overview
+- Display one selected campus and a small number of named campus zones.
+- Show available AQI/PM2.5 information, source, timestamp, and status.
+- Use a simple visual status such as Low, Elevated, or High, based on documented rules.
+- Show the pollutant and threshold/rule behind the status.
+- If no current reading exists, show “Data unavailable” or “Last updated at [timestamp]” rather than inventing a live value.
+
+6.2 Action recommendations
+- Provide a small set of transparent, configurable rules.
+- Example actions: review outdoor activities, consider moving an event indoors, share an advisory, or check official guidance.
+- Every recommendation must include: (a) evidence/data used; (b) timestamp and source; (c) the rule or reason; and (d) a confidence/data-quality note when relevant.
+- Recommendations are advisory and must not be presented as medical instructions or official government orders.
+- Link to authoritative local guidance where practical.
+
+6.3 Campus zone view
+- Show a small map or zone list for campus locations.
+- Distinguish actual sensor observations from modelled estimates.
+- If trustworthy zone-level data does not exist, label zone values as illustrative/demo data; do not imply they are real measurements.
+- Do not claim precise exposure estimates without suitable spatial and temporal data.
+
+6.4 Alerts and decision log
+- Let an administrator draft and issue an alert.
+- For the hackathon demo, an in-app alert is sufficient; external email/SMS delivery is optional.
+- Record alert time, reason, target audience, and status.
+- Let an administrator record a response such as “moved indoors”, “activity reviewed”, or “no action”.
+- If notification delivery is simulated, label it as simulated.
+
+6.5 Explainability and data transparency
+- Display data source, last-updated time, and whether data is measured, forecast, estimated, or simulated.
+- Display missing/stale data warnings.
+- Show the simple rule behind each recommendation.
+- Include a “How this works” section with limitations.
+
+6.6 Demo scenario
+The demo must support a complete scenario:
+1. Open a campus dashboard.
+2. Show an elevated air-quality reading or clearly labelled fixture.
+3. Open the evidence and explanation.
+4. Generate a recommendation.
+5. Issue an in-app alert.
+6. Record the administrator’s decision.
+7. Show the event in the alert/decision history.
+
+======================================================================
+7. SHOULD HAVE IF TIME PERMITS
+======================================================================
+
+- A short-term risk trend or forecast, only if reliable historical data and a defensible method are available.
+- A campus-zone map with data freshness indicators.
+- Downloadable summary/report.
+- Optional AI-generated plain-language explanation using a constrained prompt grounded only in model outputs and displayed evidence.
+- Basic role separation between administrator and viewer.
+- A comparison of recent readings over time.
+
+======================================================================
+8. OUT OF SCOPE
+======================================================================
+
+- Training a complex forecasting model from scratch during the event.
+- Claiming medical safety, personal diagnosis, or guaranteed prevention.
+- Unverified claims of street-level precision.
+- Collecting personal health data.
+- Face recognition, individual tracking, or student-level health profiles.
+- A complex vendor marketplace, sensor hardware deployment, or nationwide rollout in the hackathon MVP.
+- Automated changes to school schedules without human review.
+
+======================================================================
+9. DATA REQUIREMENTS
+======================================================================
+
+Preferred data:
+- Credible, documented air-quality observations and/or forecasts.
+- Timestamp, location, pollutant, units, source, and quality/freshness metadata.
+- Historical records if showing trends or forecasting.
+- Official health/environmental guidance for contextual links.
+
+Data rules:
+- Verify source terms, API access, coverage, and update frequency before selecting a data provider.
+- Never invent a source, API integration, or live reading.
+- Cache source data where appropriate and preserve source timestamps.
+- Treat a missing value as missing; do not silently replace it with zero.
+- If demo fixtures are used, label them “Demo data — not a live reading”.
+- Do not call a forecast an observation.
+- Do not infer indoor air quality from outdoor readings.
+- Avoid making medical claims from AQI alone.
+
+Potential starting points to evaluate:
+- CPCB / official Indian AQI information and services.
+- OpenAQ data and API availability for the target location.
+- Other documented public datasets with appropriate access rights.
+
+The team must verify current API availability and licensing before building a dependency on any provider.
+
+======================================================================
+10. RECOMMENDED AWS ARCHITECTURE
+======================================================================
+
+Keep the architecture small and demonstrable.
+
+Frontend:
+- Next.js or React web application.
+- Responsive desktop/mobile layout.
+- Hosted on an AWS-compatible hosting option selected by the team.
+
+Backend:
+- Amazon API Gateway exposes application endpoints.
+- AWS Lambda runs data retrieval, rule evaluation, and alert/decision operations.
+- Amazon DynamoDB stores campus settings, recent snapshots, alerts, and decision history.
+- Amazon S3 stores historical datasets, generated reports, or static reference data where needed.
+- Amazon CloudWatch provides logs and basic error visibility.
+
+Optional:
+- Amazon Bedrock for plain-language explanations based strictly on structured evidence. This is optional, not required.
+- Amazon EventBridge for scheduled refreshes if the MVP needs them.
+- Amazon SNS for real notifications only if setup, permissions, and delivery can be demonstrated reliably.
+
+Important:
+- AWS services must perform real work in the running prototype.
+- Choose only the services needed for the demo; do not add services solely to make the architecture look larger.
+- Keep secrets and API keys out of frontend code and Git.
+- Configure least-privilege IAM permissions.
+- Avoid committing credentials or real personal information.
+
+Example data flow:
+1. A scheduled or user-triggered function fetches available data.
+2. Lambda validates source, timestamp, units, and missing fields.
+3. The latest snapshot and its metadata are stored in DynamoDB or S3.
+4. The recommendation rules evaluate the available evidence.
+5. The API returns the reading, status, recommendation, and explanation.
+6. An administrator creates an alert and records a decision.
+7. CloudWatch logs backend activity and errors.
+
+======================================================================
+11. RECOMMENDATION ENGINE
+======================================================================
+
+MVP approach:
+Use deterministic, documented rules rather than an unvalidated ML model.
+
+Inputs:
+- Available pollutant measurement or forecast.
+- Timestamp and data freshness.
+- Configured thresholds from a documented, appropriate source.
+- Campus activity type, if entered by the administrator.
+
+Processing:
+- Validate data completeness and freshness.
+- Determine whether the reading can be used.
+- Apply a transparent rule to classify the current status.
+- Produce a suggested action with the rule and evidence attached.
+- Require human review before an administrator issues an alert.
+
+Outputs:
+- Risk/status label.
+- Evidence summary.
+- Suggested action.
+- Data quality/freshness note.
+- Timestamp and source.
+- Disclaimer that the output is decision support.
+
+ML policy:
+Do not claim predictive performance unless the team has evaluated the model on held-out data and can report a meaningful metric. If a forecast is added, show the forecast horizon, source/method, uncertainty, and evaluation limitations. A reliable rules-based MVP is preferable to an impressive but unsupported prediction.
+
+AI explanation policy:
+If using an LLM, pass structured facts and allowed actions. Instruct it not to invent readings, sources, thresholds, or health advice. Validate its output and retain the deterministic recommendation as the source of truth.
+
+======================================================================
+12. USER EXPERIENCE AND PAGES
+======================================================================
+
+Page 1 — Campus dashboard
+- Campus name and selected zone.
+- Latest reading/status and update time.
+- Small recent trend, if data supports it.
+- Recommended action and explanation.
+- Data-source and freshness indicator.
+
+Page 2 — Zone details
+- List/map of zones.
+- Reading and source for each zone.
+- Clear measured/estimated/demo label.
+- No false precision.
+
+Page 3 — Recommendation details
+- Evidence used.
+- Rule and threshold source.
+- Suggested action.
+- Limitations and relevant official guidance link.
+
+Page 4 — Alerts and decisions
+- Draft and issue alert.
+- Audience, message, timestamp, and status.
+- Record administrator response.
+- View previous alerts and decisions.
+
+Page 5 — About and data quality
+- How the product works.
+- Sources and update frequency.
+- Meaning of risk labels.
+- Limitations, privacy statement, and emergency disclaimer.
+
+Design principles:
+- Readable at a glance.
+- Strong contrast and accessible text.
+- Avoid relying on color alone to communicate risk.
+- Avoid alarmist language.
+- Prioritize the action and evidence over decorative charts.
+
+======================================================================
+13. NON-FUNCTIONAL REQUIREMENTS
+======================================================================
+
+Reliability:
+- Handle unavailable external data gracefully.
+- Provide clear error and stale-data states.
+- Avoid duplicate alerts from repeated requests where practical.
+
+Performance:
+- Aim for a responsive dashboard with cached recent data.
+- Avoid blocking the interface while a slow provider is queried.
+
+Security and privacy:
+- Collect only information necessary for campus-level functionality.
+- Do not collect student health data in the MVP.
+- Use HTTPS for deployed services.
+- Store credentials in environment variables or a secrets service.
+- Apply least-privilege IAM permissions.
+- Restrict administrator actions appropriately.
+- Do not expose raw logs containing secrets.
+- Define a simple retention policy for alert/decision data.
+
+Accessibility:
+- Use semantic headings and labelled controls.
+- Ensure keyboard navigation for core flows.
+- Provide text labels in addition to status colors.
+
+Transparency:
+- Show timestamps and data provenance.
+- Clearly distinguish measured, forecast, estimated, and simulated data.
+- State product limitations prominently.
+
+======================================================================
+14. METRICS
+======================================================================
+
+Product metrics for the demo:
+- Time required to understand the current status and recommended action.
+- Percentage of displayed records with visible source and timestamp.
+- Percentage of recommendations with an evidence explanation.
+- Successful completion of the full demo scenario.
+- Successful storage and retrieval of an alert/decision record.
+- Backend error rate during the demo.
+
+Impact metrics for a later pilot:
+- Number of campuses and users reached.
+- Alert delivery and acknowledgement rates.
+- Time between data update and administrator review.
+- Number of documented activity adjustments.
+- User comprehension and trust feedback.
+
+Do not claim reduced exposure or improved health outcomes without a properly designed measurement process and supporting evidence.
+
+======================================================================
+15. HACKATHON BUILD PLAN
+======================================================================
+
+Phase 1 — Scope and data
+- Choose one target campus/location.
+- Confirm the data source, coverage, license, and update cadence.
+- Define status rules and their authoritative basis.
+- Create clearly labelled fallback demo fixtures.
+
+Phase 2 — End-to-end skeleton
+- Build the dashboard and recommendation details.
+- Create API endpoints.
+- Connect at least one real AWS-backed workflow.
+- Store and retrieve an alert/decision record.
+
+Phase 3 — Data and recommendation logic
+- Fetch and validate source data.
+- Implement transparent rule-based recommendations.
+- Add freshness and missing-data states.
+- Ensure demo data cannot be mistaken for live data.
+
+Phase 4 — Usability and demo
+- Add alert creation and decision history.
+- Improve visual hierarchy and mobile layout.
+- Test provider failures and stale data.
+- Rehearse the complete scenario.
+- Prepare a short architecture diagram and a clear impact explanation.
+
+Suggested time allocation:
+- 20%: scope, data validation, and architecture.
+- 35%: working end-to-end workflow.
+- 20%: recommendation logic and data transparency.
+- 15%: UI polish and testing.
+- 10%: pitch, demo recording, and contingency.
+
+======================================================================
+16. THREE-MINUTE DEMO SCRIPT
+======================================================================
+
+0:00–0:25 — Problem
+“Campus teams can see air-quality numbers, but they still need help turning them into timely, explainable actions.”
+
+0:25–0:55 — Product
+Show the campus dashboard, latest data, source, timestamp, and status. State clearly whether the displayed reading is live, cached, forecast, or demo data.
+
+0:55–1:35 — Recommendation
+Open the recommendation. Show the evidence and rule that generated it. Explain that the product supports human decisions and does not provide medical advice.
+
+1:35–2:10 — Action
+Create an alert, show its status, and record an administrator decision. Show the record persisted in the backend.
+
+2:10–2:40 — AWS
+Explain which services actually handle the data, API, storage, and logs. Show one real AWS-backed operation if possible.
+
+2:40–3:00 — Impact and next step
+Explain how a campus could pilot the system, how success would be measured, and what data/validation is still required.
+
+======================================================================
+17. RISKS AND MITIGATIONS
+======================================================================
+
+Risk: No reliable local data source.
+Mitigation: Verify coverage early; choose another target location or use clearly labelled demo fixtures while keeping the live-data limitation visible.
+
+Risk: The product looks like a generic AQI dashboard.
+Mitigation: Make the recommendation, alert, and decision record the main workflow.
+
+Risk: Unsupported prediction claims.
+Mitigation: Use rules for the MVP; label forecasts and evaluate any model.
+
+Risk: False precision in campus zones.
+Mitigation: Show only supported spatial detail and label estimates.
+
+Risk: LLM invents facts.
+Mitigation: Use structured evidence, constrained generation, validation, and deterministic rules as the source of truth.
+
+Risk: AWS integration is only cosmetic.
+Mitigation: Ensure AWS services run real API, storage, processing, or logging tasks and prepare evidence for the demo.
+
+Risk: External API outage during judging.
+Mitigation: Cache a recent response and provide a labelled demo mode. Never present fallback fixtures as live data.
+
+Risk: Privacy or security incident.
+Mitigation: Minimize data collection, secure credentials, apply least-privilege access, and avoid personal health records.
+
+======================================================================
+18. HACKATHON SUBMISSION CHECKLIST
+======================================================================
+
+[ ] Working deployed application or reproducible demo.
+[ ] At least one AWS service or AWS tool used in a way that satisfies the current official eligibility rules.
+[ ] Verify exact track requirements and eligible AWS technologies from the official hackathon page before submission.
+[ ] Source names, timestamps, and data status are visible.
+[ ] Measured, forecast, estimated, and simulated data are distinguished.
+[ ] Complete dashboard-to-alert-to-decision workflow works.
+[ ] Error and stale-data states tested.
+[ ] No credentials committed to source control.
+[ ] README includes setup, architecture, data sources, limitations, and deployment instructions.
+[ ] Short demo video and pitch prepared.
+[ ] Impact claims are supported and not overstated.
+[ ] AWS costs and permissions reviewed; unnecessary resources removed.
+
+======================================================================
+19. OPEN QUESTIONS TO RESOLVE BEFORE IMPLEMENTATION
+======================================================================
+
+1. Which campus or city will be the initial demo location?
+2. Which verified air-quality source offers suitable data coverage?
+3. Is the hackathon judging track Air, Heat and Water, or another track?
+4. What exact AWS services/open-source tools are required or accepted?
+5. Will notifications be in-app only or sent externally?
+6. Is a real forecast dataset available, or should the MVP remain rules-based on observed readings?
+
+======================================================================
+20. FINAL PRODUCT POSITIONING
+======================================================================
+
+BreatheSafe Campus is not another AQI dashboard. It is an explainable campus air-quality action workflow that helps administrators review environmental conditions, communicate evidence-backed advisories, and record decisions—with data provenance and uncertainty visible.
+
+Its strongest hackathon story is:
+“From environmental data to a clear, auditable campus action, powered by a real AWS-backed workflow.”
+
+END OF DOCUMENT
