@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { authSignUp } from "@/lib/api";
+import Card from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
 
 export default function SignUpPage() {
   const [name, setName] = useState("");
@@ -37,17 +39,17 @@ export default function SignUpPage() {
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
-          <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">
+        <Card className="p-8">
+          <h1 className="text-2xl font-bold text-foreground text-center mb-2">
             Create Account
           </h1>
-          <p className="text-sm text-gray-500 text-center mb-6">
+          <p className="text-sm text-muted text-center mb-6">
             Join BreatheSafe Campus as an administrator
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="signup-name" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="signup-name" className="block text-sm font-medium text-muted-strong mb-1">
                 Full Name *
               </label>
               <input
@@ -57,13 +59,13 @@ export default function SignUpPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Dr. Jane Smith"
               />
             </div>
 
             <div>
-              <label htmlFor="signup-email" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="signup-email" className="block text-sm font-medium text-muted-strong mb-1">
                 Email *
               </label>
               <input
@@ -73,13 +75,13 @@ export default function SignUpPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="you@campus.edu"
               />
             </div>
 
             <div>
-              <label htmlFor="signup-password" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="signup-password" className="block text-sm font-medium text-muted-strong mb-1">
                 Password *
               </label>
               <input
@@ -90,13 +92,17 @@ export default function SignUpPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={8}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Min 8 chars, 1 lowercase, 1 number"
+                aria-describedby="signup-password-hint"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="••••••••"
               />
+              <p id="signup-password-hint" className="mt-1 text-xs text-muted">
+                At least 8 characters, with one lowercase letter and one number.
+              </p>
             </div>
 
             <div>
-              <label htmlFor="signup-institution" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="signup-institution" className="block text-sm font-medium text-muted-strong mb-1">
                 Institution
               </label>
               <input
@@ -105,28 +111,24 @@ export default function SignUpPage() {
                 type="text"
                 value={institution}
                 onChange={(e) => setInstitution(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Delhi Technological University"
               />
             </div>
 
 
             {error && (
-              <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
+              <p role="alert" className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 rounded-lg px-3 py-2">
                 {error}
               </p>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
+            <Button type="submit" fullWidth disabled={loading}>
               {loading ? "Creating account..." : "Create Account"}
-            </button>
+            </Button>
           </form>
 
-          <p className="mt-6 text-sm text-gray-500 text-center">
+          <p className="mt-6 text-sm text-muted text-center">
             Already have an account?{" "}
             <Link
               href="/login"
@@ -135,7 +137,7 @@ export default function SignUpPage() {
               Sign In
             </Link>
           </p>
-        </div>
+        </Card>
       </div>
     </div>
   );

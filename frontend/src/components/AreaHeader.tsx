@@ -20,9 +20,9 @@ export default function AreaHeader({ area, title, actions }: AreaHeaderProps) {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
-          <p className="text-sm text-gray-600">{title}</p>
-          <h1 className="text-2xl font-bold text-gray-900">{area.name}</h1>
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="text-sm text-muted">{title}</p>
+          <h1 className="text-2xl font-bold text-foreground">{area.name}</h1>
+          <p className="text-sm text-muted mt-1">
             {areaSubtitle(area)}
             {areaSubtitle(area) ? " · " : ""}
             <button
