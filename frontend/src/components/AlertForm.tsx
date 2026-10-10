@@ -6,6 +6,7 @@ import { createAlert, getNoticeDraft } from "@/lib/api";
 import { AUDIENCE_OPTIONS } from "@/lib/constants";
 import { useAuth } from "@/lib/auth";
 import type { Alert, AreaInfo, Audience, Recommendation } from "@/lib/types";
+import Button from "./ui/Button";
 
 const MAX_MESSAGE = 2000;
 
@@ -37,6 +38,7 @@ export default function AlertForm({
   const [confirming, setConfirming] = useState(false);
   const queryClient = useQueryClient();
   const firstFieldRef = useRef<HTMLSelectElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const id = useId();
 
   const draftQuery = useQuery({
@@ -86,18 +88,44 @@ export default function AlertForm({
     onCloseRef.current = onClose;
   }, [onClose]);
 
-  // Dialog behaviour: focus the first field, close on Escape, lock page scroll.
+  // Dialog behaviour: focus the first field, trap Tab inside the dialog, close
+  // on Escape, lock page scroll, and restore focus to the opener on close.
   useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
     firstFieldRef.current?.focus();
+
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCloseRef.current();
+      if (e.key === "Escape") {
+        onCloseRef.current();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusable = dialog.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !dialog.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
+
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = previousOverflow;
+      // Return focus to whatever opened the dialog (the "Issue Alert" button).
+      opener?.focus?.();
     };
   }, []);
 
@@ -113,41 +141,48 @@ export default function AlertForm({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      onMouseDown={(e) => {
+        // Click on the backdrop (not the dialog) dismisses.
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={`${id}-title`}
-        className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-xl max-h-[calc(100vh-2rem)] overflow-y-auto"
+        className="bg-surface rounded-2xl w-full max-w-lg p-6 shadow-xl max-h-[calc(100vh-2rem)] overflow-y-auto"
       >
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 id={`${id}-title`} className="text-lg font-semibold text-gray-900">
+            <h2 id={`${id}-title`} className="text-lg font-semibold text-foreground">
               Issue Campus Alert
             </h2>
-            <p className="text-xs text-gray-600">Area: {area.name}</p>
+            <p className="text-xs text-muted">Area: {area.name}</p>
           </div>
           <button
             onClick={onClose}
             aria-label="Close"
-            className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
+            className="text-muted hover:text-muted-strong text-2xl leading-none"
           >
             &times;
           </button>
         </div>
 
         {recommendation && (
-          <div className="mb-4 rounded-lg bg-orange-50 border border-orange-200 p-3 text-sm">
-            <p className="font-medium text-orange-900">
+          <div className="mb-4 rounded-lg bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-900 p-3 text-sm">
+            <p className="font-medium text-orange-900 dark:text-orange-200">
               Current: AQI {recommendation.evidence.aqi} ({recommendation.status})
             </p>
-            <p className="text-orange-800 mt-1">{recommendation.action}</p>
+            <p className="text-orange-800 dark:text-orange-200 mt-1">{recommendation.action}</p>
           </div>
         )}
 
         <div className="space-y-4">
           <div>
-            <label htmlFor={`${id}-audience`} className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor={`${id}-audience`} className="block text-sm font-medium text-muted-strong mb-1">
               Audience
             </label>
             <select
@@ -158,7 +193,7 @@ export default function AlertForm({
                 setAudience(e.target.value as Audience);
                 setConfirming(false);
               }}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               {AUDIENCE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -169,7 +204,7 @@ export default function AlertForm({
           </div>
 
           <div className="flex items-center justify-between gap-2 text-xs">
-            <span aria-live="polite" className="text-gray-600">
+            <span aria-live="polite" className="text-muted">
               {draftQuery.isPending && "Drafting notice…"}
               {draftQuery.data?.source === "ai" &&
                 "AI-assisted draft (Gemini) from the approved template — review before sending."}
@@ -191,7 +226,7 @@ export default function AlertForm({
           </div>
 
           <div>
-            <label htmlFor={`${id}-en`} className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor={`${id}-en`} className="block text-sm font-medium text-muted-strong mb-1">
               Message (English)
             </label>
             <textarea
@@ -200,16 +235,16 @@ export default function AlertForm({
               onChange={(e) => setEditedEn(e.target.value)}
               disabled={draftQuery.isPending && editedEn === null}
               rows={6}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-surface-2"
             />
-            <p className={`text-xs mt-0.5 ${messageEn.length > MAX_MESSAGE ? "text-red-700" : "text-gray-500"}`}>
+            <p className={`text-xs mt-0.5 ${messageEn.length > MAX_MESSAGE ? "text-red-700 dark:text-red-300" : "text-muted"}`}>
               {messageEn.length}/{MAX_MESSAGE}
             </p>
           </div>
 
           <div>
-            <label htmlFor={`${id}-hi`} className="block text-sm font-medium text-gray-700 mb-1">
-              Message (Hindi / हिंदी) <span className="font-normal text-gray-500">— optional</span>
+            <label htmlFor={`${id}-hi`} className="block text-sm font-medium text-muted-strong mb-1">
+              Message (Hindi / हिंदी) <span className="font-normal text-muted">— optional</span>
             </label>
             <textarea
               id={`${id}-hi`}
@@ -218,45 +253,38 @@ export default function AlertForm({
               onChange={(e) => setEditedHi(e.target.value)}
               disabled={draftQuery.isPending && editedHi === null}
               rows={6}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-surface-2"
             />
-            <p className={`text-xs mt-0.5 ${messageHi.length > MAX_MESSAGE ? "text-red-700" : "text-gray-500"}`}>
+            <p className={`text-xs mt-0.5 ${messageHi.length > MAX_MESSAGE ? "text-red-700 dark:text-red-300" : "text-muted"}`}>
               {messageHi.length}/{MAX_MESSAGE}
             </p>
           </div>
 
-          <p className="text-xs text-gray-600">
+          <p className="text-xs text-muted">
             Issued as <strong>{user?.name ?? "you"}</strong> — recorded from your sign-in.
           </p>
         </div>
 
         {confirming && (
-          <p role="alert" className="mt-4 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-900">
+          <p role="alert" className="mt-4 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
             This will notify <strong>all students, staff and parents</strong>. Press
             &ldquo;Confirm &amp; send&rdquo; to continue.
           </p>
         )}
 
         {mutation.isError && (
-          <p role="alert" className="mt-3 text-sm text-red-700">
+          <p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-300">
             Failed to send alert: {(mutation.error as Error).message}
           </p>
         )}
 
         <div className="mt-6 flex gap-3 justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
+          <Button variant="secondary" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            onClick={handleSend}
-            disabled={!canSend}
-            className="px-4 py-2 text-sm text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-          >
+          </Button>
+          <Button variant="danger" onClick={handleSend} disabled={!canSend}>
             {mutation.isPending ? "Sending..." : confirming ? "Confirm & send" : "Send Alert"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

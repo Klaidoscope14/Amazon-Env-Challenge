@@ -37,11 +37,21 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col bg-gray-50">
+      <head>
+        {/* Sets the theme before first paint (no flash). Mirrors lib/theme.ts. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              '(function(){try{var k="breathesafe_theme",v=localStorage.getItem(k),m=window.matchMedia("(prefers-color-scheme: dark)").matches,t=(v==="light"||v==="dark")?v:(m?"dark":"light");document.documentElement.setAttribute("data-theme",t);}catch(e){document.documentElement.setAttribute("data-theme","light");}})();',
+          }}
+        />
+      </head>
+      <body className="min-h-full flex flex-col bg-canvas">
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-blue-700 focus:shadow"
+          className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:m-2 focus:rounded-lg focus:bg-surface focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-blue-700 focus:shadow"
         >
           Skip to content
         </a>
