@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { buttonClasses } from "./ui/Button";
+import ThemeToggle from "./ThemeToggle";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard" },
@@ -45,7 +46,8 @@ export default function Navbar() {
             ))}
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggle />
             {isLoading ? (
               <div className="h-8 w-20 bg-surface-2 rounded-lg animate-pulse" />
             ) : user ? (
