@@ -10,7 +10,6 @@ export default function SignUpPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [institution, setInstitution] = useState("");
-  const [role, setRole] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -26,7 +25,6 @@ export default function SignUpPage() {
         password,
         name,
         institution: institution || undefined,
-        role: role || undefined,
       });
       router.push(`/verify?email=${encodeURIComponent(email)}`);
     } catch (err) {
@@ -49,10 +47,12 @@ export default function SignUpPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="signup-name" className="block text-sm font-medium text-gray-700 mb-1">
                 Full Name *
               </label>
               <input
+                id="signup-name"
+                autoComplete="name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -63,10 +63,12 @@ export default function SignUpPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="signup-email" className="block text-sm font-medium text-gray-700 mb-1">
                 Email *
               </label>
               <input
+                id="signup-email"
+                autoComplete="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -77,10 +79,12 @@ export default function SignUpPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="signup-password" className="block text-sm font-medium text-gray-700 mb-1">
                 Password *
               </label>
               <input
+                id="signup-password"
+                autoComplete="new-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -92,10 +96,12 @@ export default function SignUpPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="signup-institution" className="block text-sm font-medium text-gray-700 mb-1">
                 Institution
               </label>
               <input
+                id="signup-institution"
+                autoComplete="organization"
                 type="text"
                 value={institution}
                 onChange={(e) => setInstitution(e.target.value)}
@@ -104,22 +110,6 @@ export default function SignUpPage() {
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Role
-              </label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-              >
-                <option value="">Select your role</option>
-                <option value="admin">Campus Administrator</option>
-                <option value="faculty">Faculty</option>
-                <option value="staff">Staff</option>
-                <option value="student">Student Representative</option>
-              </select>
-            </div>
 
             {error && (
               <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">

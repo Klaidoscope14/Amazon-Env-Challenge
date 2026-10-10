@@ -24,15 +24,40 @@ export async function handler(
     if (method === "GET" && path.endsWith("/profile")) return await getProfile(event);
     return respond(404, { error: "Not found" });
   } catch (err: unknown) {
+    if (err instanceof SyntaxError) {
+      return respond(400, { error: "Request body must be valid JSON" });
+    }
+    const name = err instanceof Error ? err.name : "UnknownError";
+    const mapped = COGNITO_ERRORS[name];
+    if (mapped) {
+      // Expected user errors: clear message, stable code, no internal details.
+      const message = name === "InvalidPasswordException" && err instanceof Error ? err.message : mapped.message;
+      return respond(mapped.status, { error: message, code: mapped.code });
+    }
     console.error("Auth error:", err);
-    const message = err instanceof Error ? err.message : "Authentication failed";
-    const code = err instanceof Error && "name" in err ? (err as { name: string }).name : "UnknownError";
-    return respond(400, { error: message, code });
+    return respond(500, { error: "Authentication service error. Please try again." });
   }
 }
 
+// Cognito exceptions users can hit, mapped to HTTP status + a stable code the
+// frontend can act on (e.g. send unconfirmed users to /verify).
+const COGNITO_ERRORS: Record<string, { status: number; code: string; message: string }> = {
+  NotAuthorizedException: { status: 401, code: "INVALID_CREDENTIALS", message: "Incorrect email or password." },
+  UserNotFoundException: { status: 401, code: "INVALID_CREDENTIALS", message: "Incorrect email or password." },
+  UserNotConfirmedException: { status: 403, code: "USER_NOT_CONFIRMED", message: "Please verify your email before signing in." },
+  UsernameExistsException: { status: 409, code: "ACCOUNT_EXISTS", message: "An account with this email already exists. Sign in instead." },
+  InvalidPasswordException: { status: 400, code: "INVALID_PASSWORD", message: "Password does not meet the requirements." },
+  InvalidParameterException: { status: 400, code: "INVALID_INPUT", message: "Some details are invalid. Please check and try again." },
+  CodeMismatchException: { status: 400, code: "INVALID_CODE", message: "That verification code is incorrect." },
+  ExpiredCodeException: { status: 400, code: "EXPIRED_CODE", message: "That verification code has expired. Request a new one." },
+  LimitExceededException: { status: 429, code: "TOO_MANY_ATTEMPTS", message: "Too many attempts. Please wait and try again." },
+  TooManyRequestsException: { status: 429, code: "TOO_MANY_ATTEMPTS", message: "Too many attempts. Please wait and try again." },
+  TooManyFailedAttemptsException: { status: 429, code: "TOO_MANY_ATTEMPTS", message: "Too many attempts. Please wait and try again." },
+};
+
 async function signUp(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  const { email, password, name, institution, role } = JSON.parse(event.body || "{}");
+  // Role is not accepted at sign-up: users can't self-assign one.
+  const { email, password, name, institution } = JSON.parse(event.body || "{}");
 
   if (!email || !password || !name) {
     return respond(400, { error: "email, password, and name are required" });
@@ -42,8 +67,7 @@ async function signUp(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResul
     { Name: "email", Value: email },
     { Name: "name", Value: name },
   ];
-  if (institution) userAttributes.push({ Name: "custom:institution", Value: institution });
-  if (role) userAttributes.push({ Name: "custom:role", Value: role });
+  if (institution) userAttributes.push({ Name: "custom:institution", Value: String(institution).slice(0, 100) });
 
   await cognito.send(
     new SignUpCommand({

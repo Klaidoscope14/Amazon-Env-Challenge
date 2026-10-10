@@ -34,7 +34,7 @@ export default function DecisionRecorder({
   const { isAuthenticated, user } = useAuth();
 
   const mutation = useMutation({
-    mutationFn: (decision: string) => recordDecision(alert, decision, user?.name),
+    mutationFn: (decision: string) => recordDecision(alert, decision),
     onSuccess: (result, decision) => {
       setRecorded({ decision, at: result.decisionTimestamp });
       setShowForm(false);

@@ -24,6 +24,21 @@ const MAX_DECISION = 500;
 const MAX_TIMESTAMP = 40;
 
 class BadRequestError extends Error {}
+class UnauthorizedError extends Error {}
+
+/**
+ * The signed-in admin, from the claims API Gateway's Cognito authorizer
+ * verified. Names in the audit trail come from here, never from the request
+ * body, so they can't be spoofed.
+ */
+function signedInName(event: APIGatewayProxyEvent): string {
+  const claims = (event.requestContext?.authorizer?.claims ?? {}) as Record<string, unknown>;
+  const name = [claims.name, claims.email].find(
+    (v): v is string => typeof v === "string" && v.trim().length > 0
+  );
+  if (!name) throw new UnauthorizedError("Sign in to perform this action");
+  return name.trim().slice(0, MAX_NAME);
+}
 
 export async function handler(
   event: APIGatewayProxyEvent
@@ -53,6 +68,9 @@ export async function handler(
   } catch (err) {
     if (err instanceof BadRequestError) {
       return respond(400, { error: err.message });
+    }
+    if (err instanceof UnauthorizedError) {
+      return respond(401, { error: err.message });
     }
     if (err instanceof AlertNotFoundError) {
       return respond(404, { error: err.message });
@@ -102,6 +120,7 @@ function readString(
 async function handleCreateAlert(
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> {
+  const adminName = signedInName(event);
   const body = parseBody(event);
 
   const campus = readString(body, "campus", 90, true)!;
@@ -125,7 +144,7 @@ async function handleCreateAlert(
     message: readString(body, "message", MAX_MESSAGE, true)!,
     messageHi: readString(body, "messageHi", MAX_MESSAGE, false),
     noticeSource,
-    adminName: readString(body, "adminName", MAX_NAME, true)!,
+    adminName,
     scenario,
     readingTimestamp: readString(body, "readingTimestamp", MAX_TIMESTAMP, false),
   };
@@ -164,10 +183,10 @@ async function handleRecordDecision(
     return respond(400, { error: "Missing alert ID in path" });
   }
 
+  const decidedBy = signedInName(event);
   const body = parseBody(event);
   const decision = readString(body, "decision", MAX_DECISION, true)!;
   const createdAt = readString(body, "createdAt", MAX_TIMESTAMP, false);
-  const decidedBy = readString(body, "decidedBy", MAX_NAME, false);
 
   const campus = event.queryStringParameters?.campus;
   if (!isAreaId(campus)) {

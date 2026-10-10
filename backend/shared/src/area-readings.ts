@@ -11,6 +11,7 @@ import {
   stationReading,
 } from "./stations.js";
 import { getOpenMeteoReading, getOpenMeteoTrend } from "./open-meteo.js";
+import { getLatestReading } from "./readings.js";
 
 export interface DataContext {
   /** "live": CPCB stations. "demo": labelled fixtures for every request. */
@@ -82,9 +83,20 @@ export async function getAreaReading(
     const coords = areaCoordinates(snapshot, area);
     reading = coords ? await getOpenMeteoReading(area.id, { ...coords, name: area.name }) : null;
   }
-  if (reading) await persistReading(dynamodb, ctx.aqiTable, reading);
-  return { area, reading };
+  if (reading) {
+    await persistReading(dynamodb, ctx.aqiTable, reading);
+    return { area, reading };
+  }
+
+  // Source unavailable right now: fall back to this area's last stored
+  // reading if it is recent, clearly labelled as cached.
+  const last = await getLatestReading(dynamodb, ctx.aqiTable, area.id).catch(() => null);
+  const recent =
+    last && last.dataMode !== "demo" && Date.now() - new Date(last.timestamp).getTime() <= CACHED_FALLBACK_MS;
+  return { area, reading: recent ? { ...last, dataMode: "cached" } : null };
 }
+
+const CACHED_FALLBACK_MS = 3 * 60 * 60 * 1000;
 
 /**
  * Live trend from Open-Meteo's hourly history when the area has no current

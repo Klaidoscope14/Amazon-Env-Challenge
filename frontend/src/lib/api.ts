@@ -7,16 +7,18 @@ import {
   NoticeDraft,
   TrendResponse,
 } from "./types";
+import { API_URL } from "./config";
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://auzr0rreg6.execute-api.ap-south-1.amazonaws.com/prod";
 
-/** Carries the HTTP status so callers can tell "no data" (503) from failures. */
+/**
+ * Carries the HTTP status (so callers can tell "no data" 503 from failures)
+ * and the backend's stable error code, when it sends one.
+ */
 export class ApiError extends Error {
   constructor(
     message: string,
-    readonly status: number
+    readonly status: number,
+    readonly code?: string
   ) {
     super(message);
     this.name = "ApiError";
@@ -34,10 +36,66 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: "Request failed" }));
-    throw new ApiError(error.error || `API error: ${res.status}`, res.status);
+    // API Gateway's own errors (401, 429) carry "message" instead of "error".
+    throw new ApiError(
+      error.error || error.message || `API error: ${res.status}`,
+      res.status,
+      error.code
+    );
   }
 
   return res.json();
+}
+
+// Must match lib/auth.tsx.
+const TOKENS_KEY = "breathesafe_tokens";
+
+interface StoredTokens {
+  accessToken: string;
+  idToken: string;
+  refreshToken: string;
+}
+
+function readTokens(): StoredTokens | null {
+  try {
+    const raw = localStorage.getItem(TOKENS_KEY);
+    return raw ? (JSON.parse(raw) as StoredTokens) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function refreshTokens(tokens: StoredTokens): Promise<StoredTokens | null> {
+  try {
+    const data = await fetchApi<{ accessToken: string; idToken: string }>("/api/v1/auth/refresh", {
+      method: "POST",
+      body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+    });
+    const next = { ...tokens, accessToken: data.accessToken, idToken: data.idToken };
+    localStorage.setItem(TOKENS_KEY, JSON.stringify(next));
+    return next;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * For routes behind the Cognito authorizer: sends the ID token, and on a 401
+ * (expired token) refreshes once and retries.
+ */
+async function fetchAuthed<T>(path: string, options?: RequestInit): Promise<T> {
+  const tokens = readTokens();
+  if (!tokens) throw new ApiError("Please sign in to continue.", 401);
+  const call = (idToken: string) =>
+    fetchApi<T>(path, { ...options, headers: { ...options?.headers, Authorization: idToken } });
+  try {
+    return await call(tokens.idToken);
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.status !== 401) throw err;
+    const refreshed = await refreshTokens(tokens);
+    if (!refreshed) throw new ApiError("Your session has expired. Please sign in again.", 401);
+    return call(refreshed.idToken);
+  }
 }
 
 function query(params: Record<string, string | number | undefined>): string {
@@ -81,13 +139,13 @@ export async function createAlert(data: {
   message: string;
   messageHi?: string;
   noticeSource?: NoticeDraft["source"];
-  adminName: string;
   /** Demo mode: scenario on screen. */
   scenario?: string;
   /** Live mode: source timestamp of the reading on screen. */
   readingTimestamp?: string;
 }): Promise<Alert> {
-  return fetchApi<Alert>("/api/v1/alerts", {
+  // The issuing admin comes from the sign-in token on the server.
+  return fetchAuthed<Alert>("/api/v1/alerts", {
     method: "POST",
     body: JSON.stringify(data),
   });
@@ -104,15 +162,14 @@ export async function getAlerts(
 
 export async function recordDecision(
   alert: Pick<Alert, "alertId" | "createdAt" | "campus">,
-  decision: string,
-  decidedBy?: string
+  decision: string
 ): Promise<{ success: boolean; decisionTimestamp: string }> {
-  return fetchApi<{ success: boolean; decisionTimestamp: string }>(
+  return fetchAuthed<{ success: boolean; decisionTimestamp: string }>(
     `/api/v1/alerts/${encodeURIComponent(alert.alertId)}/decision?${query({ campus: alert.campus })}`,
     {
       method: "PATCH",
       // createdAt lets the backend address the alert by its exact key.
-      body: JSON.stringify({ decision, createdAt: alert.createdAt, decidedBy }),
+      body: JSON.stringify({ decision, createdAt: alert.createdAt }),
     }
   );
 }
@@ -124,7 +181,7 @@ export async function getNoticeDraft(params: {
   readingTimestamp?: string;
   institution?: string;
 }): Promise<NoticeDraft> {
-  return fetchApi<NoticeDraft>(`/api/v1/notices/draft?${query(params)}`);
+  return fetchAuthed<NoticeDraft>(`/api/v1/notices/draft?${query(params)}`);
 }
 
 /** Spoken version (Amazon Polly) of an issued alert, as a playable data URL. */
@@ -158,7 +215,6 @@ export async function authSignUp(data: {
   password: string;
   name: string;
   institution?: string;
-  role?: string;
 }): Promise<{ message: string; email: string }> {
   return fetchApi("/api/v1/auth/signup", {
     method: "POST",

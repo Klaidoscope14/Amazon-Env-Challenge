@@ -72,6 +72,8 @@ export default function RecommendationCard({
 
       <button
         onClick={() => setShowEvidence(!showEvidence)}
+        aria-expanded={showEvidence}
+        aria-controls="recommendation-evidence"
         className="mt-3 text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
       >
         {showEvidence ? "Hide" : "See"} evidence and rule
@@ -91,11 +93,11 @@ export default function RecommendationCard({
       </button>
 
       {showEvidence && (
-        <div className="mt-4 rounded-lg bg-gray-50 border border-gray-100 p-4 space-y-3 text-sm">
+        <div id="recommendation-evidence" className="mt-4 rounded-lg bg-gray-50 border border-gray-100 p-4 space-y-3 text-sm">
           <div>
             <span className="text-gray-500 font-medium">Rule Applied:</span>
             <p className="mt-0.5">{recommendation.rule.name}</p>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-600">
               Source: {recommendation.rule.source}
             </p>
           </div>
@@ -106,7 +108,7 @@ export default function RecommendationCard({
               {formatPollutant(recommendation.evidence.dominantPollutant).label}) at{" "}
               {recommendation.evidence.stationName}
             </p>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-600">
               {recommendation.evidence.dataAge} &middot; Source:{" "}
               {recommendation.evidence.source}
             </p>
@@ -133,7 +135,7 @@ export default function RecommendationCard({
       )}
 
       <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-        <p className="text-xs text-gray-400 max-w-md">
+        <p className="text-xs text-gray-600 max-w-md">
           {recommendation.disclaimer}
         </p>
         {recommendation.statusLevel >= 3 &&

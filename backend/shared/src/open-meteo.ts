@@ -10,7 +10,7 @@ import { AQIReading, TrendPoint } from "./types.js";
  */
 
 const ENDPOINT = "https://air-quality-api.open-meteo.com/v1/air-quality";
-const TIMEOUT_MS = 8000;
+const TIMEOUT_MS = 7000;
 const CACHE_MS = 30 * 60 * 1000;
 export const OPEN_METEO_SOURCE = "Open-Meteo";
 
@@ -78,8 +78,17 @@ async function fetchSeries(lat: number, lon: number, pastDays: number): Promise<
   url.searchParams.set("forecast_days", "1");
   url.searchParams.set("timezone", "GMT");
 
-  const response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
-  if (!response.ok) throw new Error(`Open-Meteo returned HTTP ${response.status}`);
+  // Open-Meteo is occasionally slow; one retry covers most transient failures.
+  let response: Response | undefined;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      response = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+      if (response.ok || response.status < 500 || attempt === 2) break;
+    } catch (err) {
+      if (attempt === 2) throw err;
+    }
+  }
+  if (!response?.ok) throw new Error(`Open-Meteo returned HTTP ${response?.status}`);
   const data = (await response.json()) as { hourly?: Record<string, (number | null)[] | string[]> };
   const hourly = data.hourly;
   if (!hourly || !Array.isArray(hourly.time)) throw new Error("Open-Meteo response had no hourly data");

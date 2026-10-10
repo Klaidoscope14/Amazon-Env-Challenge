@@ -227,6 +227,39 @@ campus:
 ======================================================================
 PHASE 3 — SECURITY & HARDENING (before the repo goes public, ~4–5 h)
 ======================================================================
+STATUS (2026-10-10 night): DONE — deployed to dev + prod (16:45Z) and verified on
+prod: unauthenticated/invalid-token writes and drafts -> 401 with CORS headers;
+preflight OK; public reads 200; stage throttling 20/40 + tracing on; Cognito
+authorizer attached; all 7 functions X-Ray Active and logging to
+/breathesafe/prod/* (14 days); least-privilege IAM; auth role has no policies;
+user pool deletion protection ACTIVE, WriteAttributes email/name/institution;
+6 alarms in OK state; auth errors mapped (401 INVALID_CREDENTIALS, 400 bad JSON);
+only errors since deploy are expected cpcb_refresh_failed (data.gov.in down).
+Pending owner: confirm breathesafe-ops-prod email subscription.
+Details:
+  3.1 Cognito authorizer on POST /alerts, PATCH /decision, GET /notices/draft;
+      admin/decider names from verified token claims (body ignored); frontend
+      sends the ID token and refreshes once on 401; DEFAULT_4XX/5XX gateway
+      responses carry CORS headers.
+  3.2 Stage throttling 20 rps / burst 40; area ids validated (unknown -> 404/422).
+  3.3 Alerts validation done in Phase 2; auth service maps Cognito errors to
+      401/403/409/400/429/500 with stable codes and no raw messages; bad JSON 400.
+  3.4 CpcbApiKey NoEcho (moving to SSM deferred: data.gov.in is down anyway).
+  3.5 Least-privilege IAM: explicit DynamoDB actions per function; unused
+      Cognito admin permissions removed from the auth role.
+  3.6 User pool Retain + DeletionProtection ACTIVE; client WriteAttributes =
+      email, name, custom:institution (no self-assigned role; role removed from
+      sign-up).
+  3.7 Login redirect limited to same-site paths; unverified users get a
+      "Verify your email" link.
+  3.8 Stack-managed log groups /breathesafe/<stage>/<fn> (14-day retention),
+      X-Ray tracing (API + functions), 6 alarms (API 5XX, Lambda throttles,
+      errors on aqi/recommendation/alerts/notices) -> breathesafe-ops-<stage>
+      SNS email.
+  3.9 / 3.10 done earlier (refresh no longer throws; readings TTL 8 days).
+  Extra: Open-Meteo retry once + fallback to the area's last stored reading
+  (<=3 h, labelled "cached").
+
 3.1 Authenticate write endpoints end-to-end                      [INF+BE+FE] 1.5 h
     Cognito authorizer on POST /alerts and PATCH /decision; adminName/decidedBy from
     token claims (remove the editable name field); fetchApi sends the token and
@@ -266,6 +299,28 @@ PHASE 3 — SECURITY & HARDENING (before the repo goes public, ~4–5 h)
 PHASE 4 — SUBMISSION & CREDIBILITY (before submitting, ~4 h)
 Judges and fast-track reviewers will read the repo.
 ======================================================================
+STATUS (2026-10-10 late night): DONE (code/docs; no redeploy needed — only
+tests, tooling, docs and frontend changes):
+  4.1 README.md (pitch, features, mermaid architecture, AWS services, data
+      sources, setup, deploy, AI tools); frontend/.env.example (+ .gitignore
+      exception); frontend README replaced.
+  4.2 ARCHITECTURE.md rewritten as built (routes, areas, data-source selection,
+      data model, security, observability, roadmap of what is NOT built).
+  4.3 About page: rule table uses the engine's exact wording; data sources
+      (CPCB -> Open-Meteo -> cached); limitations; privacy; 10 AWS services.
+  4.4 68 Vitest unit tests (engine bands/invalid input, timestamps, demo
+      allowlist, CPCB parsing, areas/metro naming, Open-Meteo AQI maths incl. CO
+      conversion, notice phrasing, AI faithfulness guard). `npm test`.
+  4.5 Single backend tsconfig + `npm run typecheck`; per-service package/tsconfig
+      leftovers, unused SVGs, stale .aws-sam removed; working root scripts; API
+      URL centralised (lib/config.ts); ESLint 3 -> 0 problems.
+  4.6 Labels linked + autocomplete on login/signup/verify, aria-expanded on
+      evidence toggle, disclaimer contrast, aria-current nav, named logo link,
+      skip-to-content link.
+  4.7 Per-route titles ("Sign in — BreatheSafe Campus", ...).
+  4.8 docs/WRITEUP.md (lists AI tools) and docs/BLOG.md drafts — team to fill
+      names, repo URL, video link.
+
 4.1 Root README + .env.example                                     [DOC] 1 h
     Setup, architecture (as built), data sources, limitations, AWS services, AI tools.
                                                                 (P2-2)

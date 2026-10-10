@@ -3,15 +3,19 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { authSignIn } from "@/lib/api";
+import { ApiError, authSignIn } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 function LoginForm() {
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/";
+  // Only same-site paths: "//evil.example" or "https://..." would send a
+  // freshly signed-in user off-site.
+  const requested = searchParams.get("redirect") || "/";
+  const redirect = /^\/(?![\/\\])/.test(requested) ? requested : "/";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [needsVerification, setNeedsVerification] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { signIn } = useAuth();
@@ -19,6 +23,7 @@ function LoginForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setNeedsVerification(false);
     setLoading(true);
 
     try {
@@ -31,6 +36,7 @@ function LoginForm() {
       router.push(redirect);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed");
+      setNeedsVerification(err instanceof ApiError && err.code === "USER_NOT_CONFIRMED");
     } finally {
       setLoading(false);
     }
@@ -49,10 +55,12 @@ function LoginForm() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1">
                 Email
               </label>
               <input
+                id="login-email"
+                autoComplete="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -63,10 +71,12 @@ function LoginForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-1">
                 Password
               </label>
               <input
+                id="login-password"
+                autoComplete="current-password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -77,8 +87,19 @@ function LoginForm() {
             </div>
 
             {error && (
-              <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
+              <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2">
                 {error}
+                {needsVerification && (
+                  <>
+                    {" "}
+                    <Link
+                      href={`/verify?email=${encodeURIComponent(email)}`}
+                      className="font-medium underline"
+                    >
+                      Verify your email
+                    </Link>
+                  </>
+                )}
               </p>
             )}
 

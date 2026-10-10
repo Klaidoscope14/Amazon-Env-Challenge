@@ -1,121 +1,130 @@
+import type { Metadata } from "next";
+import { STATUS_CONFIG } from "@/lib/constants";
+import type { AQIStatus } from "@/lib/types";
+
+export const metadata: Metadata = {
+  title: "How it works",
+  description: "How BreatheSafe Campus turns air-quality data into campus decisions: rules, data sources, limitations and privacy.",
+};
+
+// Mirrors the rules engine in backend/shared/src/aqi-categories.ts word for
+// word, so this page describes exactly what the recommendation says.
+const RULES: { range: string; status: AQIStatus; action: string }[] = [
+  { range: "0–50", status: "Good", action: "No action needed. Air quality is satisfactory." },
+  { range: "51–100", status: "Satisfactory", action: "Sensitive individuals: consider limiting prolonged outdoor exertion." },
+  { range: "101–200", status: "Moderate", action: "Review outdoor activities. Consider moving prolonged events indoors." },
+  { range: "201–300", status: "Poor", action: "Avoid prolonged outdoor activities. Issue campus advisory to all stakeholders." },
+  { range: "301–400", status: "Very Poor", action: "Cancel all outdoor activities. Notify all stakeholders immediately. Consider early dismissal for sensitive groups." },
+  { range: "401–500", status: "Severe", action: "Emergency protocol. Cancel all outdoor activities. Consider campus-wide early dismissal. Notify parents and guardians." },
+];
+
+const AWS_SERVICES: { name: string; role: string }[] = [
+  { name: "Amazon API Gateway", role: "REST API with a Cognito authorizer on write routes and request throttling" },
+  { name: "AWS Lambda", role: "Seven functions: AQI and areas, recommendations, trends, alerts and decisions, notices, sign-in, and the scheduled CPCB refresh" },
+  { name: "Amazon DynamoDB", role: "AQI readings and the alert/decision audit trail (deletion-protected, point-in-time recovery)" },
+  { name: "Amazon Cognito", role: "Administrator sign-up and sign-in" },
+  { name: "Amazon SNS", role: "Email delivery of issued alerts, and operational alarm emails" },
+  { name: "Amazon Polly", role: "Spoken English and Hindi versions of each notice (PA announcements)" },
+  { name: "Amazon EventBridge", role: "Refreshes CPCB station data every 30 minutes" },
+  { name: "AWS Systems Manager Parameter Store", role: "Encrypted storage of third-party API keys" },
+  { name: "Amazon CloudWatch & AWS X-Ray", role: "Logs, alarms and request tracing" },
+  { name: "AWS SAM / CloudFormation", role: "The whole stack is defined as infrastructure as code" },
+];
+
 export default function AboutPage() {
   return (
     <div className="space-y-8 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">
-          How BreatheSafe Campus Works
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Transparency, limitations, and data sources
+        <h1 className="text-2xl font-bold text-gray-900">How BreatheSafe Campus Works</h1>
+        <p className="text-sm text-gray-600 mt-1">
+          See → Act → Record: from an air-quality reading to a campus decision, with an audit trail.
         </p>
       </div>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-gray-900">
-          The Recommendation Engine
-        </h2>
+        <h2 className="text-lg font-semibold text-gray-900">The recommendation engine</h2>
         <p className="text-sm text-gray-700">
-          BreatheSafe Campus uses a <strong>deterministic, rule-based engine</strong> — not machine learning.
-          Every recommendation is traceable to a specific AQI value, a documented threshold, and a rule.
+          Recommendations come from a <strong>deterministic, rule-based engine</strong> using India&apos;s
+          National Air Quality Index categories (CPCB) — not machine learning. Every recommendation shows
+          the AQI value, the pollutant, the rule that fired and the time of the reading.
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="text-left py-2 px-3 text-gray-500 font-medium">AQI Range</th>
-                <th className="text-left py-2 px-3 text-gray-500 font-medium">Status</th>
-                <th className="text-left py-2 px-3 text-gray-500 font-medium">Recommended Action</th>
+                <th scope="col" className="text-left py-2 px-3 text-gray-600 font-medium">AQI range</th>
+                <th scope="col" className="text-left py-2 px-3 text-gray-600 font-medium">Category</th>
+                <th scope="col" className="text-left py-2 px-3 text-gray-600 font-medium">Recommended action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              <tr>
-                <td className="py-2 px-3">0–50</td>
-                <td className="py-2 px-3"><span className="text-green-700 font-medium">Good</span></td>
-                <td className="py-2 px-3">No action needed</td>
-              </tr>
-              <tr>
-                <td className="py-2 px-3">51–100</td>
-                <td className="py-2 px-3"><span className="text-lime-700 font-medium">Satisfactory</span></td>
-                <td className="py-2 px-3">Sensitive individuals: limit prolonged outdoor exertion</td>
-              </tr>
-              <tr>
-                <td className="py-2 px-3">101–200</td>
-                <td className="py-2 px-3"><span className="text-yellow-700 font-medium">Moderate</span></td>
-                <td className="py-2 px-3">Review outdoor activities. Consider moving events indoors.</td>
-              </tr>
-              <tr>
-                <td className="py-2 px-3">201–300</td>
-                <td className="py-2 px-3"><span className="text-orange-700 font-medium">Poor</span></td>
-                <td className="py-2 px-3">Avoid outdoor activities. Issue campus advisory.</td>
-              </tr>
-              <tr>
-                <td className="py-2 px-3">301–400</td>
-                <td className="py-2 px-3"><span className="text-red-700 font-medium">Very Poor</span></td>
-                <td className="py-2 px-3">Cancel outdoor activities. Notify all stakeholders.</td>
-              </tr>
-              <tr>
-                <td className="py-2 px-3">401–500</td>
-                <td className="py-2 px-3"><span className="text-red-900 font-medium">Severe</span></td>
-                <td className="py-2 px-3">Emergency protocol. Consider campus-wide early dismissal.</td>
-              </tr>
+              {RULES.map((rule) => (
+                <tr key={rule.status}>
+                  <td className="py-2 px-3 tabular-nums whitespace-nowrap">{rule.range}</td>
+                  <td className="py-2 px-3">
+                    <span className={`font-medium ${STATUS_CONFIG[rule.status].color}`}>{rule.status}</span>
+                  </td>
+                  <td className="py-2 px-3 text-gray-800">{rule.action}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-gray-500">
-          Thresholds based on India&apos;s National AQI categories by the Central Pollution Control Board (CPCB).
+        <p className="text-sm text-gray-700">
+          Alert notices are drafted from reviewed English and Hindi templates for each category. An AI
+          model (Google Gemini) may rephrase a draft for readability; drafts that change any number or
+          drop the location are discarded and the template is used. An administrator reviews every
+          notice before it is sent.
         </p>
       </section>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
-        <h2 className="text-lg font-semibold text-gray-900">Data Source</h2>
-        <div className="text-sm text-gray-700 space-y-2">
-          <p>
-            <strong>Primary:</strong> Central Pollution Control Board (CPCB), India —
-            station-level AQI readings for Delhi.
-          </p>
-          <p>
-            <strong>Fallback:</strong> OpenAQ — aggregates CPCB and other sources with a possible slight delay.
-          </p>
-          <p>
-            <strong>Update frequency:</strong> Typically hourly from CPCB. Our system fetches and caches the latest reading
-            and marks it as stale if older than 2 hours.
-          </p>
-          <p>
-            <strong>Demo mode:</strong> When running in demo mode, all data is clearly labelled
-            &quot;Demo data — not a live reading.&quot; Demo fixtures are pre-built for each AQI category.
-          </p>
-        </div>
+        <h2 className="text-lg font-semibold text-gray-900">Data sources</h2>
+        <ul className="text-sm text-gray-700 space-y-2 list-disc list-inside">
+          <li>
+            <strong>CPCB monitoring stations</strong> (via data.gov.in) — used when a station near you
+            has reported within the last 3 hours.
+          </li>
+          <li>
+            <strong>Open-Meteo air-quality data</strong> (Copernicus CAMS) for your area otherwise, so
+            every location in India has a reading. The Indian AQI is calculated with CPCB&apos;s method:
+            24-hour averages for PM2.5, PM10, NO₂ and SO₂, 8-hour averages for O₃ and CO, and the
+            highest pollutant sub-index.
+          </li>
+          <li>
+            If the current source is briefly unavailable, the last reading from the past 3 hours is
+            shown, labelled <em>Cached</em>; older data is never shown as current.
+          </li>
+          <li>
+            <strong>Demo mode</strong> uses clearly labelled sample values (&ldquo;Demo data — not a
+            live reading&rdquo;) for rehearsals and presentations.
+          </li>
+        </ul>
       </section>
 
       <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 space-y-3">
         <h2 className="text-lg font-semibold text-amber-900">Limitations</h2>
-        <ul className="text-sm text-amber-800 space-y-2 list-disc list-inside">
+        <ul className="text-sm text-amber-900 space-y-2 list-disc list-inside">
           <li>
-            <strong>Not medical advice.</strong> This tool provides decision support for campus administrators.
-            It does not diagnose health conditions or guarantee safety.
+            <strong>Not medical advice.</strong> This is decision support for administrators; it does
+            not diagnose conditions or guarantee safety.
           </li>
           <li>
-            <strong>Station-level data, not street-level.</strong> AQI readings come from monitoring stations
-            and may not reflect exact conditions at every point on campus.
+            <strong>Area-level, not street-level.</strong> Readings describe a station or an area of
+            roughly 10 km and may differ from conditions at a specific spot or from other apps.
           </li>
           <li>
-            <strong>Does not measure indoor air quality.</strong> Outdoor AQI does not directly indicate
-            indoor conditions.
+            <strong>Outdoor air only.</strong> Outdoor AQI does not directly indicate indoor conditions.
           </li>
           <li>
-            <strong>Does not replace official government advisories.</strong> Always check{" "}
-            <a
-              href="https://cpcb.nic.in"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline font-medium"
-            >
+            <strong>Does not replace official advisories.</strong> Always check{" "}
+            <a href="https://cpcb.nic.in" target="_blank" rel="noopener noreferrer" className="underline font-medium">
               CPCB
             </a>{" "}
-            and local health authority guidance for official decisions.
+            and local health-authority guidance.
           </li>
           <li>
-            <strong>No forecasting.</strong> The MVP shows current/recent data only. No predictions are made.
+            <strong>No forecasting.</strong> Only current and recent data is shown.
           </li>
         </ul>
       </section>
@@ -125,39 +134,33 @@ export default function AboutPage() {
         <ul className="text-sm text-gray-700 space-y-2 list-disc list-inside">
           <li>
             <strong>Location:</strong> with your permission, your browser&apos;s location is rounded to
-            about 1&nbsp;km and used once to find the nearest CPCB monitoring station. Coordinates
-            are not stored or logged; only the chosen area is remembered in your browser. You can
-            pick an area manually instead.
+            about 1&nbsp;km and used once to find your area. Coordinates are not stored or logged; only
+            the chosen area is remembered in your browser. You can pick an area manually instead.
           </li>
           <li>
-            <strong>Accounts:</strong> administrators sign in with an email and name (Amazon
-            Cognito). Alerts record the issuing administrator&apos;s name for accountability.
+            <strong>Accounts:</strong> administrators sign in with an email and name (Amazon Cognito).
+            Alerts and decisions record the signed-in administrator&apos;s name for accountability.
           </li>
           <li>
-            <strong>No health data:</strong> we do not collect student health information. Stored
-            data is AQI readings from public sources, alerts and administrator decisions.
+            <strong>No health data:</strong> we do not collect student health information. Stored data
+            is air-quality readings, alerts and administrator decisions.
           </li>
         </ul>
       </section>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
-        <h2 className="text-lg font-semibold text-gray-900">AWS Architecture</h2>
-        <p className="text-sm text-gray-700">
-          This application runs on real AWS infrastructure:
-        </p>
-        <ul className="text-sm text-gray-700 space-y-1 list-disc list-inside">
-          <li><strong>Amazon API Gateway</strong> — REST API endpoints</li>
-          <li><strong>AWS Lambda</strong> — Data fetching, recommendation engine, alert management</li>
-          <li><strong>Amazon DynamoDB</strong> — AQI reading cache and alert/decision audit trail</li>
-          <li><strong>Amazon CloudWatch</strong> — Logging and error monitoring</li>
+        <h2 className="text-lg font-semibold text-gray-900">Built on AWS</h2>
+        <ul className="text-sm text-gray-700 space-y-1.5">
+          {AWS_SERVICES.map((service) => (
+            <li key={service.name}>
+              <strong>{service.name}</strong> — {service.role}
+            </li>
+          ))}
         </ul>
-        <p className="text-xs text-gray-500 mt-2">
-          Every API call, data store operation, and recommendation is handled by these services in real time.
-        </p>
       </section>
 
-      <p className="text-xs text-gray-400 text-center pb-4">
-        BreatheSafe Campus — Built for the WeMakeDevs × AWS Environmental Hacks hackathon.
+      <p className="text-xs text-gray-600 text-center pb-4">
+        BreatheSafe Campus — built for the WeMakeDevs × AWS Environmental Hacks (Air track).
       </p>
     </div>
   );

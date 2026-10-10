@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
   "dependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.650.0",
     "@aws-sdk/client-dynamodb": "^3.650.0",
@@ -10,5 +14,11 @@
     "@aws-sdk/client-sns": "^3.1149.0",
     "@aws-sdk/client-ssm": "^3.1149.0",
     "@aws-sdk/util-dynamodb": "^3.650.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.164",
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
   }
 }

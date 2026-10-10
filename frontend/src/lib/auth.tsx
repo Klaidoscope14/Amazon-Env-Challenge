@@ -9,6 +9,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import { API_URL } from "./config";
 
 interface User {
   email: string;
@@ -37,9 +38,6 @@ const AuthContext = createContext<AuthContextType | null>(null);
 const TOKENS_KEY = "breathesafe_tokens";
 const REFRESH_INTERVAL_MS = 50 * 60 * 1000;
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://auzr0rreg6.execute-api.ap-south-1.amazonaws.com/prod";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -95,42 +93,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [refreshTokens]
   );
 
+  // Restore a saved session once after mount. Runs on a timer so every state
+  // update happens asynchronously, after the browser-only storage read.
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(TOKENS_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as AuthTokens;
-        setTokens(parsed);
-        fetchProfile(parsed.accessToken).then(async (profile) => {
-          if (profile) {
-            setUser(profile);
-            scheduleRefresh(parsed);
-          } else {
-            const newTokens = await refreshTokens(parsed.refreshToken);
-            if (newTokens) {
-              setTokens(newTokens);
-              try {
-                localStorage.setItem(TOKENS_KEY, JSON.stringify(newTokens));
-              } catch {}
-              const retryProfile = await fetchProfile(newTokens.accessToken);
-              if (retryProfile) {
-                setUser(retryProfile);
-                scheduleRefresh(newTokens);
-              } else {
-                localStorage.removeItem(TOKENS_KEY);
-                setTokens(null);
-              }
-            } else {
-              localStorage.removeItem(TOKENS_KEY);
-              setTokens(null);
-            }
-          }
-          setIsLoading(false);
-        });
+    const restore = async () => {
+      let stored: AuthTokens | null = null;
+      try {
+        const raw = localStorage.getItem(TOKENS_KEY);
+        stored = raw ? (JSON.parse(raw) as AuthTokens) : null;
+      } catch {
+        stored = null;
+      }
+      if (!stored) {
+        setIsLoading(false);
         return;
       }
-    } catch {}
-    setIsLoading(false);
+
+      let active: AuthTokens | null = stored;
+      let profile = await fetchProfile(stored.accessToken);
+      if (!profile) {
+        active = await refreshTokens(stored.refreshToken);
+        profile = active ? await fetchProfile(active.accessToken) : null;
+      }
+
+      if (active && profile) {
+        try {
+          localStorage.setItem(TOKENS_KEY, JSON.stringify(active));
+        } catch {}
+        setTokens(active);
+        setUser(profile);
+        scheduleRefresh(active);
+      } else {
+        try {
+          localStorage.removeItem(TOKENS_KEY);
+        } catch {}
+        setTokens(null);
+      }
+      setIsLoading(false);
+    };
+    const timer = setTimeout(() => void restore(), 0);
+    return () => clearTimeout(timer);
   }, [fetchProfile, refreshTokens, scheduleRefresh]);
 
   useEffect(() => {

@@ -62,10 +62,12 @@ function VerifyForm() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="verify-email" className="block text-sm font-medium text-gray-700 mb-1">
                 Email
               </label>
               <input
+                id="verify-email"
+                autoComplete="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -75,10 +77,13 @@ function VerifyForm() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="verify-code" className="block text-sm font-medium text-gray-700 mb-1">
                 Verification Code
               </label>
               <input
+                id="verify-code"
+                autoComplete="one-time-code"
+                inputMode="numeric"
                 type="text"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}

@@ -34,7 +34,6 @@ export default function AlertForm({
   // null = untouched, so the field shows the (possibly refreshed) draft.
   const [editedEn, setEditedEn] = useState<string | null>(null);
   const [editedHi, setEditedHi] = useState<string | null>(null);
-  const [adminName, setAdminName] = useState(user?.name || "");
   const [confirming, setConfirming] = useState(false);
   const queryClient = useQueryClient();
   const firstFieldRef = useRef<HTMLSelectElement>(null);
@@ -71,7 +70,6 @@ export default function AlertForm({
         message: messageEn.trim(),
         messageHi: messageHi.trim() || undefined,
         noticeSource: draftQuery.data?.source,
-        adminName: adminName.trim() || "Campus Admin",
         scenario,
         readingTimestamp,
       }),
@@ -227,21 +225,9 @@ export default function AlertForm({
             </p>
           </div>
 
-          <div>
-            <label htmlFor={`${id}-name`} className="block text-sm font-medium text-gray-700 mb-1">
-              Your Name
-            </label>
-            <input
-              id={`${id}-name`}
-              type="text"
-              autoComplete="name"
-              value={adminName}
-              onChange={(e) => setAdminName(e.target.value)}
-              maxLength={100}
-              placeholder="Campus Admin"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+          <p className="text-xs text-gray-600">
+            Issued as <strong>{user?.name ?? "you"}</strong> — recorded from your sign-in.
+          </p>
         </div>
 
         {confirming && (

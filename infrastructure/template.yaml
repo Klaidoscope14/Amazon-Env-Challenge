@@ -10,6 +10,7 @@ Globals:
     MemorySize: 256
     Architectures:
       - arm64
+    Tracing: Active
     Environment:
       Variables:
         AQI_TABLE_NAME: !Ref AQIReadingsTable
@@ -77,8 +78,11 @@ Resources:
   # ============================================
   UserPool:
     Type: AWS::Cognito::UserPool
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       UserPoolName: !Sub breathesafe-users-${Stage}
+      DeletionProtection: ACTIVE
       AutoVerifiedAttributes:
         - email
       UsernameAttributes:
@@ -112,6 +116,12 @@ Resources:
         - ALLOW_REFRESH_TOKEN_AUTH
       GenerateSecret: false
       PreventUserExistenceErrors: ENABLED
+      # Attributes a user may set themselves (sign-up needs email). custom:role
+      # is excluded so nobody can self-assign a role.
+      WriteAttributes:
+        - email
+        - name
+        - custom:institution
       AccessTokenValidity: 1
       IdTokenValidity: 1
       RefreshTokenValidity: 30
@@ -126,12 +136,40 @@ Resources:
   BreatheSafeApi:
     Type: AWS::Serverless::Api
     Properties:
+      Name: !Sub breathesafe-api-${Stage}
       StageName: !Ref Stage
+      TracingEnabled: true
       Cors:
         AllowMethods: "'GET,POST,PATCH,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization'"
         AllowOrigin: "'*'"
       Description: BreatheSafe Campus REST API
+      # Caps abuse and cost on the public API.
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          ThrottlingRateLimit: 20
+          ThrottlingBurstLimit: 40
+          MetricsEnabled: true
+      # Write/draft routes opt in with Auth: Authorizer: CognitoAuth (ID token
+      # in the Authorization header); read routes stay public.
+      Auth:
+        Authorizers:
+          CognitoAuth:
+            UserPoolArn: !GetAtt UserPool.Arn
+      # Errors produced by API Gateway itself (401 from the authorizer, 429
+      # throttling, ...) need CORS headers too, or browsers hide them.
+      GatewayResponses:
+        DEFAULT_4XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+        DEFAULT_5XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type,Authorization'"
 
   # ============================================
   # DynamoDB Tables
@@ -213,9 +251,16 @@ Resources:
       Environment:
         Variables:
           CPCB_API_KEY: !Ref CpcbApiKey
+      LoggingConfig:
+        LogGroup: !Ref FetchAQILogGroup
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref AQIReadingsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:Query
+              Resource: !GetAtt AQIReadingsTable.Arn
       Events:
         GetAQI:
           Type: Api
@@ -263,9 +308,15 @@ Resources:
       Environment:
         Variables:
           CPCB_API_KEY: !Ref CpcbApiKey
+      LoggingConfig:
+        LogGroup: !Ref StationsRefreshLogGroup
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref AQIReadingsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+              Resource: !GetAtt AQIReadingsTable.Arn
       Events:
         Every30Minutes:
           Type: Schedule
@@ -297,9 +348,16 @@ Resources:
       Environment:
         Variables:
           CPCB_API_KEY: !Ref CpcbApiKey
+      LoggingConfig:
+        LogGroup: !Ref RecommendationLogGroup
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref AQIReadingsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:Query
+              Resource: !GetAtt AQIReadingsTable.Arn
       Events:
         GetRecommendation:
           Type: Api
@@ -333,12 +391,23 @@ Resources:
           ALERTS_TOPIC_ARN: !Ref AlertsTopic
           NOTICE_URL: !Ref PublicSiteUrl
           CPCB_API_KEY: !Ref CpcbApiKey
+      LoggingConfig:
+        LogGroup: !Ref AlertsLogGroup
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref AlertsDecisionsTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref AQIReadingsTable
         - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:Query
+                - dynamodb:UpdateItem
+              Resource: !GetAtt AlertsDecisionsTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:Query
+              Resource: !GetAtt AQIReadingsTable.Arn
             - Effect: Allow
               Action:
                 - sns:Publish
@@ -351,6 +420,8 @@ Resources:
             RestApiId: !Ref BreatheSafeApi
             Path: /api/v1/alerts
             Method: POST
+            Auth:
+              Authorizer: CognitoAuth
         GetAlerts:
           Type: Api
           Properties:
@@ -363,6 +434,8 @@ Resources:
             RestApiId: !Ref BreatheSafeApi
             Path: /api/v1/alerts/{alertId}/decision
             Method: PATCH
+            Auth:
+              Authorizer: CognitoAuth
     Metadata:
       BuildMethod: esbuild
       BuildProperties:
@@ -390,12 +463,20 @@ Resources:
           GEMINI_MODEL: !Ref GeminiModel
           GEMINI_API_KEY_PARAM: !Ref GeminiApiKeyParam
           CPCB_API_KEY: !Ref CpcbApiKey
+      LoggingConfig:
+        LogGroup: !Ref NoticesLogGroup
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref AQIReadingsTable
-        - DynamoDBReadPolicy:
-            TableName: !Ref AlertsDecisionsTable
         - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:Query
+              Resource: !GetAtt AQIReadingsTable.Arn
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+              Resource: !GetAtt AlertsDecisionsTable.Arn
             - Effect: Allow
               Action: ssm:GetParameter
               Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GeminiApiKeyParam}
@@ -409,6 +490,8 @@ Resources:
             RestApiId: !Ref BreatheSafeApi
             Path: /api/v1/notices/draft
             Method: GET
+            Auth:
+              Authorizer: CognitoAuth
         GetAudio:
           Type: Api
           Properties:
@@ -438,10 +521,16 @@ Resources:
       FunctionName: !Sub breathesafe-trends-${Stage}
       CodeUri: ../backend/
       Handler: handler.handler
-      Description: Returns historical AQI trend data from DynamoDB
+      Description: AQI trend for an area (Open-Meteo hourly history or stored readings)
+      LoggingConfig:
+        LogGroup: !Ref TrendsLogGroup
       Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref AQIReadingsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+              Resource: !GetAtt AQIReadingsTable.Arn
       Events:
         GetTrends:
           Type: Api
@@ -474,13 +563,10 @@ Resources:
         Variables:
           USER_POOL_ID: !Ref UserPool
           USER_POOL_CLIENT_ID: !Ref UserPoolClient
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:AdminGetUser
-                - cognito-idp:AdminUpdateUserAttributes
-              Resource: !GetAtt UserPool.Arn
+      # Uses only public Cognito client APIs (SignUp, InitiateAuth, GetUser),
+      # which need no IAM permissions.
+      LoggingConfig:
+        LogGroup: !Ref AuthLogGroup
       Events:
         SignUp:
           Type: Api
@@ -526,6 +612,176 @@ Resources:
         External:
           - '@aws-sdk/*'
 
+  # ============================================
+  # Logs (14-day retention) and monitoring
+  # ============================================
+  # Functions log to these stack-managed groups instead of the default
+  # /aws/lambda/... groups, so retention is controlled here.
+  FetchAQILogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /breathesafe/${Stage}/fetch-aqi
+      RetentionInDays: 14
+
+  StationsRefreshLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /breathesafe/${Stage}/stations-refresh
+      RetentionInDays: 14
+
+  RecommendationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /breathesafe/${Stage}/recommendation
+      RetentionInDays: 14
+
+  AlertsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /breathesafe/${Stage}/alerts
+      RetentionInDays: 14
+
+  NoticesLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /breathesafe/${Stage}/notices
+      RetentionInDays: 14
+
+  TrendsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /breathesafe/${Stage}/trends
+      RetentionInDays: 14
+
+  AuthLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /breathesafe/${Stage}/auth
+      RetentionInDays: 14
+
+  # Operational alarms -> email (same address as alert emails; AWS sends a
+  # separate confirmation link for this topic).
+  OpsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub breathesafe-ops-${Stage}
+      DisplayName: BreatheSafe Ops
+
+  OpsEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail
+    Properties:
+      TopicArn: !Ref OpsTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+  ApiServerErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub breathesafe-${Stage}-api-5xx
+      AlarmDescription: API returned 5 or more server errors in 5 minutes
+      Namespace: AWS/ApiGateway
+      MetricName: 5XXError
+      Dimensions:
+        - Name: ApiName
+          Value: !Sub breathesafe-api-${Stage}
+        - Name: Stage
+          Value: !Ref Stage
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref OpsTopic]
+
+  LambdaThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub breathesafe-${Stage}-lambda-throttles
+      AlarmDescription: Lambda invocations were throttled (account concurrency limit)
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref OpsTopic]
+
+  FetchAQIErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub breathesafe-${Stage}-fetchaqi-errors
+      AlarmDescription: Function errors (3 or more in 5 minutes)
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FetchAQIFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref OpsTopic]
+
+  RecommendationErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub breathesafe-${Stage}-recommendation-errors
+      AlarmDescription: Function errors (3 or more in 5 minutes)
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GetRecommendationFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref OpsTopic]
+
+  AlertsErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub breathesafe-${Stage}-alerts-errors
+      AlarmDescription: Function errors (3 or more in 5 minutes)
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AlertsCRUDFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref OpsTopic]
+
+  NoticesErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub breathesafe-${Stage}-notices-errors
+      AlarmDescription: Function errors (3 or more in 5 minutes)
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref NoticesFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref OpsTopic]
+
 Outputs:
   ApiUrl:
     Description: API Gateway endpoint URL
@@ -548,6 +804,9 @@ Outputs:
   AlertsTopicArn:
     Description: SNS topic for alert emails
     Value: !Ref AlertsTopic
+  OpsTopicArn:
+    Description: SNS topic for operational alarms
+    Value: !Ref OpsTopic
   UserPoolId:
     Description: Cognito User Pool ID
     Value: !Ref UserPool

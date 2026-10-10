@@ -4,17 +4,13 @@
   "private": true,
   "description": "BreatheSafe Campus - Air Quality Action Engine",
   "scripts": {
-    "build:shared": "cd backend/shared && npm run build",
-    "build:aqi": "cd backend/services/aqi-data && npm run build",
-    "build:recommendation": "cd backend/services/recommendation && npm run build",
-    "build:alerts": "cd backend/services/alerts && npm run build",
-    "build:backend": "npm run build:shared && npm run build:aqi && npm run build:recommendation && npm run build:alerts",
-    "install:all": "npm run install:shared && npm run install:aqi && npm run install:recommendation && npm run install:alerts",
-    "install:shared": "cd backend/shared && npm install",
-    "install:aqi": "cd backend/services/aqi-data && npm install",
-    "install:recommendation": "cd backend/services/recommendation && npm install",
-    "install:alerts": "cd backend/services/alerts && npm install",
-    "deploy": "cd infrastructure && sam build && sam deploy",
-    "deploy:guided": "cd infrastructure && sam build && sam deploy --guided"
+    "install:all": "npm install --prefix backend && npm install --prefix frontend",
+    "typecheck": "npm run typecheck --prefix backend && cd frontend && npx tsc --noEmit -p .",
+    "test": "npm test --prefix backend",
+    "lint": "npm run lint --prefix frontend",
+    "dev": "npm run dev --prefix frontend",
+    "build": "cd infrastructure && sam build && cd ../frontend && npx next build",
+    "deploy:dev": "cd infrastructure && sam build && sam deploy --config-env dev",
+    "deploy": "cd infrastructure && sam build && sam deploy"
   }
 }
