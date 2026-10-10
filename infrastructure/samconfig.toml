@@ -15,7 +15,7 @@ s3_prefix = "breathesafe-campus"
 region = "ap-south-1"
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
-parameter_overrides = "DataMode=demo Stage=prod"
+parameter_overrides = "DataMode=live Stage=prod"
 
 [dev.deploy.parameters]
 stack_name = "breathesafe-campus-dev"
