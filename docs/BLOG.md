@@ -29,7 +29,7 @@ We built **BreatheSafe** around that gap: **See → Act → Record**.
 
 _Insert the architecture diagram from the README._
 
-- **API Gateway + 8 Lambda functions** (Node.js 22 on Graviton/arm64), all defined in one **AWS SAM** template.
+- **API Gateway + 7 Lambda functions** (Node.js 22 on Graviton/arm64), all defined in one **AWS SAM** template.
 - **DynamoDB** for readings, an append-only decision log, and a **RulesConfig** table that holds the
   recommendation rules as data.
 - **EventBridge** as a domain-event bus: readings, category changes, alerts and decisions are published
@@ -42,11 +42,12 @@ _Insert the architecture diagram from the README._
 
 ## Challenges (and what we learned)
 
-1. **Our primary data source went down mid-hackathon.** CPCB's public feed on data.gov.in started
+1. **Our first data source went down mid-hackathon.** CPCB's public feed on data.gov.in started
    refusing connections — from our laptops, from AWS Mumbai, from everywhere. Because the data layer
-   was built around "areas" with a source-selection step, we added Open-Meteo as a fallback: we fetch
-   hourly pollutant concentrations and compute the Indian AQI ourselves with CPCB's breakpoints and
-   averaging windows.
+   was built around "areas" with a single source-selection step, we could swap the source without
+   touching the rest of the app: BreatheSafe now uses the Google Air Quality API, which reports
+   India's National AQI (the CPCB scale) for any location, with hourly history for trends. To keep
+   costs down, each area is looked up at most every 30 minutes and recent readings are reused.
 2. **Honest data beats impressive data.** "Unavailable" is a first-class state: if no source responds,
    the app shows the last reading from the past 3 hours labelled *Cached*, or says data is unavailable.
 3. **Using AI without letting it make things up.** The explanation model only sees evidence our server

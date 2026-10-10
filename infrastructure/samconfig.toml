@@ -3,7 +3,7 @@
 # Dev:   cd infrastructure && sam build && sam deploy --config-env dev
 # Each environment is its own stack. Never deploy Stage=dev into the prod stack:
 # changing Stage renames the tables and CloudFormation would replace them.
-# Parameters not listed here (e.g. CpcbApiKey, AlertEmail) keep their previously
+# Parameters not listed here (e.g. AlertEmail, GoogleAqKeyParam) keep their previously
 # deployed values; pass them once with --parameter-overrides to set them.
 
 version = 0.1

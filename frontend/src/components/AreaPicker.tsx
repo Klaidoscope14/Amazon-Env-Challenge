@@ -54,7 +54,7 @@ export default function AreaPicker({ intro, onDone }: AreaPickerProps) {
           Choose your area
         </h2>
         <p className="text-sm text-muted mt-1">
-          {intro ?? "Air quality is shown for the nearest CPCB monitoring station."}
+          {intro ?? "Air quality is shown for the area around your location, anywhere in India."}
         </p>
       </div>
 
@@ -71,7 +71,7 @@ export default function AreaPicker({ intro, onDone }: AreaPickerProps) {
 
       <div>
         <label htmlFor={`${id}-search`} className="block text-sm font-medium text-muted-strong mb-1">
-          Or search for a city or monitoring station
+          Or search for a city
         </label>
         <input
           id={`${id}-search`}

@@ -1,52 +1,41 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { AQIReading, TrendPoint } from "./types.js";
 import { fetchDemoReading } from "./demo.js";
-import {
-  Area,
-  areaCoordinates,
-  getStationSnapshot,
-  persistReading,
-  resolveArea,
-  StationSnapshot,
-  stationReading,
-} from "./stations.js";
-import { getOpenMeteoReading, getOpenMeteoTrend } from "./open-meteo.js";
-import { getLatestReading, getReadingBefore } from "./readings.js";
+import { Area, areaCoordinates, readingPlaceName, resolveArea } from "./areas.js";
+import { getGoogleReading, getGoogleTrend, GOOGLE_SOURCE } from "./google-aq.js";
+import { getLatestReading, getReadingBefore, persistReading } from "./readings.js";
 import { getThresholdForAqi } from "./aqi-categories.js";
 import { getActiveRuleset } from "./rules.js";
 import { BreatheSafeEvent, eventBusFromEnv, publishEvents, ReadingEventDetail } from "./events.js";
 
 export interface DataContext {
-  /** "live": CPCB stations. "demo": labelled fixtures for every request. */
+  /** "live": Google Air Quality API. "demo": labelled fixtures for every request. */
   dataMode: string;
   /** In live mode, allow presenter requests with ?scenario= to use fixtures. */
   demoScenariosEnabled: boolean;
   aqiTable: string;
-  cpcbApiKey?: string;
 }
 
 export function dataContextFromEnv(): DataContext {
-  const key = process.env.CPCB_API_KEY;
   return {
     dataMode: process.env.DATA_MODE || "demo",
     demoScenariosEnabled: process.env.DEMO_SCENARIOS_ENABLED !== "false",
     aqiTable: process.env.AQI_TABLE_NAME!,
-    cpcbApiKey: key && key !== "none" ? key : undefined,
   };
 }
 
-/** Area ids are slugs: "st-<station>", "city-<city>" (and legacy campus ids). */
+/** Area ids are slugs: "geo-<lat>-<lon>", "city-<city>" (and legacy ids on old alerts). */
 export function isAreaId(value: unknown): value is string {
   return typeof value === "string" && /^[a-z0-9][a-z0-9-]{0,89}$/.test(value);
 }
 
-/** Display name for where a reading applies: the area's name, else the reading's station without the demo suffix. */
+/** Display name for where a reading applies: the area's name, else the reading's place without the demo suffix. */
 export function areaDisplayName(
   area: Area | null,
   reading: AQIReading | null,
   fallback: string
 ): string {
-  return area?.name ?? reading?.stationName.replace(/ \(sample values\)$/, "") ?? fallback;
+  return area?.name ?? (reading ? readingPlaceName(reading) : fallback);
 }
 
 /** True when this request should be served from labelled demo fixtures. */
@@ -54,27 +43,24 @@ export function usesDemo(ctx: DataContext, scenario?: string): boolean {
   return ctx.dataMode !== "live" || (!!scenario && ctx.demoScenariosEnabled);
 }
 
-export async function loadSnapshotFor(
-  dynamodb: DynamoDBClient,
-  ctx: DataContext
-): Promise<StationSnapshot | null> {
-  return ctx.dataMode === "live"
-    ? getStationSnapshot(dynamodb, ctx.aqiTable, ctx.cpcbApiKey)
-    : null;
-}
-
 export interface AreaReading {
-  /** null when the area id is not known (live mode) */
+  /** null when the area id is not known */
   area: Area | null;
   /** null when no valid reading is available for a known area */
   reading: AQIReading | null;
 }
 
+/** A stored Google reading younger than this is reused instead of calling the API. */
+const REUSE_STORED_MS = 30 * 60 * 1000;
+/** Without a fresh reading, the last stored one is shown (labelled cached) for this long. */
+const CACHED_FALLBACK_MS = 3 * 60 * 60 * 1000;
+
 /**
  * The current reading for an area. Demo/presenter requests get a labelled
- * fixture named after the area. Live requests use a CPCB station's measured
- * reading when it is current, otherwise Open-Meteo data for the area's
- * location. Live readings are stored (once per source timestamp) for trends.
+ * fixture named after the area. Live requests use the Google Air Quality API
+ * (India's National AQI for the area's location); a reading stored in the
+ * last 30 minutes is reused, which keeps API calls (and cost) low across
+ * Lambda containers. New readings are stored once per source timestamp.
  */
 export async function getAreaReading(
   dynamodb: DynamoDBClient,
@@ -82,19 +68,25 @@ export async function getAreaReading(
   areaId: string,
   scenario?: string
 ): Promise<AreaReading> {
-  const snapshot = await loadSnapshotFor(dynamodb, ctx);
-  const area = resolveArea(snapshot, areaId);
+  const area = resolveArea(areaId);
 
   if (usesDemo(ctx, scenario)) {
     return { area, reading: fetchDemoReading(areaId, scenario, area?.name) };
   }
   if (!area) return { area: null, reading: null };
 
-  let reading = snapshot ? stationReading(snapshot, area) : null;
-  if (!reading) {
-    const coords = areaCoordinates(snapshot, area);
-    reading = coords ? await getOpenMeteoReading(area.id, { ...coords, name: area.name }) : null;
+  const last = await getLatestReading(dynamodb, ctx.aqiTable, area.id).catch(() => null);
+  if (
+    last &&
+    last.source === GOOGLE_SOURCE &&
+    last.dataMode === "live" &&
+    Date.now() - new Date(last.fetchedAt).getTime() < REUSE_STORED_MS
+  ) {
+    return { area, reading: last };
   }
+
+  const coords = areaCoordinates(area);
+  const reading = coords ? await getGoogleReading(area.id, { ...coords, name: area.name }) : null;
   if (reading) {
     if (await persistReading(dynamodb, ctx.aqiTable, reading)) {
       await announceReading(dynamodb, ctx, area, reading);
@@ -104,13 +96,10 @@ export async function getAreaReading(
 
   // Source unavailable right now: fall back to this area's last stored
   // reading if it is recent, clearly labelled as cached.
-  const last = await getLatestReading(dynamodb, ctx.aqiTable, area.id).catch(() => null);
   const recent =
     last && last.dataMode !== "demo" && Date.now() - new Date(last.timestamp).getTime() <= CACHED_FALLBACK_MS;
   return { area, reading: recent ? { ...last, dataMode: "cached" } : null };
 }
-
-const CACHED_FALLBACK_MS = 3 * 60 * 60 * 1000;
 
 /**
  * Emits aqi.reading.received for a newly stored reading, plus
@@ -163,19 +152,16 @@ async function announceReading(
 }
 
 /**
- * Live trend from Open-Meteo's hourly history when the area has no current
- * CPCB station; null means "use stored readings instead".
+ * Hourly trend for an area from Google's history (one call per area per hour,
+ * sliced for every window); null means "use stored readings instead".
  */
 export async function getAreaTrend(
-  dynamodb: DynamoDBClient,
   ctx: DataContext,
   areaId: string,
   hours: number
 ): Promise<TrendPoint[] | null> {
-  const snapshot = await loadSnapshotFor(dynamodb, ctx);
-  const area = resolveArea(snapshot, areaId);
-  if (!area) return null;
-  if (snapshot && stationReading(snapshot, area)) return null;
-  const coords = areaCoordinates(snapshot, area);
-  return coords ? getOpenMeteoTrend(coords, hours) : null;
+  if (ctx.dataMode !== "live") return null;
+  const area = resolveArea(areaId);
+  const coords = area ? areaCoordinates(area) : null;
+  return coords ? getGoogleTrend(areaId, coords, hours) : null;
 }

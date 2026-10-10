@@ -15,6 +15,8 @@ import { authSignOut } from "./api";
 interface User {
   email: string;
   name: string;
+  /** Two-step verification (authenticator app) is on. */
+  mfaEnabled?: boolean;
 }
 
 interface AuthTokens {
@@ -30,6 +32,8 @@ interface AuthContextType {
   isAuthenticated: boolean;
   signIn: (tokens: AuthTokens) => Promise<void>;
   signOut: () => void;
+  /** Re-reads the profile (e.g. after changing two-step verification). */
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -187,6 +191,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("storage", onStorage);
   }, [fetchProfile]);
 
+  const refreshProfile = useCallback(async () => {
+    if (!tokens) return;
+    const profile = await fetchProfile(tokens.accessToken);
+    if (profile) setUser(profile);
+  }, [tokens, fetchProfile]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -196,6 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
         signIn,
         signOut,
+        refreshProfile,
       }}
     >
       {children}

@@ -10,7 +10,7 @@ import {
 import type { AQIReading } from "../shared/src/types.js";
 
 const reading: AQIReading = {
-  campus: "geo-288-771", aqi: 268, dominantPollutant: "pm25", pollutants: {}, source: "Open-Meteo",
+  campus: "geo-288-771", aqi: 268, dominantPollutant: "pm25", pollutants: {}, source: "Google Air Quality",
   stationName: "Delhi area", timestamp: new Date().toISOString(), fetchedAt: "", dataMode: "live",
 };
 const place = { areaName: "Delhi area", areaKind: "geo" as const };

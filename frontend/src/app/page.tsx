@@ -115,7 +115,7 @@ function Dashboard({ area }: { area: AreaInfo }) {
             Air quality data unavailable
           </p>
           <p className="text-sm text-muted mt-1">
-            The monitoring station for this area has no valid reading right now. Check{" "}
+            No valid air-quality reading is available for this area right now. Check{" "}
             <a
               href={CPCB_URL}
               target="_blank"
@@ -150,15 +150,12 @@ function Dashboard({ area }: { area: AreaInfo }) {
                 <div className="flex items-center justify-between gap-3 mb-4">
                   <h2 className="text-sm font-medium text-muted">Pollutant levels</h2>
                   <span className="text-xs text-muted">
-                    {aqiQuery.data.pollutantScale === "subindex"
-                      ? "CPCB sub-indices"
-                      : "vs CPCB safe limits"}
+                    vs CPCB safe limits
                   </span>
                 </div>
                 <PollutantBreakdown
                   pollutants={aqiQuery.data.pollutants}
                   dominantPollutant={aqiQuery.data.dominantPollutant}
-                  scale={aqiQuery.data.pollutantScale}
                 />
               </Card>
             )}

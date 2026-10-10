@@ -2,6 +2,21 @@ import type { Page, Request } from "@playwright/test";
 
 /** A fake BreatheSafe API served from inside the browser (host api.test). */
 
+/** An unsigned JWT-shaped token (the app only decodes, never verifies, tokens). */
+function fakeJwt(claims: Record<string, unknown>): string {
+  const part = (o: unknown) => Buffer.from(JSON.stringify(o)).toString("base64url");
+  const now = Math.floor(Date.now() / 1000);
+  return `${part({ alg: "none", kid: "e2e" })}.${part({ iat: now, exp: now + 3600, ...claims })}.sig`;
+}
+
+export const TOKENS = {
+  AccessToken: fakeJwt({ token_use: "access", sub: "asha-sub", username: "asha-sub" }),
+  IdToken: fakeJwt({ token_use: "id", sub: "asha-sub", email: "asha@example.com", name: "Asha Verma", "custom:role": "admin" }),
+  RefreshToken: "e2e-refresh-token",
+  ExpiresIn: 3600,
+  TokenType: "Bearer",
+};
+
 export const AREA = { id: "city-delhi", kind: "city", name: "Delhi", city: "Delhi", state: "Delhi" };
 
 const now = () => new Date().toISOString();
@@ -12,7 +27,7 @@ const reading = () => ({
   dominantPollutant: "pm25",
   pollutants: { pm25: 132.4, pm10: 210.5, no2: 41.2 },
   pollutantScale: "concentration",
-  source: "Open-Meteo",
+  source: "Google Air Quality",
   stationName: "Delhi",
   timestamp: now(),
   fetchedAt: now(),
@@ -28,7 +43,7 @@ const recommendation = () => ({
   action: "Avoid prolonged outdoor activity. Keep windows closed at peak hours and let your family and neighbours know.",
   evidence: {
     aqi: 268, dominantPollutant: "pm25", pollutants: { pm25: 132.4 }, pollutantScale: "concentration",
-    source: "Open-Meteo", stationName: "Delhi", timestamp: now(), dataAge: "Just now",
+    source: "Google Air Quality", stationName: "Delhi", timestamp: now(), dataAge: "Just now",
   },
   rule: { id: "cpcb-india-v1", config: "dynamodb", name: "CPCB AQI Category — Poor (201–300)", threshold: "AQI 201–300", source: "Central Pollution Control Board, India" },
   dataQuality: "live",
@@ -38,9 +53,13 @@ const recommendation = () => ({
 export interface ApiLog {
   createdAlert?: { body: Record<string, unknown>; idempotencyKey?: string };
   decision?: Record<string, unknown>;
+  mfaCode?: string;
+  /** True if the password itself was ever sent to Cognito (it must not be, with SRP). */
+  srpPasswordSent?: boolean;
+  srpProofReceived?: boolean;
 }
 
-export async function mockApi(page: Page): Promise<ApiLog> {
+export async function mockApi(page: Page, options: { mfa?: boolean } = {}): Promise<ApiLog> {
   const log: ApiLog = {};
   let alert: Record<string, unknown> | null = null;
 
@@ -63,7 +82,7 @@ export async function mockApi(page: Page): Promise<ApiLog> {
     if (path.endsWith("/trends")) {
       const points = Array.from({ length: 24 }, (_, i) => ({
         timestamp: new Date(Date.now() - (23 - i) * 3600e3).toISOString(),
-        aqi: 200 + i * 3, dominantPollutant: "pm25", source: "Open-Meteo", dataMode: "live",
+        aqi: 200 + i * 3, dominantPollutant: "pm25", source: "Google Air Quality", dataMode: "live",
       }));
       return json(200, { campus: AREA.id, points, period: "24h", dataMode: "live" });
     }
@@ -79,12 +98,9 @@ export async function mockApi(page: Page): Promise<ApiLog> {
         disclaimer: "Based on the current reading, not a forecast. Decision support, not medical advice.",
       });
     }
-    if (path.endsWith("/auth/signin")) {
-      return json(200, { message: "ok", accessToken: "access-token", idToken: "id-token", refreshToken: "refresh-token", expiresIn: 3600 });
-    }
     if (path.endsWith("/auth/profile")) {
-      return request.headers()["authorization"] === "Bearer access-token"
-        ? json(200, { email: "asha@example.com", name: "Asha Verma" })
+      return request.headers()["authorization"] === `Bearer ${TOKENS.AccessToken}`
+        ? json(200, { email: "asha@example.com", name: "Asha Verma", mfaEnabled: !!options.mfa })
         : json(401, { error: "Unauthorized" });
     }
     if (path.endsWith("/notices/draft")) {
@@ -113,6 +129,49 @@ export async function mockApi(page: Page): Promise<ApiLog> {
     if (path.endsWith("/rules")) return json(404, { error: "Not mocked" });
     if (path.endsWith("/explain")) return json(503, { error: "Not mocked" });
     return json(404, { error: `Not mocked: ${path}` });
+  });
+
+  // Cognito (SRP sign-in happens in the browser, straight to Cognito).
+  await page.route("https://cognito-idp.ap-south-1.amazonaws.com/**", async (route) => {
+    const request = route.request();
+    const cors = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "*",
+      "Access-Control-Allow-Methods": "POST,OPTIONS",
+    };
+    if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
+    const target = (request.headers()["x-amz-target"] ?? "").split(".").pop();
+    const body = request.postDataJSON() as Record<string, any>;
+    const reply = (status: number, payload: unknown) =>
+      route.fulfill({ status, headers: { ...cors, "Content-Type": "application/x-amz-json-1.1" }, body: JSON.stringify(payload) });
+
+    if (target === "InitiateAuth") {
+      log.srpPasswordSent = JSON.stringify(body).includes("secret123");
+      return reply(200, {
+        ChallengeName: "PASSWORD_VERIFIER",
+        ChallengeParameters: {
+          SALT: "5a1d3c9e8f7b6a5d",
+          SECRET_BLOCK: Buffer.from("e2e-secret-block").toString("base64"),
+          SRP_B: "ab".repeat(192),
+          USERNAME: "asha-sub",
+          USER_ID_FOR_SRP: "asha-sub",
+        },
+      });
+    }
+    if (target === "RespondToAuthChallenge" && body.ChallengeName === "PASSWORD_VERIFIER") {
+      log.srpProofReceived = typeof body.ChallengeResponses?.PASSWORD_CLAIM_SIGNATURE === "string";
+      log.srpPasswordSent ||= JSON.stringify(body).includes("secret123");
+      return options.mfa
+        ? reply(200, { ChallengeName: "SOFTWARE_TOKEN_MFA", Session: "mfa-session", ChallengeParameters: {} })
+        : reply(200, { AuthenticationResult: TOKENS, ChallengeParameters: {} });
+    }
+    if (target === "RespondToAuthChallenge" && body.ChallengeName === "SOFTWARE_TOKEN_MFA") {
+      log.mfaCode = body.ChallengeResponses?.SOFTWARE_TOKEN_MFA_CODE;
+      return log.mfaCode === "123456" && body.Session === "mfa-session"
+        ? reply(200, { AuthenticationResult: TOKENS, ChallengeParameters: {} })
+        : reply(400, { __type: "CodeMismatchException", message: "Invalid code received for user" });
+    }
+    return reply(400, { __type: "InvalidParameterException", message: `Not mocked: ${target}` });
   });
 
   // The dashboard area is normally detected from location; start with Delhi.

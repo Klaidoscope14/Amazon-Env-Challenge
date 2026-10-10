@@ -68,7 +68,7 @@ export default function AqiHeroCard({ reading }: AqiHeroCardProps) {
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-muted">{reading.source === "CPCB" ? "Station" : "Location"}</dt>
+          <dt className="text-xs text-muted">Location</dt>
           <dd className="font-medium mt-0.5 text-foreground truncate" title={reading.stationName}>
             {reading.stationName}
           </dd>

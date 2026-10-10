@@ -118,7 +118,7 @@ export async function getAQI(
   );
 }
 
-export async function getAreas(): Promise<{ areas: AreaInfo[]; source: "cpcb" | "cities" }> {
+export async function getAreas(): Promise<{ areas: AreaInfo[]; source: "cities" }> {
   return fetchApi(`/api/v1/areas`);
 }
 
@@ -274,20 +274,27 @@ export async function authConfirm(data: {
   });
 }
 
-export async function authSignIn(data: {
-  email: string;
-  password: string;
-}): Promise<{
-  message: string;
-  accessToken: string;
-  idToken: string;
-  refreshToken: string;
-  expiresIn: number;
-}> {
-  return fetchApi("/api/v1/auth/signin", {
+/** Calls an auth route as the signed-in user (Cognito access token). */
+async function withAccessToken<T>(path: string, body: unknown = {}): Promise<T> {
+  const tokens = readTokens();
+  if (!tokens) throw new ApiError("Please sign in to continue.", 401);
+  return fetchApi<T>(path, {
     method: "POST",
-    body: JSON.stringify(data),
+    headers: { Authorization: `Bearer ${tokens.accessToken}` },
+    body: JSON.stringify(body),
   });
+}
+
+export async function mfaSetup(): Promise<{ secret: string; otpauthUri: string }> {
+  return withAccessToken("/api/v1/auth/mfa/setup");
+}
+
+export async function mfaEnable(code: string): Promise<{ mfaEnabled: boolean }> {
+  return withAccessToken("/api/v1/auth/mfa/enable", { code });
+}
+
+export async function mfaDisable(): Promise<{ mfaEnabled: boolean }> {
+  return withAccessToken("/api/v1/auth/mfa/disable");
 }
 
 export async function authForgotPassword(email: string): Promise<{ message: string }> {

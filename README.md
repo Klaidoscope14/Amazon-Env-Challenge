@@ -30,9 +30,9 @@ No account is needed to check the air; you sign in only to share alerts.
 - **Bilingual alerts** — reviewed English + Hindi templates per category and audience (family, neighbourhood, team/group, everyone), optionally polished by AI under a faithfulness check; signed with your name.
 - **Delivery** — public notice page per area (shareable link), email via Amazon SNS (recorded only when actually delivered), WhatsApp share, Amazon Polly audio in English and Hindi.
 - **Audit trail + domain events** — alerts snapshot the exact reading; decisions are append-only and record who decided. Readings, category changes, alerts and decisions are published as events on an **Amazon EventBridge** bus, archived for 30 days and replayable.
-- **Validated everywhere** — every API input and the Open-Meteo response are checked with **Zod** schemas.
+- **Validated everywhere** — every API input and the Google Air Quality response are checked with **Zod** schemas.
 - **Safe to retry** — sharing an alert is idempotent (`Idempotency-Key`), so a double click or a network retry never sends the same alert twice; alert history is paginated.
-- **Accounts** — sign-up with email verification (resend code), forgot/reset password, and sign-out that revokes the session; sign-in state stays in sync across tabs.
+- **Accounts** — **SRP sign-in** straight from the browser to Cognito (the password never leaves the device), sign-up with email verification (resend code), forgot/reset password, optional **two-step verification** with an authenticator app (TOTP), and sign-out that revokes the session; sign-in state stays in sync across tabs.
 - **Observability** — structured JSON logs and business metrics (alerts, decisions, AI vs fallback explanations, unavailable readings) in CloudWatch via Embedded Metric Format.
 - **Presenter mode** — `?presenter=1` reveals a labelled demo-scenario control for presentations.
 
@@ -54,9 +54,7 @@ flowchart LR
   L1 & L2 & L4 & L5 & L8 -->|domain events| BUS{{EventBridge bus}}
   BUS --> ARC[(Archive · 30 days)]
   BUS --> EVL[CloudWatch event log]
-  SCH[EventBridge schedule<br/>every 30 min] --> L7[CPCB refresh]
-  L7 --> CPCB[(CPCB via data.gov.in)]
-  L1 & L2 & L3 -.->|when no current station| OM[(Open-Meteo<br/>air-quality API)]
+  L1 & L2 & L3 & L8 --> GAQ[(Google Air Quality API<br/>India NAQI · hourly history)]
   L4 --> SNS[Amazon SNS<br/>email]
   L5 --> POLLY[Amazon Polly]
   L5 & L8 --> SSM[SSM Parameter Store] -.-> GEM[(Google Gemini)]
@@ -69,9 +67,9 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the data model, rules, events, guardr
 | Service | What it does here |
 |---|---|
 | API Gateway | REST API; Cognito authorizer on write routes; throttling (20 rps, burst 40) |
-| Lambda (Node.js 22, arm64) | 8 functions — AQI/areas, recommendations/rules, explanations, trends, alerts/decisions, notices, auth, scheduled CPCB refresh |
+| Lambda (Node.js 22, arm64) | 7 functions — AQI/areas, recommendations/rules/plans, explanations, trends, alerts/decisions, notices, auth |
 | DynamoDB | AQI readings (8-day TTL), the alert/decision audit trail (deletion protection, PITR), the RulesConfig table |
-| EventBridge | Custom event bus for domain events, with a 30-day archive and a CloudWatch event log; scheduled CPCB refresh |
+| EventBridge | Custom event bus for domain events, with a 30-day archive and a CloudWatch event log |
 | Cognito | Accounts for people who share alerts |
 | SNS | Alert emails; operational alarm emails |
 | Polly | Spoken English/Hindi notices |
@@ -81,8 +79,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the data model, rules, events, guardr
 
 ## Data sources and limitations
 
-- **CPCB monitoring stations** (data.gov.in) are used when a station near you reported within 3 hours. *(At the time of writing, CPCB's public feed has been unavailable since 7 October 2026; the app falls back automatically.)*
-- **Open-Meteo air-quality data** (Copernicus CAMS, ~11 km grid) otherwise — so every location in India gets a reading.
+- **Google Air Quality API** — real-time hourly air quality for any location in India, reported on India's National AQI (index `ind_cpcb`, the CPCB scale), with the dominant pollutant and concentrations; its hourly history drives the trend chart. Each area is looked up at most every 30 minutes (stored readings are reused), and if the API is briefly unavailable the last reading from the past 3 hours is shown, labelled *Cached*.
 - Readings are area-level, not street-level, and can differ from other apps. This is **decision support, not medical advice**, and does not replace official CPCB or health-authority advisories.
 - No health data is collected. See the in-app **About** page for the full privacy note.
 
@@ -117,7 +114,7 @@ CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs the same checks p
 ### Run the frontend
 
 ```bash
-cp frontend/.env.example frontend/.env.local   # set NEXT_PUBLIC_API_URL (or leave unset for the public demo API)
+cp frontend/.env.example frontend/.env.local   # API URL + Cognito pool/client ids of your stack (unset = public demo)
 npm run dev                                    # http://localhost:3000
 ```
 
@@ -133,10 +130,11 @@ cd .. && npm run seed:rules        # seed the RulesConfig table (safe to re-run;
 Optional keys (stored by you in SSM Parameter Store, never in code):
 
 ```bash
-aws ssm put-parameter --name /breathesafe/gemini-api-key --type SecureString --value "<key>"   # AI drafts + explanations (Gemini free tier)
+aws ssm put-parameter --name /breathesafe/google-air-quality-key --type SecureString --value "<key>"   # live air quality (required for DataMode=live)
+aws ssm put-parameter --name /breathesafe/gemini-api-key --type SecureString --value "<key>"          # AI drafts + explanations (Gemini free tier)
 ```
 
-Key parameters: `DataMode` (`live` / `demo`), `AlertEmail` (SNS email; confirm the subscription email AWS sends), `CpcbApiKey` (data.gov.in key, optional), `NoticeAIEnabled`, `ExplainAIEnabled`, `PublicSiteUrl`. Use `--config-env dev` (and `npm run seed:rules:dev`) for the separate dev stack defined in `samconfig.toml`.
+Key parameters: `DataMode` (`live` / `demo`), `AlertEmail` (SNS email; confirm the subscription email AWS sends), `GoogleAqKeyParam` (SSM name of the Google Air Quality key), `NoticeAIEnabled`, `ExplainAIEnabled`, `PublicSiteUrl`, `SesFromEmail` (optional verified SES sender for Cognito emails; needs SES production access). Use `--config-env dev` (and `npm run seed:rules:dev`) for the separate dev stack defined in `samconfig.toml`.
 
 ## AI tools used
 

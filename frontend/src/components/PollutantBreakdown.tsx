@@ -5,14 +5,11 @@ import {
   bandForLimitRatio,
   formatPollutant,
   pollutantLimit,
-  statusForAqi,
 } from "@/lib/constants";
 
 interface PollutantBreakdownProps {
   pollutants: Record<string, number>;
   dominantPollutant: string;
-  /** "subindex" = CPCB sub-indices (0–500); otherwise measured concentrations. */
-  scale?: "subindex" | "concentration";
 }
 
 // Fixed display order so the layout is stable regardless of the data's key order.
@@ -32,9 +29,7 @@ interface Row {
 export default function PollutantBreakdown({
   pollutants,
   dominantPollutant,
-  scale = "concentration",
 }: PollutantBreakdownProps) {
-  const isSubIndex = scale === "subindex";
   const keys = Object.keys(pollutants);
   const ordered = [
     ...ORDER.filter((k) => keys.includes(k)),
@@ -45,20 +40,6 @@ export default function PollutantBreakdown({
     const value = pollutants[key];
     const { label, unit } = formatPollutant(key);
     const isDominant = key.toLowerCase() === dominantPollutant.toLowerCase();
-
-    if (isSubIndex) {
-      const status = statusForAqi(value);
-      return {
-        key,
-        label,
-        fillPct: Math.min(value / 500, 1) * 100,
-        hex: STATUS_CONFIG[status].hex,
-        statusText: status,
-        valueText: String(Math.round(value)),
-        subText: `${status} · sub-index`,
-        isDominant,
-      };
-    }
 
     const limitInfo = pollutantLimit(key);
     if (!limitInfo) {
@@ -100,7 +81,7 @@ export default function PollutantBreakdown({
               className="relative h-2.5 rounded-full bg-surface-2"
               title={`${r.label}: ${r.valueText} — ${r.statusText}`}
             >
-              {!isSubIndex && (
+              {(
                 // CPCB safe-limit marker at 50% of the track (= 1× limit).
                 <span
                   className="absolute -top-1 -bottom-1 w-px bg-muted-strong/70"
@@ -128,9 +109,7 @@ export default function PollutantBreakdown({
         ))}
       </ul>
       <p className="mt-4 text-xs text-muted">
-        {isSubIndex
-          ? "Bars show each pollutant's CPCB sub-index (0–500); the AQI is the highest."
-          : "Bars are relative to the CPCB safe limit (dashed line). Colour shows severity."}
+        Bars are relative to the CPCB safe limit (dashed line). Colour shows severity.
       </p>
     </div>
   );

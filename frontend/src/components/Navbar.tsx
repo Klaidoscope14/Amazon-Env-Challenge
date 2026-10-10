@@ -49,7 +49,12 @@ export default function Navbar() {
               <div className="h-8 w-20 bg-surface-2 rounded-lg animate-pulse" />
             ) : user ? (
               <div className="flex items-center gap-2">
-                <p className="hidden sm:block text-sm font-medium text-foreground">{user.name}</p>
+                <Link
+                  href="/account"
+                  className="hidden sm:block text-sm font-medium text-foreground hover:underline"
+                >
+                  {user.name}
+                </Link>
                 <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium">
                   {user.name.charAt(0).toUpperCase()}
                 </div>

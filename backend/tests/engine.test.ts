@@ -34,7 +34,7 @@ describe("getDataAge", () => {
 
 const reading = (overrides: Partial<AQIReading> = {}): AQIReading => ({
   campus: "geo-288-771", aqi: 150, dominantPollutant: "pm10", pollutants: { pm10: 175 },
-  source: "Open-Meteo", stationName: "Delhi area", timestamp: new Date().toISOString(),
+  source: "Google Air Quality", stationName: "Delhi area", timestamp: new Date().toISOString(),
   fetchedAt: new Date().toISOString(), dataMode: "live", ...overrides,
 });
 
@@ -55,6 +55,6 @@ describe("evaluate", () => {
     expect(rec).toMatchObject({ status: "Unavailable", statusLevel: 0, dataQuality: "unavailable" });
   });
   it("passes the pollutant scale through to the evidence", () => {
-    expect(evaluate(reading({ pollutantScale: "subindex" })).evidence.pollutantScale).toBe("subindex");
+    expect(evaluate(reading({ pollutantScale: "concentration" })).evidence.pollutantScale).toBe("concentration");
   });
 });

@@ -13,13 +13,13 @@ keep the original "campus" naming so existing resources are never replaced.)
 | API | Amazon API Gateway (REST) | Throttling 20 rps / burst 40; Cognito authorizer on write routes; CORS on gateway errors; X-Ray. |
 | Compute | 8 AWS Lambda functions (Node.js 22, arm64, esbuild bundles) | One per service, see §2. Timeouts ≤ 25 s (API Gateway limit 29 s). |
 | Data | Amazon DynamoDB, on-demand | `aqi-readings` (TTL 8 days), `alerts-decisions` (deletion protection, PITR), `rules-config` (PITR). All with Retain policy. |
-| Events | Amazon EventBridge | Custom bus `breathesafe-<stage>`, 30-day archive, rule → CloudWatch event log; scheduled rule for the CPCB refresh. |
-| Identity | Amazon Cognito user pool | Email sign-up; users may only write `email` and `name`. Deletion protection on. |
+| Events | Amazon EventBridge | Custom bus `breathesafe-<stage>`, 30-day archive, rule → CloudWatch event log. |
+| Identity | Amazon Cognito user pool | Email sign-up; users may only write `email` and `name`. Optional TOTP MFA. Optional SES sender (`SesFromEmail`). Deletion protection on. |
 | Messaging | Amazon SNS | `alerts` topic (alert emails), `ops` topic (alarm emails). |
 | Speech | Amazon Polly | Neural voice *Kajal*, `en-IN` and `hi-IN`. |
-| Secrets | SSM Parameter Store (SecureString) | Gemini API key; read at runtime by the notices and explain functions only. |
+| Secrets | SSM Parameter Store (SecureString) | Google Air Quality key (functions that look up air quality) and Gemini key (notices, explain). |
 | Observability | CloudWatch Logs (14 days), 7 CloudWatch alarms, AWS X-Ray | Logs in `/breathesafe/<stage>/<function>`; events in `/aws/events/breathesafe-<stage>`. |
-| Validation | Zod | Every API input and the Open-Meteo response (`backend/shared/src/schemas.ts`, `open-meteo.ts`). |
+| Validation | Zod | Every API input and the Google Air Quality response (`backend/shared/src/schemas.ts`, `google-aq.ts`). |
 | CI | GitHub Actions | Typecheck, Vitest, ESLint, Next build, `sam validate --lint`, `sam build`. Deploys stay manual. |
 
 ## 2. Services and routes
@@ -32,15 +32,15 @@ keep the original "campus" naming so existing resources are never replaced.)
 | `trends` | `GET /api/v1/trends?campus=<area>&hours=<1..168>` | public |
 | `alerts` | `GET /api/v1/alerts?campus=<area>&limit&cursor` · `POST /api/v1/alerts` (optional `Idempotency-Key`) · `PATCH /api/v1/alerts/{id}/decision` | GET public; POST/PATCH Cognito + `custom:role=admin` (granted to every verified account) |
 | `notices` | `GET /api/v1/notices/draft` (Cognito) · `GET /api/v1/notices/audio` (public, issued alerts only) | mixed |
-| `auth` | `POST /api/v1/auth/{signup,confirm,signin,refresh,forgot-password,reset-password,resend-code,signout}`, `GET /api/v1/auth/profile` | public (Cognito client APIs; sign-out revokes the refresh token) |
-| `stations-refresh` | EventBridge schedule (no route) | — |
+| `auth` | `POST /api/v1/auth/{signup,confirm,refresh,forgot-password,reset-password,resend-code,signout}`, `POST /api/v1/auth/mfa/{setup,enable,disable}`, `GET /api/v1/auth/profile` | public (Cognito client APIs; MFA setup uses the caller's access token; sign-out revokes the refresh token) |
+| `pre-token` | Cognito Pre Token Generation trigger (no route) | — |
+| *(browser)* | Sign-in: SRP (`USER_SRP_AUTH`) and the TOTP challenge, straight to Cognito (`frontend/src/lib/cognito.ts`) | — |
 
 All read routes accept an optional `scenario=<good|…|severe>` (presenter/demo mode). The query
 parameter is still called `campus` for compatibility; its value is an area id.
 
 ## 3. Areas — the unit everything is keyed by
 
-- `st-<station>` — a CPCB monitoring station (only when its data is current),
 - `geo-<lat×10>-<lon×10>` — a ~11 km grid cell around the user's location (any point in India),
 - `city-<city>` — a city from the built-in table (area picker, demo mode).
 
@@ -52,14 +52,18 @@ carry `?area=<id>`.
 
 For a live request (`DATA_MODE=live`), `getAreaReading` (backend/shared/src/area-readings.ts):
 
-1. **CPCB measured** — if a CPCB station for the area (or within 15 km of a grid cell) reported within
-   3 hours. The station snapshot is one gzip-compressed DynamoDB item written by `stations-refresh`
-   from the data.gov.in feed.
-2. **Open-Meteo** — otherwise, hourly concentrations for the area's coordinates (response validated
-   with Zod); Indian AQI computed with CPCB breakpoints (24 h averages for PM10/PM2.5/NO₂/SO₂/NH₃, 8 h
-   for O₃/CO). One retry, 30-minute cache per area.
-3. **Cached** — if both fail, the area's last stored reading from the past 3 hours, labelled `cached`.
+1. **Recent stored reading** — if the area has a Google reading fetched in the last 30 minutes (in
+   DynamoDB), it is reused, so API calls stay low across Lambda containers.
+2. **Google Air Quality API** — `POST currentConditions:lookup` for the area's coordinates with
+   `customLocalAqis: [{regionCode: "IN", aqi: "ind_cpcb"}]`, `LOCAL_AQI` and `POLLUTANT_CONCENTRATION`.
+   The AQI, category and dominant pollutant come from the `ind_cpcb` index (India's National AQI, CPCB
+   scale); gas concentrations are converted from ppb to µg/m³ (CO to mg/m³). Response validated with
+   Zod; one retry; 30-minute in-memory cache per area. The key is read from SSM.
+3. **Cached** — if that fails, the area's last stored reading from the past 3 hours, labelled `cached`.
 4. Otherwise **unavailable** (HTTP 503) — no stale value is shown as current.
+
+Trends use `POST history:lookup` (168 hourly records, fetched once per area per hour and sliced for each
+window); if it fails, stored readings are used.
 
 Demo/presenter requests return labelled fixtures named after the area and never write to the database.
 New live readings are stored once per source timestamp (`READING#<timestamp>`) and announced as events (§7).
@@ -69,7 +73,6 @@ New live readings are stored once per source timestamp (`READING#<timestamp>`) a
 | Table | PK | SK | Item |
 |---|---|---|---|
 | `aqi-readings` | `CAMPUS#<area>` | `READING#<source timestamp>` | reading (AQI, pollutants, source, dataMode, TTL) |
-| `aqi-readings` | `STATIONS` | `LATEST` | gzip snapshot of all CPCB stations |
 | `alerts-decisions` | `CAMPUS#<area>` | `ALERT#<createdAt>#<alertId>` | alert: message (+Hindi), audience, snapshot, recommendation, delivery, decision, decisionBy, adminName (the sender) |
 | `alerts-decisions` | `IDEMPOTENCY#<user sub>` | `KEY#<Idempotency-Key>` | request hash, status, created alert's key; TTL 24 h |
 | `rules-config` | `RULESET#<id>` | `THRESHOLD#<level>` | one band: minAqi, maxAqi, status, statusLevel, action, color |
@@ -139,14 +142,19 @@ with a rule, without changing producers.
 
 ## 10. Security
 
+- Sign-in uses SRP from the browser: the password is never sent to Cognito or to the API (the app
+  client allows only `USER_SRP_AUTH` and refresh). Optional TOTP MFA.
 - Cognito authorizer on POST alert, PATCH decision and notice drafts; frontend sends the ID token and
-  refreshes once on 401.
+  refreshes once on 401. The write routes also require the `custom:role` claim, which the
+  `pre-token` trigger adds to every ID token (stored role if an admin set one, otherwise `admin` —
+  i.e. every verified account; change `DEFAULT_ROLE` to restrict).
 - Least-privilege IAM: explicit DynamoDB actions per function (RulesConfig: `Query` only);
   `events:PutEvents` only on the stack's bus; SNS publish only on the alerts topic; `ssm:GetParameter`
-  only on the Gemini key; the auth function has no AWS permissions.
+  only on the specific key each function needs (Google Air Quality, Gemini); the auth and pre-token
+  functions have no AWS permissions.
 - Zod validation and length limits on every input; malformed JSON → 400; Cognito errors mapped to
   stable codes without raw messages.
-- `CpcbApiKey` is a `NoEcho` parameter. Tables and user pool are retained on stack deletion.
+- API keys (Google Air Quality, Gemini) live in SSM SecureString parameters, readable only by the functions that need them. Tables and user pool are retained on stack deletion.
 
 ## 11. Observability and cost controls
 
@@ -157,7 +165,8 @@ with a rule, without changing producers.
 - Business metrics via CloudWatch Embedded Metric Format, namespace `BreatheSafe`, dimension `Stage`:
   `AlertsCreated`, `DecisionsRecorded`, `ExplanationsAI`, `ExplanationsFallback`, `ReadingsUnavailable`
   (5 names × 2 stages = the 10 free custom metrics).
-- Caching (30 min Open-Meteo per area, 5 min station snapshot and ruleset in memory, 30 min
+- Caching (30 min Google reading per area — also reused from DynamoDB across containers — 60 min
+  history per area sliced for every trend window, 5 min ruleset in memory, 30 min
   explanations), stage throttling, AI rate limit, and an AWS Budget alert on the account.
 
 ## 12. Testing
@@ -169,7 +178,7 @@ with a rule, without changing producers.
 ## 13. Not built (roadmap)
 
 - Hosting the frontend on AWS (S3 + CloudFront or Amplify) and continuous deployment (GitHub Actions with OIDC).
-- SRP sign-in instead of USER_PASSWORD_AUTH, MFA, SES for Cognito email, httpOnly-cookie sessions.
+- httpOnly-cookie sessions (needs the frontend hosted on the API's site).
 - Push/SMS notifications (e.g. an `aqi.threshold.crossed` consumer) and subscriptions per area.
 - An admin UI for editing RulesConfig (today: DynamoDB console + validation).
 - Forecasting (e.g. SageMaker) — the MVP shows only current and recent data.

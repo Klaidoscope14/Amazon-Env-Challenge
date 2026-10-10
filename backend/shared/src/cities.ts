@@ -1,7 +1,6 @@
 /*
- * Approximate centres of major Indian cities with CPCB monitoring. Used to
- * (a) match a user's location to a city when stations lack coordinates and
- * (b) offer areas in demo mode, when no live station list is available.
+ * Approximate centres of major Indian cities. Used to name a user's area
+ * ("Delhi area") and as the selectable areas in the area picker.
  */
 
 export interface City {
@@ -10,7 +9,7 @@ export interface City {
   state: string;
   lat: number;
   lon: number;
-  /** Other spellings CPCB may use for the same city. */
+  /** Other names for the same city (used when searching). */
   aliases?: string[];
   /** Approximate urban radius; a point inside it belongs to this city. Default 10 km. */
   radiusKm?: number;
@@ -65,14 +64,6 @@ export const CITIES: City[] = [
 
 export function normalizeName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
-
-/** The city from the table that a CPCB city string refers to, if any. */
-export function matchCity(cpcbCity: string): City | undefined {
-  const name = normalizeName(cpcbCity);
-  return CITIES.find(
-    (c) => normalizeName(c.name) === name || (c.aliases ?? []).some((a) => normalizeName(a) === name)
-  );
 }
 
 /** Great-circle distance in kilometres. */

@@ -14,7 +14,7 @@ import { ApiError, getNearestArea } from "./api";
 import type { AreaInfo } from "./types";
 
 /*
- * The area (nearest CPCB monitoring station) every page is scoped to.
+ * The area (a ~11 km grid cell around the user, or a city) every page is scoped to.
  * Detected once from the browser's location and remembered in localStorage;
  * if location is unavailable or denied, the user picks an area instead.
  * Coordinates are rounded to ~1 km before leaving the browser and are never
@@ -60,10 +60,16 @@ function parseArea(raw: string | null): AreaInfo | null {
   if (!raw) return null;
   try {
     const value = JSON.parse(raw) as Partial<AreaInfo>;
-    if (typeof value.id === "string" && typeof value.name === "string") {
+    // Areas are cities or location grid cells; anything else (e.g. a monitoring
+    // station saved by an older version) is dropped so the user picks again.
+    if (
+      typeof value.id === "string" &&
+      typeof value.name === "string" &&
+      (value.kind === "city" || value.kind === "geo")
+    ) {
       return {
         id: value.id,
-        kind: value.kind === "city" || value.kind === "geo" ? value.kind : "station",
+        kind: value.kind,
         name: value.name,
         city: value.city ?? "",
         state: value.state ?? "",
@@ -85,7 +91,7 @@ interface AreaContextValue {
   area: AreaInfo | null;
   /** loading: before hydration; ready: area known; detecting; needs-choice: user must pick */
   status: "loading" | "detecting" | "ready" | "needs-choice";
-  /** Why the user needs to choose (permission denied, no station nearby, ...). */
+  /** Why the user needs to choose (permission denied, location outside India, ...). */
   message: string | null;
   isDetecting: boolean;
   chooseArea: (area: AreaInfo) => void;
@@ -118,7 +124,7 @@ export function AreaProvider({ children }: { children: ReactNode }) {
     return new Promise((resolve) => {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
-          // ~1 km precision is plenty to find the nearest station.
+          // ~1 km precision is plenty to find the user's area.
           const lat = Math.round(position.coords.latitude * 100) / 100;
           const lon = Math.round(position.coords.longitude * 100) / 100;
           try {
@@ -131,7 +137,7 @@ export function AreaProvider({ children }: { children: ReactNode }) {
               phase: "failed",
               message:
                 err instanceof ApiError && (err.status === 404 || err.status === 400)
-                  ? "No air-quality monitoring station was found near you. Choose the nearest area below."
+                  ? "Air quality is available for locations in India. Choose an area below."
                   : "Couldn't find your area automatically. Choose it below.",
             });
             resolve(false);
@@ -189,7 +195,7 @@ export function useArea(): AreaContextValue {
   return ctx;
 }
 
-/** "ITO, Delhi - CPCB" + "Delhi, Delhi" style subtitle for an area. */
+/** "Delhi, Delhi · 2 km from you" style subtitle for an area. */
 export function areaSubtitle(area: AreaInfo): string {
   const place = [area.city, area.state].filter(Boolean);
   const unique = place.filter((p, i) => place.indexOf(p) === i).join(", ");

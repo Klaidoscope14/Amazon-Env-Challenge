@@ -157,8 +157,6 @@ export const SignUpBodySchema = z.object({
 
 export const ConfirmBodySchema = z.object({ email, code: requiredText("code", 10) });
 
-export const SignInBodySchema = z.object({ email: requiredText("email", 254), password });
-
 export const EmailBodySchema = z.object({ email });
 
 export const ResetPasswordBodySchema = z.object({
@@ -166,6 +164,13 @@ export const ResetPasswordBodySchema = z.object({
   code: requiredText("code", 10),
   password: password.min(8, "Password must be at least 8 characters"),
 });
+
+const totpCode = z
+  .string({ error: "Enter the 6-digit code from your authenticator app" })
+  .trim()
+  .regex(/^\d{6}$/, "Enter the 6-digit code from your authenticator app");
+
+export const MfaCodeBodySchema = z.object({ code: totpCode });
 
 export const RefreshBodySchema = z.object({ refreshToken: requiredText("refreshToken", 4096) });
 

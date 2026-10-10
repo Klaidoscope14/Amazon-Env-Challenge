@@ -15,10 +15,10 @@ export default function AreaGate({ children }: { children: (area: AreaInfo) => R
 
   return (
     <Card role="status" className="p-6 text-sm text-muted-strong shadow-none">
-      <p className="font-medium text-foreground">Finding the nearest air-quality monitoring station…</p>
+      <p className="font-medium text-foreground">Finding your area…</p>
       <p className="mt-1 text-muted">
-        Allow location access when your browser asks. Your location is only used to find the
-        nearest station and is not stored.
+        Allow location access when your browser asks. Your location is rounded to about 1 km,
+        used only to find your area, and not stored.
       </p>
     </Card>
   );

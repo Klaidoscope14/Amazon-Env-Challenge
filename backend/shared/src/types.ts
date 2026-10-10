@@ -8,14 +8,14 @@ export interface AQIReading {
   timestamp: string;
   fetchedAt: string;
   dataMode: "live" | "cached" | "demo";
-  /** "subindex": pollutant values are CPCB sub-indices (live feed); otherwise concentrations. */
-  pollutantScale?: "subindex" | "concentration";
+  /** Pollutant values are concentrations: µg/m³ (CO in mg/m³). */
+  pollutantScale?: "concentration";
 }
 
-/** The place everything is scoped to: nearest CPCB station, or a city in demo mode. */
+/** The place everything is scoped to: a ~11 km grid cell around the user, or a city. */
 export interface AreaInfo {
   id: string;
-  kind: "station" | "city" | "geo";
+  kind: "city" | "geo";
   name: string;
   city: string;
   state: string;
@@ -30,7 +30,7 @@ export interface Recommendation {
     aqi: number;
     dominantPollutant: string;
     pollutants: Record<string, number>;
-    pollutantScale?: "subindex" | "concentration";
+    pollutantScale?: "concentration";
     source: string;
     stationName: string;
     timestamp: string;

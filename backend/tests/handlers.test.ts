@@ -10,7 +10,7 @@ import { rulesetItems } from "../shared/src/rules.js";
 
 /*
  * Handler-level tests: real handlers, AWS SDK clients and fetch stubbed.
- * Live mode, so requests without ?scenario= go through the Open-Meteo path
+ * Live mode, so requests without ?scenario= go through the Google Air Quality path
  * (and store readings / emit events); ?scenario= requests use demo fixtures.
  */
 
@@ -53,22 +53,34 @@ const dbSend = vi.spyOn(DynamoDBClient.prototype, "send").mockImplementation(def
 const eventSend = vi
   .spyOn(EventBridgeClient.prototype, "send")
   .mockImplementation((async () => ({ FailedEntryCount: 0 })) as never);
+const cognitoSend = vi.spyOn(CognitoIdentityProviderClient.prototype, "send");
 vi.spyOn(SSMClient.prototype, "send").mockImplementation((async () => ({ Parameter: { Value: "test-key" } })) as never);
 
 let geminiText = "";
-function openMeteoSeries() {
-  const start = new Date();
-  start.setUTCMinutes(0, 0, 0);
-  start.setUTCHours(start.getUTCHours() - 48);
-  const time = Array.from({ length: 72 }, (_, i) =>
-    new Date(start.getTime() + i * 3600e3).toISOString().slice(0, 16)
-  );
-  const constant = (v: number) => time.map(() => v);
-  return { hourly: { time, pm2_5: constant(100), pm10: constant(150), nitrogen_dioxide: constant(40) } };
+function googleCurrent() {
+  const hour = new Date();
+  hour.setUTCMinutes(0, 0, 0);
+  return {
+    dateTime: hour.toISOString(),
+    regionCode: "in",
+    indexes: [{ code: "ind_cpcb", aqi: 233, category: "Poor air quality", dominantPollutant: "pm25" }],
+    pollutants: [
+      { code: "pm25", concentration: { value: 100, units: "MICROGRAMS_PER_CUBIC_METER" } },
+      { code: "no2", concentration: { value: 21.3, units: "PARTS_PER_BILLION" } },
+    ],
+  };
 }
-const fetchMock = vi.fn(async (url: string | URL) => {
+const googleRequests: { path: string; key: string | null; body: Record<string, unknown> }[] = [];
+const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
   const href = String(url);
-  if (href.includes("open-meteo")) return new Response(JSON.stringify(openMeteoSeries()));
+  if (href.includes("airquality.googleapis.com")) {
+    googleRequests.push({
+      path: new URL(href).pathname,
+      key: new Headers(init?.headers).get("X-Goog-Api-Key"),
+      body: JSON.parse(String(init?.body)),
+    });
+    return new Response(JSON.stringify(googleCurrent()));
+  }
   if (href.includes("generativelanguage")) {
     return new Response(
       JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify({ explanation: geminiText }) }] } }] })
@@ -142,12 +154,21 @@ describe("live readings and events", () => {
   it("stores a new reading and emits reading + threshold-crossed events", async () => {
     previousReading = {
       PK: "CAMPUS#city-pune", SK: "READING#2026-01-01T00:00:00.000Z", campus: "city-pune", aqi: 150,
-      dominantPollutant: "pm10", pollutants: {}, source: "Open-Meteo", stationName: "Pune",
+      dominantPollutant: "pm10", pollutants: {}, source: "Google Air Quality", stationName: "Pune",
       timestamp: "2026-01-01T00:00:00.000Z", fetchedAt: "", dataMode: "live",
     };
     const res = await aqi(request("GET", "/api/v1/aqi/current", { query: { campus: "city-pune" } }));
     expect(res.statusCode).toBe(200);
-    expect(json(res)).toMatchObject({ aqi: 233, status: "Poor", source: "Open-Meteo" });
+    expect(json(res)).toMatchObject({
+      aqi: 233,
+      status: "Poor",
+      source: "Google Air Quality",
+      pollutants: { pm25: 100, no2: 40.1 },
+    });
+    const call = googleRequests.at(-1)!;
+    expect(call.path).toBe("/v1/currentConditions:lookup");
+    expect(call.key).toBe("test-key");
+    expect(call.body).toMatchObject({ customLocalAqis: [{ regionCode: "IN", aqi: "ind_cpcb" }], universalAqi: false });
 
     const events = publishedEvents();
     expect(events.map((e) => e.type)).toEqual(["aqi.reading.received", "aqi.threshold.crossed"]);
@@ -164,6 +185,23 @@ describe("live readings and events", () => {
       expect(publishedEvents()).toEqual([]);
     } finally {
       readingAlreadyStored = false;
+    }
+  });
+
+  it("reuses a reading stored in the last 30 minutes instead of calling Google", async () => {
+    const stored = {
+      PK: "CAMPUS#city-jaipur", SK: "READING#x", campus: "city-jaipur", aqi: 120, dominantPollutant: "pm10",
+      pollutants: {}, source: "Google Air Quality", stationName: "Jaipur", timestamp: new Date().toISOString(),
+      fetchedAt: new Date(Date.now() - 5 * 60e3).toISOString(), dataMode: "live",
+    };
+    previousReading = stored;
+    const before = googleRequests.length;
+    try {
+      const res = await aqi(request("GET", "/api/v1/aqi/current", { query: { campus: "city-jaipur" } }));
+      expect(json(res)).toMatchObject({ aqi: 120, source: "Google Air Quality" });
+      expect(googleRequests.length).toBe(before);
+    } finally {
+      previousReading = null;
     }
   });
 
@@ -346,7 +384,6 @@ describe("POST /plans/evaluate", () => {
 });
 
 describe("account recovery and sign-out", () => {
-  const cognitoSend = vi.spyOn(CognitoIdentityProviderClient.prototype, "send");
   beforeEach(() => {
     cognitoSend.mockReset();
     cognitoSend.mockImplementation((async () => ({})) as never);
@@ -382,5 +419,38 @@ describe("account recovery and sign-out", () => {
     const res = await auth(request("POST", "/api/v1/auth/signout", { body: { refreshToken: "rt" } }));
     expect(res.statusCode).toBe(200);
     expect((cognitoSend.mock.calls[0][0] as { constructor: { name: string } }).constructor.name).toBe("RevokeTokenCommand");
+  });
+});
+
+describe("two-step verification setup", () => {
+  const sent = () => cognitoSend.mock.calls.map(([c]) => (c as { constructor: { name: string } }).constructor.name);
+  beforeEach(() => {
+    cognitoSend.mockReset();
+    cognitoSend.mockImplementation((async () => ({})) as never);
+  });
+  const bearer = (e: APIGatewayProxyEvent) => ({ ...e, headers: { Authorization: "Bearer access" } }) as APIGatewayProxyEvent;
+
+  it("rejects codes that aren't 6 digits", async () => {
+    const res = await auth(bearer(request("POST", "/api/v1/auth/mfa/enable", { body: { code: "12ab" } })));
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("sets up an authenticator app and enables MFA after a correct code", async () => {
+    cognitoSend.mockImplementation((async (cmd: { constructor: { name: string } }) => {
+      if (cmd.constructor.name === "AssociateSoftwareTokenCommand") return { SecretCode: "ABCDEF" };
+      if (cmd.constructor.name === "GetUserCommand") return { UserAttributes: [{ Name: "email", Value: "a@b.co" }] };
+      if (cmd.constructor.name === "VerifySoftwareTokenCommand") return { Status: "SUCCESS" };
+      return {};
+    }) as never);
+    const setup = await auth(bearer(request("POST", "/api/v1/auth/mfa/setup", { body: {} })));
+    expect(json(setup)).toEqual({ secret: "ABCDEF", otpauthUri: "otpauth://totp/BreatheSafe%3Aa%40b.co?secret=ABCDEF&issuer=BreatheSafe" });
+    const enable = await auth(bearer(request("POST", "/api/v1/auth/mfa/enable", { body: { code: "123456" } })));
+    expect(json(enable)).toMatchObject({ mfaEnabled: true });
+    expect(sent()).toContain("SetUserMFAPreferenceCommand");
+  });
+
+  it("requires a signed-in user for setup", async () => {
+    const res = await auth(request("POST", "/api/v1/auth/mfa/setup", { body: {} }));
+    expect(res.statusCode).toBe(401);
   });
 });

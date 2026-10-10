@@ -21,6 +21,9 @@ test("see the AQI, check a plan, sign in, share an alert and record a decision",
   await page.getByLabel("Password", { exact: true }).fill("secret123");
   await page.getByRole("button", { name: "Sign In" }).click();
   await expect(page).toHaveURL(/\/$/);
+  // SRP: Cognito got a proof, never the password.
+  expect(api.srpProofReceived).toBe(true);
+  expect(api.srpPasswordSent).toBe(false);
 
   // Act: share a bilingual alert with the family.
   await page.getByRole("button", { name: "Share an alert" }).click();

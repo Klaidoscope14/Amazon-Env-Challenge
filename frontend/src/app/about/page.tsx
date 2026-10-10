@@ -8,13 +8,13 @@ export const metadata: Metadata = {
 
 const AWS_SERVICES: { name: string; role: string }[] = [
   { name: "Amazon API Gateway", role: "REST API with a Cognito authorizer on write routes and request throttling" },
-  { name: "AWS Lambda", role: "Eight functions: AQI and areas, recommendations and rules, explanations, trends, alerts and decisions, notices, sign-in, and the scheduled CPCB refresh" },
+  { name: "AWS Lambda", role: "Seven functions: AQI and areas, recommendations, rules and plans, explanations, trends, alerts and decisions, notices, and sign-in" },
   { name: "Amazon DynamoDB", role: "AQI readings, the alert/decision audit trail (deletion-protected, point-in-time recovery) and the RulesConfig table of recommendation bands" },
-  { name: "Amazon EventBridge", role: "A domain-event bus (reading received, category crossed, alert created, decision recorded) with a 30-day replayable archive, plus the 30-minute CPCB refresh schedule" },
+  { name: "Amazon EventBridge", role: "A domain-event bus (reading received, category crossed, alert created, decision recorded) with a 30-day replayable archive" },
   { name: "Amazon Cognito", role: "Sign-up and sign-in for people who share alerts" },
   { name: "Amazon SNS", role: "Email delivery of shared alerts, and operational alarm emails" },
   { name: "Amazon Polly", role: "Spoken English and Hindi versions of each notice" },
-  { name: "AWS Systems Manager Parameter Store", role: "Encrypted storage of third-party API keys" },
+  { name: "AWS Systems Manager Parameter Store", role: "Encrypted storage of the Google Air Quality and Gemini API keys" },
   { name: "Amazon CloudWatch & AWS X-Ray", role: "Logs, the event log, alarms and request tracing" },
   { name: "AWS SAM / CloudFormation", role: "The whole stack is defined as infrastructure as code" },
 ];
@@ -74,17 +74,13 @@ export default function AboutPage() {
         <h2 className="text-lg font-semibold text-foreground">Data sources</h2>
         <ul className="text-sm text-muted-strong space-y-2 list-disc list-inside">
           <li>
-            <strong>CPCB monitoring stations</strong> (via data.gov.in) — used when a station near you
-            has reported within the last 3 hours.
+            <strong>Google Air Quality API</strong> — real-time, hourly air quality for the area around
+            your location, anywhere in India, reported on India&apos;s National Air Quality Index (the
+            CPCB scale), with the dominant pollutant and pollutant concentrations. The trend chart uses
+            its hourly history.
           </li>
           <li>
-            <strong>Open-Meteo air-quality data</strong> (Copernicus CAMS) for your area otherwise, so
-            every location in India has a reading. The Indian AQI is calculated with CPCB&apos;s method:
-            24-hour averages for PM2.5, PM10, NO₂ and SO₂, 8-hour averages for O₃ and CO, and the
-            highest pollutant sub-index.
-          </li>
-          <li>
-            If the current source is briefly unavailable, the last reading from the past 3 hours is
+            Readings are refreshed at most every 30 minutes per area. If the source is briefly unavailable, the last reading from the past 3 hours is
             shown, labelled <em>Cached</em>; older data is never shown as current.
           </li>
           <li>
@@ -102,8 +98,7 @@ export default function AboutPage() {
             conditions or guarantee safety.
           </li>
           <li>
-            <strong>Area-level, not street-level.</strong> Readings describe a station or an area of
-            roughly 10 km and may differ from conditions at a specific spot or from other apps.
+            <strong>Area-level, not street-level.</strong> Readings describe an area of roughly 10 km and may differ from conditions at a specific spot or from other apps.
           </li>
           <li>
             <strong>Outdoor air only.</strong> Outdoor AQI does not directly indicate indoor conditions.

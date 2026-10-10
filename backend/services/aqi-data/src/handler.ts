@@ -2,7 +2,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { AQIReading, AQIReadingResponse, Ruleset } from "../../../shared/src/types.js";
 import { getThresholdForAqi } from "../../../shared/src/aqi-categories.js";
-import { Area, findNearestArea, listAreas } from "../../../shared/src/stations.js";
+import { Area, findNearestArea, listAreas } from "../../../shared/src/areas.js";
 import { getActiveRuleset } from "../../../shared/src/rules.js";
 import {
   AreaQuerySchema,
@@ -14,7 +14,6 @@ import { respond } from "../../../shared/src/http.js";
 import {
   dataContextFromEnv,
   getAreaReading,
-  loadSnapshotFor,
   usesDemo,
 } from "../../../shared/src/area-readings.js";
 import { errorFields, log, metric } from "../../../shared/src/observability.js";
@@ -48,7 +47,7 @@ async function handleCurrent(event: APIGatewayProxyEvent): Promise<APIGatewayPro
     return area || usesDemo(ctx, scenario)
       ? respond(503, {
           error: "No AQI data available",
-          message: "The monitoring station has no valid reading right now. Check official CPCB sources.",
+          message: "No valid air-quality reading is available for this area right now. Check official sources.",
           dataMode: "unavailable",
         })
       : respond(404, { error: `Unknown area: ${areaId}` });
@@ -57,22 +56,17 @@ async function handleCurrent(event: APIGatewayProxyEvent): Promise<APIGatewayPro
 }
 
 async function handleListAreas(): Promise<APIGatewayProxyResult> {
-  const snapshot = await loadSnapshotFor(dynamodb, ctx);
-  return respond(200, {
-    areas: listAreas(snapshot),
-    source: snapshot ? "cpcb" : "cities",
-  });
+  return respond(200, { areas: listAreas(), source: "cities" });
 }
 
 async function handleNearest(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const { lat, lon } = parse(NearestQuerySchema, event.queryStringParameters ?? {});
 
   // Coordinates are used only for this lookup; they are never logged or stored.
-  const snapshot = await loadSnapshotFor(dynamodb, ctx);
-  const area = findNearestArea(snapshot, lat, lon, ctx.dataMode === "live");
+  const area = findNearestArea(lat, lon, ctx.dataMode === "live");
   return area
     ? respond(200, { area })
-    : respond(404, { error: "No monitoring station found near this location" });
+    : respond(404, { error: "No area found for this location" });
 }
 
 // Status comes from the shared rules engine so the dashboard never derives

@@ -1,11 +1,16 @@
 import {
+  ConditionalCheckFailedException,
   DynamoDBClient,
   GetItemCommand,
+  PutItemCommand,
   QueryCommand,
   QueryCommandOutput,
 } from "@aws-sdk/client-dynamodb";
 import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
 import { AQIReading } from "./types.js";
+import { errorFields, log } from "./observability.js";
+
+const READING_TTL_SECONDS = 8 * 24 * 3600;
 
 type StoredReading = AQIReading & { PK?: string; SK?: string; TTL?: number };
 
@@ -111,4 +116,39 @@ export async function getReadingsSince(
     startKey = result.LastEvaluatedKey;
   } while (startKey && readings.length < maxItems);
   return readings.slice(0, maxItems);
+}
+
+/**
+ * Stores a reading for trends and as a cache, keyed by its source
+ * observation time so the same hourly value is stored once however often it
+ * is requested. True when this call stored it.
+ */
+export async function persistReading(
+  dynamodb: DynamoDBClient,
+  table: string,
+  reading: AQIReading
+): Promise<boolean> {
+  try {
+    await dynamodb.send(
+      new PutItemCommand({
+        TableName: table,
+        Item: marshall(
+          {
+            PK: `CAMPUS#${reading.campus}`,
+            SK: `READING#${reading.timestamp}`,
+            ...reading,
+            TTL: Math.floor(Date.now() / 1000) + READING_TTL_SECONDS,
+          },
+          { removeUndefinedValues: true }
+        ),
+        ConditionExpression: "attribute_not_exists(PK)",
+      })
+    );
+    return true;
+  } catch (err) {
+    if (!(err instanceof ConditionalCheckFailedException)) {
+      log("error", "reading_store_failed", errorFields(err));
+    }
+    return false;
+  }
 }

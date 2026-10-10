@@ -4,7 +4,7 @@ import { evaluate, evaluateUnavailable } from "../shared/src/evaluate.js";
 import { isFaithful } from "../services/notices/src/ai.js";
 
 const rec = evaluate({
-  campus: "geo-288-771", aqi: 268, dominantPollutant: "pm25", pollutants: {}, source: "Open-Meteo",
+  campus: "geo-288-771", aqi: 268, dominantPollutant: "pm25", pollutants: {}, source: "Google Air Quality",
   stationName: "Delhi area", timestamp: "2026-10-10T13:30:00.000Z", fetchedAt: "", dataMode: "live",
 });
 

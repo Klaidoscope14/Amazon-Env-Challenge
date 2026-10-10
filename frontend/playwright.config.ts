@@ -2,8 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 
 /*
  * End-to-end tests run against a production build of the app with the API
- * mocked in the browser (see e2e/mock-api.ts), so they need no AWS account
- * and never touch real data. The build points at a placeholder API host.
+ * mocked in the browser (see e2e/mock-api.ts) — including Cognito's SRP
+ * sign-in — so they need no AWS account and never touch real data.
  */
 const PORT = 3100;
 
@@ -22,6 +22,11 @@ export default defineConfig({
     url: `http://localhost:${PORT}`,
     timeout: 240_000,
     reuseExistingServer: false,
-    env: { NEXT_PUBLIC_API_URL: "http://api.test", NEXT_TELEMETRY_DISABLED: "1" },
+    env: {
+      NEXT_PUBLIC_API_URL: "http://api.test",
+      NEXT_PUBLIC_COGNITO_USER_POOL_ID: "ap-south-1_E2eTestPool",
+      NEXT_PUBLIC_COGNITO_CLIENT_ID: "e2etestclient",
+      NEXT_TELEMETRY_DISABLED: "1",
+    },
   },
 });

@@ -16,7 +16,7 @@ decision that is understood, shared and remembered.
 BreatheSafe is an air-quality **decision workflow for anyone in India** — **See → Act → Record**:
 
 - **See** — the AQI where you are, anywhere in India (browser location rounded to ~1 km, never
-  stored), computed with CPCB's method, with a deterministic recommendation, the evidence behind it,
+  stored), on India's National AQI (CPCB scale), with a deterministic recommendation, the evidence behind it,
   and an **"Explain in plain language"** button in English or Hindi.
 - **Act** — share a bilingual (English + Hindi) alert with your family, neighbourhood, team or
   everyone: a public notice page, an email, a WhatsApp message and a spoken version.
@@ -31,18 +31,18 @@ or sample value presented as current.
 The whole backend is serverless on AWS, defined as code with AWS SAM:
 
 - **API Gateway** — REST API with a **Cognito** authorizer on write routes and request throttling.
-- **Lambda** (8 functions, Node.js 22) — AQI and areas, recommendations and rules, explanations,
-  trends, alerts and decisions, notices, sign-in, and a scheduled CPCB refresh.
+- **Lambda** (7 functions, Node.js 22) — AQI and areas, recommendations, rules and plans,
+  explanations, trends, alerts and decisions, notices, and sign-in.
 - **DynamoDB** — readings, the alert/decision audit trail (deletion protection, point-in-time
   recovery) and a **RulesConfig** table: the recommendation bands are data, validated on load, editable
   without a redeploy, with built-in rules as a safe fallback.
 - **EventBridge** — a custom bus for domain events (reading received, category crossed, alert created,
-  decision recorded) with a 30-day replayable archive and an event log; plus the CPCB refresh schedule.
+  decision recorded) with a 30-day replayable archive and an event log.
 - **SNS** — alert emails and operational alarm emails. **Polly** — English/Hindi audio notices.
 - **SSM Parameter Store** — encrypted API keys. **CloudWatch + X-Ray** — logs, seven alarms, tracing.
 
-Air-quality data comes from CPCB stations (data.gov.in) when a nearby station has reported recently,
-otherwise from Open-Meteo's air-quality data for the user's area.
+Real-time air-quality data comes from the Google Air Quality API, which reports India's National AQI
+(CPCB scale) for any location in India, plus hourly history for the trend chart.
 
 ## Responsible AI
 
@@ -70,4 +70,4 @@ tests with mocked AWS clients; GitHub Actions CI (typecheck, tests, lint, build,
 ## Limitations
 
 Decision support, not medical advice; area-level rather than street-level readings; no forecasting.
-CPCB's public feed has been unavailable since 7 October 2026, so the live demo uses the Open-Meteo path.
+Readings are hourly and area-level (about 10 km), so they can differ from a specific street or app.

@@ -20,6 +20,7 @@ Globals:
         RULES_TABLE_NAME: !Ref RulesConfigTable
         EVENT_BUS_NAME: !Ref EventBus
         STAGE: !Ref Stage
+        GOOGLE_AQ_KEY_PARAM: !Ref GoogleAqKeyParam
 
 Parameters:
   DataMode:
@@ -28,12 +29,7 @@ Parameters:
     AllowedValues:
       - live
       - demo
-    Description: "'live': nearest CPCB station for each area; 'demo': labelled fixtures for every request"
-  CpcbApiKey:
-    Type: String
-    Default: 'none'
-    NoEcho: true
-    Description: data.gov.in API key for the CPCB real-time AQI feed (required for live mode)
+    Description: "'live': Google Air Quality API (India's National AQI) for each area; 'demo': labelled fixtures for every request"
   DemoScenariosEnabled:
     Type: String
     Default: 'true'
@@ -69,6 +65,14 @@ Parameters:
       - 'true'
       - 'false'
     Description: Write plain-language explanations with the Gemini API (guardrail-checked; falls back to a deterministic explanation)
+  SesFromEmail:
+    Type: String
+    Default: ''
+    Description: Optional. Verified SES email identity for Cognito emails (sign-up codes, password resets). Empty uses Cognito's built-in email.
+  GoogleAqKeyParam:
+    Type: String
+    Default: /breathesafe/google-air-quality-key
+    Description: SSM SecureString parameter holding the Google Air Quality API key
   GeminiModel:
     Type: String
     Default: gemini-flash-lite-latest
@@ -80,6 +84,7 @@ Parameters:
 
 Conditions:
   HasAlertEmail: !Not [!Equals [!Ref AlertEmail, '']]
+  UseSesEmail: !Not [!Equals [!Ref SesFromEmail, '']]
 
 Resources:
 
@@ -97,6 +102,18 @@ Resources:
         - email
       UsernameAttributes:
         - email
+      # Two-step verification with an authenticator app, chosen by each user.
+      MfaConfiguration: OPTIONAL
+      EnabledMfas:
+        - SOFTWARE_TOKEN_MFA
+      # Cognito's built-in email allows ~50 emails a day. Set SesFromEmail (a
+      # verified SES identity, with SES production access) to send through SES.
+      EmailConfiguration: !If
+        - UseSesEmail
+        - EmailSendingAccount: DEVELOPER
+          From: !Sub BreatheSafe <${SesFromEmail}>
+          SourceArn: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SesFromEmail}
+        - !Ref AWS::NoValue
       Policies:
         PasswordPolicy:
           MinimumLength: 8
@@ -121,8 +138,9 @@ Resources:
     Properties:
       ClientName: !Sub breathesafe-web-${Stage}
       UserPoolId: !Ref UserPool
+      # SRP only: the browser proves it knows the password without sending it.
       ExplicitAuthFlows:
-        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_USER_SRP_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
       GenerateSecret: false
       PreventUserExistenceErrors: ENABLED
@@ -346,10 +364,7 @@ Resources:
       FunctionName: !Sub breathesafe-fetch-aqi-${Stage}
       CodeUri: ../backend/
       Handler: handler.handler
-      Description: Current AQI for an area (nearest CPCB station), area list and nearest-area lookup
-      Environment:
-        Variables:
-          CPCB_API_KEY: !Ref CpcbApiKey
+      Description: Current AQI for an area (Google Air Quality API), area list and nearest-area lookup
       LoggingConfig:
         LogGroup: !Ref FetchAQILogGroup
       Policies:
@@ -366,6 +381,9 @@ Resources:
             - Effect: Allow
               Action: events:PutEvents
               Resource: !GetAtt EventBus.Arn
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
       Events:
         GetAQI:
           Type: Api
@@ -399,49 +417,6 @@ Resources:
         External:
           - '@aws-sdk/*'
 
-  # Pulls the full CPCB feed every 30 minutes into one compressed snapshot,
-  # so API requests read a single item instead of calling CPCB.
-  StationsRefreshFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub breathesafe-stations-refresh-${Stage}
-      CodeUri: ../backend/
-      Handler: refresh.handler
-      Timeout: 60
-      MemorySize: 512
-      Description: Refreshes the CPCB station snapshot (live mode)
-      Environment:
-        Variables:
-          CPCB_API_KEY: !Ref CpcbApiKey
-      LoggingConfig:
-        LogGroup: !Ref StationsRefreshLogGroup
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action:
-                - dynamodb:GetItem
-                - dynamodb:PutItem
-              Resource: !GetAtt AQIReadingsTable.Arn
-      Events:
-        Every30Minutes:
-          Type: Schedule
-          Properties:
-            Schedule: rate(30 minutes)
-            Description: Refresh CPCB station snapshot
-    Metadata:
-      BuildMethod: esbuild
-      BuildProperties:
-        Minify: true
-        Target: es2022
-        Sourcemap: true
-        Format: esm
-        OutExtension:
-          - .js=.mjs
-        EntryPoints:
-          - services/aqi-data/src/refresh.ts
-        External:
-          - '@aws-sdk/*'
-
   GetRecommendationFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -450,9 +425,6 @@ Resources:
       Handler: handler.handler
       Timeout: 25
       Description: Evaluates an area's current AQI against the active ruleset; serves the ruleset and plan verdicts
-      Environment:
-        Variables:
-          CPCB_API_KEY: !Ref CpcbApiKey
       LoggingConfig:
         LogGroup: !Ref RecommendationLogGroup
       Policies:
@@ -469,6 +441,9 @@ Resources:
             - Effect: Allow
               Action: events:PutEvents
               Resource: !GetAtt EventBus.Arn
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
       Events:
         GetRecommendation:
           Type: Api
@@ -513,7 +488,6 @@ Resources:
         Variables:
           ALERTS_TOPIC_ARN: !Ref AlertsTopic
           NOTICE_URL: !Ref PublicSiteUrl
-          CPCB_API_KEY: !Ref CpcbApiKey
       LoggingConfig:
         LogGroup: !Ref AlertsLogGroup
       Policies:
@@ -543,6 +517,9 @@ Resources:
             - Effect: Allow
               Action: events:PutEvents
               Resource: !GetAtt EventBus.Arn
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
       Events:
         CreateAlert:
           Type: Api
@@ -592,7 +569,6 @@ Resources:
           NOTICE_AI_ENABLED: !Ref NoticeAIEnabled
           GEMINI_MODEL: !Ref GeminiModel
           GEMINI_API_KEY_PARAM: !Ref GeminiApiKeyParam
-          CPCB_API_KEY: !Ref CpcbApiKey
       LoggingConfig:
         LogGroup: !Ref NoticesLogGroup
       Policies:
@@ -619,6 +595,9 @@ Resources:
             - Effect: Allow
               Action: events:PutEvents
               Resource: !GetAtt EventBus.Arn
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
       Events:
         GetDraft:
           Type: Api
@@ -663,7 +642,6 @@ Resources:
           EXPLAIN_AI_ENABLED: !Ref ExplainAIEnabled
           GEMINI_MODEL: !Ref GeminiModel
           GEMINI_API_KEY_PARAM: !Ref GeminiApiKeyParam
-          CPCB_API_KEY: !Ref CpcbApiKey
       LoggingConfig:
         LogGroup: !Ref ExplainLogGroup
       Policies:
@@ -683,6 +661,9 @@ Resources:
             - Effect: Allow
               Action: events:PutEvents
               Resource: !GetAtt EventBus.Arn
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
       Events:
         GetExplanation:
           Type: Api
@@ -713,7 +694,7 @@ Resources:
       FunctionName: !Sub breathesafe-trends-${Stage}
       CodeUri: ../backend/
       Handler: handler.handler
-      Description: AQI trend for an area (Open-Meteo hourly history or stored readings)
+      Description: AQI trend for an area (Google Air Quality history or stored readings)
       LoggingConfig:
         LogGroup: !Ref TrendsLogGroup
       Policies:
@@ -723,6 +704,9 @@ Resources:
                 - dynamodb:GetItem
                 - dynamodb:Query
               Resource: !GetAtt AQIReadingsTable.Arn
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
       Events:
         GetTrends:
           Type: Api
@@ -750,19 +734,12 @@ Resources:
       FunctionName: !Sub breathesafe-auth-${Stage}
       CodeUri: ../backend/
       Handler: handler.handler
-      Description: Authentication - signup, signin, user profile
+      Description: Accounts - sign-up, verification, password reset, token refresh, profile, MFA setup, sign-out
       Environment:
         Variables:
-          USER_POOL_ID: !Ref UserPool
           USER_POOL_CLIENT_ID: !Ref UserPoolClient
-      # Public Cognito client APIs (SignUp, InitiateAuth, GetUser) need no IAM.
-      # The admin API that assigns the server-controlled "admin" role does.
-      Policies:
-        - Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:AdminUpdateUserAttributes
-              Resource: !GetAtt UserPool.Arn
+      # Only public Cognito client APIs (no IAM permissions). Sign-in itself
+      # happens in the browser with SRP, directly against Cognito.
       LoggingConfig:
         LogGroup: !Ref AuthLogGroup
       Events:
@@ -777,12 +754,6 @@ Resources:
           Properties:
             RestApiId: !Ref BreatheSafeApi
             Path: /api/v1/auth/confirm
-            Method: POST
-        SignIn:
-          Type: Api
-          Properties:
-            RestApiId: !Ref BreatheSafeApi
-            Path: /api/v1/auth/signin
             Method: POST
         RefreshToken:
           Type: Api
@@ -820,6 +791,24 @@ Resources:
             RestApiId: !Ref BreatheSafeApi
             Path: /api/v1/auth/signout
             Method: POST
+        MfaSetup:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/auth/mfa/setup
+            Method: POST
+        MfaEnable:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/auth/mfa/enable
+            Method: POST
+        MfaDisable:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/auth/mfa/disable
+            Method: POST
     Metadata:
       BuildMethod: esbuild
       BuildProperties:
@@ -834,6 +823,39 @@ Resources:
         External:
           - '@aws-sdk/*'
 
+  # Adds the "custom:role" claim to every ID token Cognito issues (SRP
+  # sign-in, MFA, refresh); the alert write routes require it.
+  PreTokenFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub breathesafe-pre-token-${Stage}
+      CodeUri: ../backend/
+      Handler: pre-token.handler
+      Timeout: 5
+      MemorySize: 128
+      Description: Cognito Pre Token Generation trigger - role claim for alert write routes
+      LoggingConfig:
+        LogGroup: !Ref PreTokenLogGroup
+      Events:
+        PreTokenGeneration:
+          Type: Cognito
+          Properties:
+            UserPool: !Ref UserPool
+            Trigger: PreTokenGeneration
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        EntryPoints:
+          - services/auth/src/pre-token.ts
+        External:
+          - '@aws-sdk/*'
+
   # ============================================
   # Logs (14-day retention) and monitoring
   # ============================================
@@ -843,12 +865,6 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /breathesafe/${Stage}/fetch-aqi
-      RetentionInDays: 14
-
-  StationsRefreshLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /breathesafe/${Stage}/stations-refresh
       RetentionInDays: 14
 
   RecommendationLogGroup:
@@ -879,6 +895,12 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /breathesafe/${Stage}/auth
+      RetentionInDays: 14
+
+  PreTokenLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /breathesafe/${Stage}/pre-token
       RetentionInDays: 14
 
   ExplainLogGroup:

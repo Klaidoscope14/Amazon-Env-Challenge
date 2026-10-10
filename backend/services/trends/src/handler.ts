@@ -35,10 +35,10 @@ export async function handler(
   }
 
   try {
-    // Areas without a current CPCB station get Open-Meteo's hourly history.
-    const modelled = await getAreaTrend(dynamodb, ctx, campus, hours);
-    if (modelled) {
-      const response: TrendResponse = { campus, points: modelled, period: `${hours}h`, dataMode: "live" };
+    // Hourly history from the Google Air Quality API; stored readings otherwise.
+    const hourly = await getAreaTrend(ctx, campus, hours);
+    if (hourly) {
+      const response: TrendResponse = { campus, points: hourly, period: `${hours}h`, dataMode: "live" };
       return respond(200, response);
     }
 

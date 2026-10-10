@@ -4,54 +4,30 @@ import {
   ConfirmSignUpCommand,
   InitiateAuthCommand,
   GetUserCommand,
-  AdminUpdateUserAttributesCommand,
   ForgotPasswordCommand,
   ConfirmForgotPasswordCommand,
   ResendConfirmationCodeCommand,
   RevokeTokenCommand,
+  AssociateSoftwareTokenCommand,
+  VerifySoftwareTokenCommand,
+  SetUserMFAPreferenceCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import {
   ConfirmBodySchema,
   EmailBodySchema,
+  MfaCodeBodySchema,
   parse,
   ResetPasswordBodySchema,
   RefreshBodySchema,
-  SignInBodySchema,
   SignUpBodySchema,
   ValidationError,
 } from "../../../shared/src/schemas.js";
-import { parseJsonBody, respond } from "../../../shared/src/http.js";
+import { header, parseJsonBody, respond } from "../../../shared/src/http.js";
 import { errorFields, log } from "../../../shared/src/observability.js";
 
 const cognito = new CognitoIdentityProviderClient({});
 const CLIENT_ID = process.env.USER_POOL_CLIENT_ID!;
-const USER_POOL_ID = process.env.USER_POOL_ID!;
-
-/**
- * Grants the server-controlled "admin" role to a verified administrator
- * account. Users cannot self-assign it (custom:role is not a writable
- * attribute), so the write routes — which require role === "admin" — can only
- * be reached by accounts the server has deliberately promoted. In the MVP every
- * self-registered, email-verified account is promoted here; to restrict access,
- * remove this call and promote accounts manually (e.g. via the Cognito console).
- *
- * Best-effort: a failure never blocks sign-up/sign-in. The role check simply
- * denies alert actions until the attribute is set (e.g. on the next sign-in).
- */
-async function grantAdminRole(username: string): Promise<void> {
-  try {
-    await cognito.send(
-      new AdminUpdateUserAttributesCommand({
-        UserPoolId: USER_POOL_ID,
-        Username: username,
-        UserAttributes: [{ Name: "custom:role", Value: "admin" }],
-      })
-    );
-  } catch (err) {
-    log("error", "grant_role_failed", errorFields(err));
-  }
-}
 
 export async function handler(
   event: APIGatewayProxyEvent
@@ -60,9 +36,13 @@ export async function handler(
   const method = event.httpMethod;
 
   try {
+    // Sign-in itself happens in the browser with SRP, directly against Cognito
+    // (the password never reaches this service); see frontend/src/lib/cognito.ts.
+    if (method === "POST" && path.endsWith("/mfa/setup")) return await mfaSetup(event);
+    if (method === "POST" && path.endsWith("/mfa/enable")) return await mfaEnable(event);
+    if (method === "POST" && path.endsWith("/mfa/disable")) return await mfaDisable(event);
     if (method === "POST" && path.endsWith("/signup")) return await signUp(event);
     if (method === "POST" && path.endsWith("/confirm")) return await confirmSignUp(event);
-    if (method === "POST" && path.endsWith("/signin")) return await signIn(event);
     if (method === "POST" && path.endsWith("/refresh")) return await refreshToken(event);
     if (method === "GET" && path.endsWith("/profile")) return await getProfile(event);
     if (method === "POST" && path.endsWith("/forgot-password")) return await forgotPassword(event);
@@ -100,6 +80,7 @@ const COGNITO_ERRORS: Record<string, { status: number; code: string; message: st
   LimitExceededException: { status: 429, code: "TOO_MANY_ATTEMPTS", message: "Too many attempts. Please wait and try again." },
   TooManyRequestsException: { status: 429, code: "TOO_MANY_ATTEMPTS", message: "Too many attempts. Please wait and try again." },
   TooManyFailedAttemptsException: { status: 429, code: "TOO_MANY_ATTEMPTS", message: "Too many attempts. Please wait and try again." },
+  EnableSoftwareTokenMFAException: { status: 400, code: "INVALID_CODE", message: "That code is incorrect. Check your authenticator app and try again." },
 };
 
 async function signUp(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
@@ -117,9 +98,6 @@ async function signUp(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResul
       ],
     })
   );
-
-  // Promote the new account to the admin role (server-side only).
-  await grantAdminRole(email);
 
   return respond(200, {
     message: "Sign up successful. Check your email for a verification code.",
@@ -141,34 +119,6 @@ async function confirmSignUp(event: APIGatewayProxyEvent): Promise<APIGatewayPro
   return respond(200, { message: "Email verified. You can now sign in." });
 }
 
-async function signIn(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  const { email, password } = parse(SignInBodySchema, parseJsonBody(event));
-
-  // Ensure the role claim is present before the ID token is minted below. This
-  // also back-fills accounts created before role enforcement existed.
-  await grantAdminRole(email);
-
-  const result = await cognito.send(
-    new InitiateAuthCommand({
-      AuthFlow: "USER_PASSWORD_AUTH",
-      ClientId: CLIENT_ID,
-      AuthParameters: {
-        USERNAME: email,
-        PASSWORD: password,
-      },
-    })
-  );
-
-  const auth = result.AuthenticationResult;
-
-  return respond(200, {
-    message: "Sign in successful",
-    accessToken: auth?.AccessToken,
-    idToken: auth?.IdToken,
-    refreshToken: auth?.RefreshToken,
-    expiresIn: auth?.ExpiresIn,
-  });
-}
 
 async function refreshToken(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const { refreshToken } = parse(RefreshBodySchema, parseJsonBody(event));
@@ -192,10 +142,14 @@ async function refreshToken(event: APIGatewayProxyEvent): Promise<APIGatewayProx
   });
 }
 
+/** The caller's Cognito access token ("Authorization: Bearer <token>"). */
+function accessToken(event: APIGatewayProxyEvent): string | null {
+  const value = header(event, "Authorization");
+  return value?.startsWith("Bearer ") ? value.slice("Bearer ".length).trim() || null : null;
+}
+
 async function getProfile(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  const token =
-    event.headers?.Authorization?.replace("Bearer ", "") ||
-    event.headers?.authorization?.replace("Bearer ", "");
+  const token = accessToken(event);
 
   if (!token) {
     return respond(401, { error: "Authorization token required" });
@@ -214,6 +168,7 @@ async function getProfile(event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
     email: attributes.email,
     name: attributes.name,
     role: attributes["custom:role"],
+    mfaEnabled: (result.UserMFASettingList ?? []).includes("SOFTWARE_TOKEN_MFA"),
   });
 }
 
@@ -267,4 +222,57 @@ async function signOut(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResu
     console.warn(JSON.stringify({ event: "token_revoke_failed", error: (err as Error).name }));
   }
   return respond(200, { message: "Signed out." });
+}
+
+// ---- Two-step verification (TOTP authenticator apps) -----------------------
+
+function requireAccessToken(event: APIGatewayProxyEvent): string {
+  const token = accessToken(event);
+  if (!token) throw Object.assign(new Error("Authorization token required"), { name: "NotAuthorizedException" });
+  return token;
+}
+
+/** Starts setup: a new secret for the user's authenticator app (shown once, as text and QR). */
+async function mfaSetup(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const token = requireAccessToken(event);
+  const [{ SecretCode }, user] = await Promise.all([
+    cognito.send(new AssociateSoftwareTokenCommand({ AccessToken: token })),
+    cognito.send(new GetUserCommand({ AccessToken: token })),
+  ]);
+  const email = user.UserAttributes?.find((a) => a.Name === "email")?.Value ?? "account";
+  const label = encodeURIComponent(`BreatheSafe:${email}`);
+  return respond(200, {
+    secret: SecretCode,
+    otpauthUri: `otpauth://totp/${label}?secret=${SecretCode}&issuer=BreatheSafe`,
+  });
+}
+
+/** Confirms setup with a first code, then makes TOTP required at every sign-in. */
+async function mfaEnable(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const token = requireAccessToken(event);
+  const { code } = parse(MfaCodeBodySchema, parseJsonBody(event));
+  const verified = await cognito.send(
+    new VerifySoftwareTokenCommand({ AccessToken: token, UserCode: code, FriendlyDeviceName: "Authenticator app" })
+  );
+  if (verified.Status !== "SUCCESS") {
+    return respond(400, { error: "That code is incorrect. Check your authenticator app and try again.", code: "INVALID_CODE" });
+  }
+  await cognito.send(
+    new SetUserMFAPreferenceCommand({
+      AccessToken: token,
+      SoftwareTokenMfaSettings: { Enabled: true, PreferredMfa: true },
+    })
+  );
+  return respond(200, { message: "Two-step verification is on.", mfaEnabled: true });
+}
+
+async function mfaDisable(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const token = requireAccessToken(event);
+  await cognito.send(
+    new SetUserMFAPreferenceCommand({
+      AccessToken: token,
+      SoftwareTokenMfaSettings: { Enabled: false, PreferredMfa: false },
+    })
+  );
+  return respond(200, { message: "Two-step verification is off.", mfaEnabled: false });
 }
