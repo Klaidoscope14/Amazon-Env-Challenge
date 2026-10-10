@@ -1,19 +1,63 @@
 @import "tailwindcss";
 
 /*
- * The UI is designed as a light theme (white cards on gray-50). Declaring the
- * color scheme keeps native controls (selects, inputs, scrollbars) light too,
- * so the app stays readable when the OS is in dark mode.
+ * Semantic color tokens. The neutral surfaces (page, cards, borders, text) are
+ * driven by these so the whole UI flips to a dark theme automatically under
+ * prefers-color-scheme: dark — no per-element `dark:` utilities needed for the
+ * neutrals. Accent colours (AQI bands, badges) keep their own Tailwind classes.
  */
 :root {
   color-scheme: light;
+  --canvas: #f9fafb; /* gray-50  — page background */
+  --surface: #ffffff; /* card background */
+  --surface-2: #f9fafb; /* inset / muted panel */
+  --border: #e5e7eb; /* gray-200 */
+  --border-strong: #d1d5db; /* gray-300 */
+  --foreground: #111827; /* gray-900 */
+  --muted: #6b7280; /* gray-500 */
+  --muted-strong: #374151; /* gray-700 */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --canvas: #0b1120; /* slate-950-ish */
+    --surface: #111827; /* gray-900 */
+    --surface-2: #1f2937; /* gray-800 */
+    --border: #1f2937; /* gray-800 */
+    --border-strong: #374151; /* gray-700 */
+    --foreground: #f3f4f6; /* gray-100 */
+    --muted: #9ca3af; /* gray-400 */
+    --muted-strong: #d1d5db; /* gray-300 */
+  }
 }
 
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-strong: var(--muted-strong);
 }
 
 body {
-  color: var(--color-gray-900);
+  background-color: var(--canvas);
+  color: var(--foreground);
+}
+
+/*
+ * Visible keyboard focus for every interactive element. Inputs that opt into
+ * their own focus:ring-* still get it; this covers the link-buttons and plain
+ * buttons that previously relied on the browser default outline only.
+ */
+:focus-visible {
+  outline: 2px solid var(--color-blue-600);
+  outline-offset: 2px;
+  border-radius: 0.25rem;
 }

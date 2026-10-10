@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getAreas } from "@/lib/api";
 import { areaSubtitle, useArea } from "@/lib/area";
 import type { AreaInfo } from "@/lib/types";
+import Button from "./ui/Button";
 
 const MAX_RESULTS = 60;
 
@@ -46,30 +47,30 @@ export default function AreaPicker({ intro, onDone }: AreaPickerProps) {
   return (
     <section
       aria-labelledby={`${id}-title`}
-      className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-4"
+      className="rounded-2xl border border-border bg-surface p-6 shadow-sm space-y-4"
     >
       <div>
-        <h2 id={`${id}-title`} className="text-lg font-semibold text-gray-900">
+        <h2 id={`${id}-title`} className="text-lg font-semibold text-foreground">
           Choose your area
         </h2>
-        <p className="text-sm text-gray-600 mt-1">
+        <p className="text-sm text-muted mt-1">
           {intro ?? "Air quality is shown for the nearest CPCB monitoring station."}
         </p>
       </div>
 
-      <button
+      <Button
         type="button"
         onClick={async () => {
           if (await detect()) onDone?.();
         }}
         disabled={isDetecting}
-        className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+        className="gap-2"
       >
         {isDetecting ? "Finding your location…" : "Use my location"}
-      </button>
+      </Button>
 
       <div>
-        <label htmlFor={`${id}-search`} className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor={`${id}-search`} className="block text-sm font-medium text-muted-strong mb-1">
           Or search for a city or monitoring station
         </label>
         <input
@@ -79,13 +80,13 @@ export default function AreaPicker({ intro, onDone }: AreaPickerProps) {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="e.g. Delhi, Pune, Anand Vihar"
           autoComplete="off"
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
-      {areasQuery.isPending && <p className="text-sm text-gray-600">Loading areas…</p>}
+      {areasQuery.isPending && <p className="text-sm text-muted">Loading areas…</p>}
       {areasQuery.isError && (
-        <p className="text-sm text-red-700" role="alert">
+        <p className="text-sm text-red-700 dark:text-red-300" role="alert">
           Couldn&apos;t load the list of areas.{" "}
           <button onClick={() => areasQuery.refetch()} className="underline font-medium">
             Retry
@@ -94,9 +95,9 @@ export default function AreaPicker({ intro, onDone }: AreaPickerProps) {
       )}
 
       {areasQuery.data && (
-        <ul className="max-h-72 overflow-y-auto divide-y divide-gray-100 rounded-lg border border-gray-200">
+        <ul className="max-h-72 overflow-y-auto divide-y divide-border rounded-lg border border-border">
           {matches.length === 0 && (
-            <li className="px-3 py-3 text-sm text-gray-600">No matching areas.</li>
+            <li className="px-3 py-3 text-sm text-muted">No matching areas.</li>
           )}
           {matches.map((area) => (
             <li key={area.id}>
@@ -104,17 +105,17 @@ export default function AreaPicker({ intro, onDone }: AreaPickerProps) {
                 type="button"
                 onClick={() => choose(area)}
                 aria-label={`${area.name}, ${areaSubtitle(area)}`}
-                className="w-full text-left px-3 py-2 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
+                className="w-full text-left px-3 py-2 hover:bg-surface-2 focus:bg-surface-2 focus:outline-none"
               >
-                <span className="block text-sm font-medium text-gray-900">{area.name}</span>
-                <span className="block text-xs text-gray-600">{areaSubtitle(area)}</span>
+                <span className="block text-sm font-medium text-foreground">{area.name}</span>
+                <span className="block text-xs text-muted">{areaSubtitle(area)}</span>
               </button>
             </li>
           ))}
         </ul>
       )}
       {areasQuery.data?.source === "cities" && (
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted">
           Demo mode: areas are cities and readings are labelled sample values.
         </p>
       )}

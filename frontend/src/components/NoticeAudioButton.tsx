@@ -48,13 +48,13 @@ export default function NoticeAudioButton({ alert, lang, label }: NoticeAudioBut
         onClick={toggle}
         disabled={state === "loading"}
         aria-pressed={state === "playing"}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-60"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-border-strong bg-surface px-3 py-1.5 text-sm font-medium text-foreground hover:bg-surface-2 disabled:opacity-60"
       >
         <span aria-hidden="true">{state === "playing" ? "■" : "▶"}</span>
         {state === "loading" ? "Preparing audio…" : state === "playing" ? "Stop" : label}
       </button>
       {state === "error" && (
-        <span role="alert" className="text-xs text-red-700">
+        <span role="alert" className="text-xs text-red-700 dark:text-red-300">
           Audio unavailable
         </span>
       )}

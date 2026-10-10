@@ -7,6 +7,7 @@ import { ApiError, recordDecision } from "@/lib/api";
 import { DECISION_OPTIONS } from "@/lib/constants";
 import { useAuth } from "@/lib/auth";
 import type { Alert } from "@/lib/types";
+import Button from "./ui/Button";
 
 function formatTime(ts: string | null | undefined): string {
   if (!ts) return "";
@@ -54,11 +55,11 @@ export default function DecisionRecorder({
     const at = recorded?.at ?? alert.decisionTimestamp;
     const by = recorded ? user?.name : alert.decisionBy;
     return (
-      <div className="mt-3 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2">
-        <p className="text-xs text-blue-700 font-medium">Decision recorded</p>
-        <p className="text-sm text-blue-900 mt-0.5">{decision}</p>
+      <div className="mt-3 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 px-3 py-2">
+        <p className="text-xs text-blue-700 dark:text-blue-300 font-medium">Decision recorded</p>
+        <p className="text-sm text-blue-900 dark:text-blue-200 mt-0.5">{decision}</p>
         {(at || by) && (
-          <p className="text-xs text-blue-700 mt-0.5">
+          <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
             {by ? `by ${by}` : ""}
             {by && at ? " · " : ""}
             {formatTime(at)}
@@ -72,7 +73,7 @@ export default function DecisionRecorder({
     return (
       <Link
         href="/login?redirect=/alerts"
-        className="mt-3 inline-block text-sm text-gray-600 hover:text-blue-700 underline"
+        className="mt-3 inline-block text-sm text-muted hover:text-blue-700 underline"
       >
         Sign in to record a decision
       </Link>
@@ -83,7 +84,7 @@ export default function DecisionRecorder({
     return (
       <button
         onClick={() => setShowForm(true)}
-        className="mt-3 text-sm text-blue-700 hover:text-blue-900 font-medium"
+        className="mt-3 text-sm text-blue-700 hover:text-blue-900 dark:text-blue-200 font-medium"
       >
         Record decision
       </button>
@@ -95,17 +96,18 @@ export default function DecisionRecorder({
 
   return (
     <div className="mt-3 space-y-2">
-      <p className="text-xs text-gray-600 font-medium">Record what you decided:</p>
+      <p className="text-xs text-muted font-medium">Record what you decided:</p>
       <div className="flex flex-wrap gap-2">
         {DECISION_OPTIONS.map((opt) => (
-          <button
+          <Button
             key={opt}
+            variant="secondary"
+            size="sm"
             onClick={() => mutation.mutate(opt)}
             disabled={mutation.isPending}
-            className="text-xs px-3 py-1.5 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 text-gray-900"
           >
             {opt}
-          </button>
+          </Button>
         ))}
       </div>
       <form
@@ -126,18 +128,14 @@ export default function DecisionRecorder({
           onChange={(e) => setCustomDecision(e.target.value)}
           maxLength={500}
           placeholder="Or type a custom decision..."
-          className="flex-1 text-xs border border-gray-300 rounded-lg px-3 py-1.5 text-gray-900"
+          className="flex-1 min-h-11 text-xs border border-border-strong rounded-lg px-3 text-foreground"
         />
-        <button
-          type="submit"
-          disabled={mutation.isPending || !customDecision.trim()}
-          className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-        >
+        <Button type="submit" size="sm" disabled={mutation.isPending || !customDecision.trim()}>
           Save
-        </button>
+        </Button>
       </form>
       {mutation.isError && (
-        <p className="text-xs text-red-700" role="alert">
+        <p className="text-xs text-red-700 dark:text-red-300" role="alert">
           {conflict
             ? "A decision was already recorded for this alert. Refreshing…"
             : "Failed to save. Try again."}
