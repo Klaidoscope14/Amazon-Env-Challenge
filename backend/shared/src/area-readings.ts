@@ -40,6 +40,15 @@ export function isAreaId(value: unknown): value is string {
   return typeof value === "string" && /^[a-z0-9][a-z0-9-]{0,89}$/.test(value);
 }
 
+/** Display name for where a reading applies: the area's name, else the reading's station without the demo suffix. */
+export function areaDisplayName(
+  area: Area | null,
+  reading: AQIReading | null,
+  fallback: string
+): string {
+  return area?.name ?? reading?.stationName.replace(/ \(sample values\)$/, "") ?? fallback;
+}
+
 /** True when this request should be served from labelled demo fixtures. */
 export function usesDemo(ctx: DataContext, scenario?: string): boolean {
   return ctx.dataMode !== "live" || (!!scenario && ctx.demoScenariosEnabled);

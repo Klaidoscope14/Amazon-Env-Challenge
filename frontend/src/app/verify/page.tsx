@@ -3,7 +3,7 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { authConfirm } from "@/lib/api";
+import { authConfirm, authResendCode } from "@/lib/api";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 
@@ -15,6 +15,7 @@ function VerifyForm() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [verified, setVerified] = useState(false);
+  const [resendStatus, setResendStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent) {
@@ -30,6 +31,22 @@ function VerifyForm() {
       setError(err instanceof Error ? err.message : "Verification failed");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    if (!email) {
+      setError("Enter your email first.");
+      return;
+    }
+    setError("");
+    setResendStatus("sending");
+    try {
+      await authResendCode(email);
+      setResendStatus("sent");
+    } catch (err) {
+      setResendStatus("error");
+      setError(err instanceof Error ? err.message : "Couldn't send a new code");
     }
   }
 
@@ -112,6 +129,24 @@ function VerifyForm() {
               {loading ? "Verifying..." : "Verify Email"}
             </Button>
           </form>
+
+          <p className="mt-4 text-sm text-muted text-center" aria-live="polite">
+            {resendStatus === "sent" ? (
+              "A new code is on its way — check your inbox and spam folder."
+            ) : (
+              <>
+                Didn&apos;t get a code?{" "}
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resendStatus === "sending"}
+                  className="text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
+                >
+                  {resendStatus === "sending" ? "Sending…" : "Send a new code"}
+                </button>
+              </>
+            )}
+          </p>
 
           <p className="mt-6 text-sm text-muted text-center">
             <Link

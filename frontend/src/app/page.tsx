@@ -17,6 +17,7 @@ import AqiHeroCard from "@/components/AqiHeroCard";
 import PollutantBreakdown from "@/components/PollutantBreakdown";
 import RecommendationCard from "@/components/RecommendationCard";
 import TrendChart from "@/components/TrendChart";
+import PlansCard from "@/components/PlansCard";
 import Card from "@/components/ui/Card";
 import AlertForm from "@/components/AlertForm";
 import DecisionRecorder from "@/components/DecisionRecorder";
@@ -182,6 +183,8 @@ function Dashboard({ area }: { area: AreaInfo }) {
           onIssueAlert={() => setShowAlertForm(true)}
         />
       )}
+
+      {aqiQuery.data && <PlansCard areaId={area.id} scenario={activeScenario} />}
 
       {trendQuery.isError && (
         <ErrorCard

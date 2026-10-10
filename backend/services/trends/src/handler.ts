@@ -1,14 +1,12 @@
-import {
-  DynamoDBClient,
-  QueryCommand,
-} from "@aws-sdk/client-dynamodb";
-import { unmarshall, marshall } from "@aws-sdk/util-dynamodb";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { AQIReading, TrendPoint, TrendResponse } from "../../../shared/src/types.js";
+import { TrendPoint, TrendResponse } from "../../../shared/src/types.js";
 import { buildDemoTrend } from "../../../shared/src/demo.js";
 import { dataContextFromEnv, getAreaTrend, usesDemo } from "../../../shared/src/area-readings.js";
 import { parse, TrendsQuerySchema, ValidationError } from "../../../shared/src/schemas.js";
 import { respond } from "../../../shared/src/http.js";
+import { getReadingsSince } from "../../../shared/src/readings.js";
+import { errorFields, log } from "../../../shared/src/observability.js";
 
 const dynamodb = new DynamoDBClient({});
 const AQI_TABLE_NAME = process.env.AQI_TABLE_NAME!;
@@ -45,29 +43,14 @@ export async function handler(
     }
 
     const cutoff = new Date(Date.now() - hours * 3600 * 1000).toISOString();
-
-    const result = await dynamodb.send(
-      new QueryCommand({
-        TableName: AQI_TABLE_NAME,
-        KeyConditionExpression: "PK = :pk AND SK >= :cutoff",
-        ExpressionAttributeValues: marshall({
-          ":pk": `CAMPUS#${campus}`,
-          ":cutoff": `READING#${cutoff}`,
-        }),
-        ScanIndexForward: true,
-      })
-    );
-
-    const points: TrendPoint[] = (result.Items || []).map((item) => {
-      const row = unmarshall(item) as AQIReading & { PK: string; SK: string };
-      return {
-        timestamp: row.timestamp,
-        aqi: row.aqi,
-        dominantPollutant: row.dominantPollutant,
-        source: row.source,
-        dataMode: row.dataMode,
-      };
-    });
+    const readings = await getReadingsSince(dynamodb, AQI_TABLE_NAME, campus, cutoff);
+    const points: TrendPoint[] = readings.map((row) => ({
+      timestamp: row.timestamp,
+      aqi: row.aqi,
+      dominantPollutant: row.dominantPollutant,
+      source: row.source,
+      dataMode: row.dataMode,
+    }));
 
     const response: TrendResponse = {
       campus,
@@ -78,7 +61,7 @@ export async function handler(
 
     return respond(200, response);
   } catch (err) {
-    console.error("Trends handler error:", err);
+    log("error", "unhandled_error", { route: event.path, ...errorFields(err) });
     return respond(500, { error: "Internal server error" });
   }
 }

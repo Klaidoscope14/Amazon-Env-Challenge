@@ -8,7 +8,7 @@ export function respond(statusCode: number, body: unknown): APIGatewayProxyResul
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization",
+      "Access-Control-Allow-Headers": "Content-Type,Authorization,Idempotency-Key",
       "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
     },
     body: JSON.stringify(body),
@@ -65,4 +65,21 @@ export function signedInName(event: APIGatewayProxyEvent): string {
   );
   if (!name) throw new UnauthorizedError();
   return name.trim().slice(0, MAX_NAME);
+}
+
+/** Stable id of the signed-in caller (Cognito "sub"), for per-user records. */
+export function callerId(event: APIGatewayProxyEvent): string {
+  const claims = (event.requestContext?.authorizer?.claims ?? {}) as Record<string, unknown>;
+  const id = [claims.sub, claims.email].find((v): v is string => typeof v === "string" && v.length > 0);
+  if (!id) throw new UnauthorizedError();
+  return id;
+}
+
+/** A request header, case-insensitively. */
+export function header(event: APIGatewayProxyEvent, name: string): string | undefined {
+  const wanted = name.toLowerCase();
+  for (const [key, value] of Object.entries(event.headers ?? {})) {
+    if (key.toLowerCase() === wanted && value) return value;
+  }
+  return undefined;
 }

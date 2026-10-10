@@ -5,6 +5,7 @@ import {
 } from "@aws-sdk/client-sns";
 import { Alert } from "../../../../shared/src/types.js";
 import { AUDIENCE_LABELS, formatIstTime } from "../../../../shared/src/notice-templates.js";
+import { errorFields, log } from "../../../../shared/src/observability.js";
 
 const sns = new SNSClient({});
 const SUBSCRIBER_CACHE_MS = 5 * 60 * 1000;
@@ -82,7 +83,7 @@ export async function publishAlertEmail(
     await sns.send(new PublishCommand({ TopicArn: topicArn, Subject: subject, Message: message }));
     return true;
   } catch (err) {
-    console.error("SNS publish failed:", err);
+    log("error", "alert_email_failed", errorFields(err));
     return false;
   }
 }

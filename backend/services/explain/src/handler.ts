@@ -8,6 +8,7 @@ import { geminiConfigFromEnv, generateJson } from "../../../shared/src/gemini.js
 import { ExplainQuerySchema, parse, ValidationError } from "../../../shared/src/schemas.js";
 import { respond } from "../../../shared/src/http.js";
 import {
+  areaDisplayName,
   dataContextFromEnv,
   getAreaReading,
   usesDemo,
@@ -20,6 +21,7 @@ import {
   systemInstruction,
   templateExplanation,
 } from "./explanation.js";
+import { errorFields, log, metric } from "../../../shared/src/observability.js";
 
 /*
  * GET /api/v1/explain?campus=<area>&lang=en|hi — a plain-language
@@ -74,7 +76,7 @@ export async function handler(
     if (hit && Date.now() - hit.at < CACHE_MS) return respond(200, hit.value);
 
     const place = {
-      areaName: area?.name ?? reading.stationName.replace(/ \(sample values\)$/, ""),
+      areaName: areaDisplayName(area, reading, areaId),
       areaKind: area?.kind,
       measuredStation: reading.source === "CPCB" ? reading.stationName : undefined,
     };
@@ -107,6 +109,8 @@ export async function handler(
           disclaimer: DISCLAIMER,
         };
 
+    metric(ai.ok ? "ExplanationsAI" : "ExplanationsFallback");
+
     // Transient failures are not cached, so the next request can try AI again.
     if (ai.ok || ai.reason.startsWith("guardrail:") || ai.reason === "ai_disabled") {
       if (cache.size >= CACHE_LIMIT) cache.delete(cache.keys().next().value!);
@@ -115,7 +119,7 @@ export async function handler(
     return respond(200, value);
   } catch (err) {
     if (err instanceof ValidationError) return respond(400, { error: err.message });
-    console.error("Explain handler error:", err);
+    log("error", "unhandled_error", { route: event.path, ...errorFields(err) });
     return respond(500, { error: "Internal server error" });
   }
 }

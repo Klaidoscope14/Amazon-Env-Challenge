@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from "react";
 import { API_URL } from "./config";
+import { authSignOut } from "./api";
 
 interface User {
   email: string;
@@ -153,13 +154,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(() => {
+    // Revoke the refresh token so a copied session can't be refreshed.
+    if (tokens?.refreshToken) void authSignOut(tokens.refreshToken);
     setUser(null);
     setTokens(null);
     if (refreshTimer.current) clearInterval(refreshTimer.current);
     try {
       localStorage.removeItem(TOKENS_KEY);
     } catch {}
-  }, []);
+  }, [tokens]);
+
+  // Keep tabs in sync: signing out (or in) in one tab updates the others.
+  useEffect(() => {
+    const onStorage = async (e: StorageEvent) => {
+      if (e.key !== TOKENS_KEY) return;
+      if (!e.newValue) {
+        setUser(null);
+        setTokens(null);
+        if (refreshTimer.current) clearInterval(refreshTimer.current);
+        return;
+      }
+      try {
+        const next = JSON.parse(e.newValue) as AuthTokens;
+        setTokens(next);
+        const profile = await fetchProfile(next.accessToken);
+        if (profile) setUser(profile);
+      } catch {
+        // Ignore malformed values written by something else.
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [fetchProfile]);
 
   return (
     <AuthContext.Provider

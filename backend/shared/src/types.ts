@@ -180,3 +180,13 @@ export interface APIResponse<T> {
   dataMode?: "live" | "cached" | "demo";
   timestamp: string;
 }
+
+/** POST /plans/evaluate response. */
+export interface PlansEvaluation {
+  status: AQIStatus;
+  aqi: number;
+  dataQuality: Recommendation["dataQuality"];
+  basedOn: string | null;
+  verdicts: { id: string; verdict: "go" | "modify" | "avoid" | "unknown"; reason: string; suggestion: string }[];
+  disclaimer: string;
+}

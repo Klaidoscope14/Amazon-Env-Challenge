@@ -14,6 +14,7 @@ function LoginForm() {
   // freshly signed-in user off-site.
   const requested = searchParams.get("redirect") || "/";
   const redirect = /^\/(?![\/\\])/.test(requested) ? requested : "/";
+  const passwordReset = searchParams.get("reset") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -86,7 +87,21 @@ function LoginForm() {
                 className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Your password"
               />
+              <p className="mt-1 text-right text-xs">
+                <Link
+                  href={`/forgot-password${email ? `?email=${encodeURIComponent(email)}` : ""}`}
+                  className="text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Forgot password?
+                </Link>
+              </p>
             </div>
+
+            {passwordReset && !error && (
+              <p role="status" className="text-sm text-green-800 dark:text-green-300 bg-green-50 dark:bg-green-950/40 rounded-lg px-3 py-2">
+                Password changed. Sign in with your new password.
+              </p>
+            )}
 
             {error && (
               <p role="alert" className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 rounded-lg px-3 py-2">

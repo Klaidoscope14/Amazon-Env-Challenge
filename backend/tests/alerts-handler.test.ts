@@ -9,6 +9,7 @@ vi.mock("../services/alerts/src/operations/createAlert.js", () => ({
 }));
 vi.mock("../services/alerts/src/operations/getAlerts.js", () => ({
   getAlerts: vi.fn(async () => []),
+  getAlertsPage: vi.fn(async () => ({ alerts: [] })),
 }));
 vi.mock("../services/alerts/src/operations/recordDecision.js", () => ({
   recordDecision: vi.fn(async () => ({ success: true, alertId: "a1", decisionTimestamp: "t" })),

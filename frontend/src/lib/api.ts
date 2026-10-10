@@ -8,6 +8,7 @@ import {
   TrendResponse,
   Explanation,
   Ruleset,
+  PlansEvaluation,
 } from "./types";
 import { API_URL } from "./config";
 
@@ -145,21 +146,29 @@ export async function createAlert(data: {
   scenario?: string;
   /** Live mode: source timestamp of the reading on screen. */
   readingTimestamp?: string;
-}): Promise<Alert> {
-  // The sender's name comes from the sign-in token on the server.
+}, idempotencyKey?: string): Promise<Alert> {
+  // The sender's name comes from the sign-in token on the server. The
+  // idempotency key makes a retried submit return the same alert.
   return fetchAuthed<Alert>("/api/v1/alerts", {
     method: "POST",
     body: JSON.stringify(data),
+    headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
   });
+}
+
+export interface AlertsPage {
+  alerts: Alert[];
+  count: number;
+  /** Pass back to get the next (older) page; absent on the last page. */
+  nextCursor?: string;
 }
 
 export async function getAlerts(
   campus: string,
-  limit?: number
-): Promise<{ alerts: Alert[]; count: number }> {
-  return fetchApi<{ alerts: Alert[]; count: number }>(
-    `/api/v1/alerts?${query({ campus, limit })}`
-  );
+  limit?: number,
+  cursor?: string
+): Promise<AlertsPage> {
+  return fetchApi<AlertsPage>(`/api/v1/alerts?${query({ campus, limit, cursor })}`);
 }
 
 export async function recordDecision(
@@ -208,6 +217,25 @@ export async function getExplanation(
   scenario?: string
 ): Promise<Explanation> {
   return fetchApi<Explanation>(`/api/v1/explain?${query({ campus, lang, scenario })}`);
+}
+
+export interface PlanInput {
+  id: string;
+  activity: string;
+  durationMinutes: number;
+  sensitive?: boolean;
+}
+
+/** Go / Modify / Avoid for each of today's plans, from the area's current reading. */
+export async function evaluatePlans(
+  campus: string,
+  plans: PlanInput[],
+  scenario?: string
+): Promise<PlansEvaluation> {
+  return fetchApi<PlansEvaluation>("/api/v1/plans/evaluate", {
+    method: "POST",
+    body: JSON.stringify({ campus, scenario, plans }),
+  });
 }
 
 /** The ruleset the recommendation engine is currently applying. */
@@ -260,4 +288,28 @@ export async function authSignIn(data: {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+export async function authForgotPassword(email: string): Promise<{ message: string }> {
+  return fetchApi("/api/v1/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) });
+}
+
+export async function authResetPassword(data: {
+  email: string;
+  code: string;
+  password: string;
+}): Promise<{ message: string }> {
+  return fetchApi("/api/v1/auth/reset-password", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function authResendCode(email: string): Promise<{ message: string }> {
+  return fetchApi("/api/v1/auth/resend-code", { method: "POST", body: JSON.stringify({ email }) });
+}
+
+/** Revokes the refresh token server-side. Best-effort: never throws. */
+export async function authSignOut(refreshToken: string): Promise<void> {
+  await fetchApi("/api/v1/auth/signout", {
+    method: "POST",
+    body: JSON.stringify({ refreshToken }),
+  }).catch(() => undefined);
 }

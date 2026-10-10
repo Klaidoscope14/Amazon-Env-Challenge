@@ -3,6 +3,7 @@ import {
   ParameterNotFound,
   SSMClient,
 } from "@aws-sdk/client-ssm";
+import { errorFields, log } from "./observability.js";
 
 /*
  * Minimal Gemini API client (free tier) for structured JSON output. The key
@@ -40,11 +41,11 @@ async function getApiKey(parameterName: string): Promise<string | null> {
     apiKey = result.Parameter?.Value?.trim() || null;
   } catch (err) {
     if (err instanceof ParameterNotFound) {
-      console.warn(`Gemini key parameter ${parameterName} not found; AI features disabled`);
+      log("warn", "gemini_key_missing", { parameter: parameterName });
       apiKey = null;
     } else {
       // Transient failure: don't cache, try again on the next request.
-      console.warn("Could not read Gemini key from SSM:", (err as Error).name);
+      log("warn", "gemini_key_unavailable", errorFields(err));
       return null;
     }
   }
@@ -89,7 +90,7 @@ export async function generateJson(
     );
 
     if (!response.ok) {
-      console.warn(`Gemini returned HTTP ${response.status}`);
+      log("warn", "gemini_http_error", { status: response.status });
       return null;
     }
 
@@ -102,7 +103,7 @@ export async function generateJson(
       .join("");
     return JSON.parse(text) as unknown;
   } catch (err) {
-    console.warn("Gemini request failed:", (err as Error).name);
+    log("warn", "gemini_request_failed", { error: (err as Error).name });
     return null;
   }
 }

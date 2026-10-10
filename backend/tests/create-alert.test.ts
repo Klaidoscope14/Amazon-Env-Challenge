@@ -4,7 +4,8 @@ import type { AQIReading } from "../shared/src/types.js";
 
 // Collaborators are mocked so the test exercises only createAlert's own logic:
 // snapshot resolution, delivery-state selection, and the email write-back.
-vi.mock("../shared/src/area-readings.js", () => ({
+vi.mock("../shared/src/area-readings.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../shared/src/area-readings.js")>()),
   getAreaReading: vi.fn(),
   usesDemo: vi.fn(() => true),
 }));

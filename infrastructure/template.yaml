@@ -19,6 +19,7 @@ Globals:
         DEMO_SCENARIOS_ENABLED: !Ref DemoScenariosEnabled
         RULES_TABLE_NAME: !Ref RulesConfigTable
         EVENT_BUS_NAME: !Ref EventBus
+        STAGE: !Ref Stage
 
 Parameters:
   DataMode:
@@ -125,6 +126,8 @@ Resources:
         - ALLOW_REFRESH_TOKEN_AUTH
       GenerateSecret: false
       PreventUserExistenceErrors: ENABLED
+      # Sign-out revokes the refresh token (RevokeToken).
+      EnableTokenRevocation: true
       # Attributes a user may set themselves (sign-up needs email). custom:role
       # is excluded so nobody can self-assign a role.
       WriteAttributes:
@@ -150,7 +153,7 @@ Resources:
       TracingEnabled: true
       Cors:
         AllowMethods: "'GET,POST,PATCH,OPTIONS'"
-        AllowHeaders: "'Content-Type,Authorization'"
+        AllowHeaders: "'Content-Type,Authorization,Idempotency-Key'"
         AllowOrigin: "'*'"
       Description: BreatheSafe REST API
       # Caps abuse and cost on the public API.
@@ -173,12 +176,12 @@ Resources:
           ResponseParameters:
             Headers:
               Access-Control-Allow-Origin: "'*'"
-              Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              Access-Control-Allow-Headers: "'Content-Type,Authorization,Idempotency-Key'"
         DEFAULT_5XX:
           ResponseParameters:
             Headers:
               Access-Control-Allow-Origin: "'*'"
-              Access-Control-Allow-Headers: "'Content-Type,Authorization'"
+              Access-Control-Allow-Headers: "'Content-Type,Authorization,Idempotency-Key'"
 
   # ============================================
   # DynamoDB Tables
@@ -217,6 +220,10 @@ Resources:
       DeletionProtectionEnabled: true
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
+      # Only idempotency records carry TTL; alerts never expire.
+      TimeToLiveSpecification:
+        AttributeName: TTL
+        Enabled: true
       AttributeDefinitions:
         - AttributeName: PK
           AttributeType: S
@@ -442,7 +449,7 @@ Resources:
       CodeUri: ../backend/
       Handler: handler.handler
       Timeout: 25
-      Description: Evaluates an area's current AQI against the active ruleset; serves the ruleset
+      Description: Evaluates an area's current AQI against the active ruleset; serves the ruleset and plan verdicts
       Environment:
         Variables:
           CPCB_API_KEY: !Ref CpcbApiKey
@@ -475,6 +482,12 @@ Resources:
             RestApiId: !Ref BreatheSafeApi
             Path: /api/v1/rules
             Method: GET
+        EvaluatePlans:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/plans/evaluate
+            Method: POST
     Metadata:
       BuildMethod: esbuild
       BuildProperties:
@@ -511,6 +524,7 @@ Resources:
                 - dynamodb:PutItem
                 - dynamodb:Query
                 - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
               Resource: !GetAtt AlertsDecisionsTable.Arn
             - Effect: Allow
               Action:
@@ -782,6 +796,30 @@ Resources:
             RestApiId: !Ref BreatheSafeApi
             Path: /api/v1/auth/profile
             Method: GET
+        ForgotPassword:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/auth/forgot-password
+            Method: POST
+        ResetPassword:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/auth/reset-password
+            Method: POST
+        ResendCode:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/auth/resend-code
+            Method: POST
+        SignOut:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/auth/signout
+            Method: POST
     Metadata:
       BuildMethod: esbuild
       BuildProperties:

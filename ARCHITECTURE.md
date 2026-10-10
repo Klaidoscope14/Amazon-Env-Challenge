@@ -27,12 +27,12 @@ keep the original "campus" naming so existing resources are never replaced.)
 | Function | Routes | Auth |
 |---|---|---|
 | `fetch-aqi` | `GET /api/v1/aqi/current?campus=<area>`, `GET /api/v1/areas`, `GET /api/v1/areas/nearest?lat&lon` | public |
-| `recommendation` | `GET /api/v1/recommendations/current?campus=<area>` · `GET /api/v1/rules` | public |
+| `recommendation` | `GET /api/v1/recommendations/current?campus=<area>` · `GET /api/v1/rules` · `POST /api/v1/plans/evaluate` | public |
 | `explain` | `GET /api/v1/explain?campus=<area>&lang=en\|hi` | public (cached, rate-limited) |
 | `trends` | `GET /api/v1/trends?campus=<area>&hours=<1..168>` | public |
-| `alerts` | `GET /api/v1/alerts?campus=<area>` · `POST /api/v1/alerts` · `PATCH /api/v1/alerts/{id}/decision` | GET public; POST/PATCH Cognito |
+| `alerts` | `GET /api/v1/alerts?campus=<area>&limit&cursor` · `POST /api/v1/alerts` (optional `Idempotency-Key`) · `PATCH /api/v1/alerts/{id}/decision` | GET public; POST/PATCH Cognito + `custom:role=admin` (granted to every verified account) |
 | `notices` | `GET /api/v1/notices/draft` (Cognito) · `GET /api/v1/notices/audio` (public, issued alerts only) | mixed |
-| `auth` | `POST /api/v1/auth/{signup,confirm,signin,refresh}`, `GET /api/v1/auth/profile` | public (Cognito client APIs) |
+| `auth` | `POST /api/v1/auth/{signup,confirm,signin,refresh,forgot-password,reset-password,resend-code,signout}`, `GET /api/v1/auth/profile` | public (Cognito client APIs; sign-out revokes the refresh token) |
 | `stations-refresh` | EventBridge schedule (no route) | — |
 
 All read routes accept an optional `scenario=<good|…|severe>` (presenter/demo mode). The query
@@ -71,6 +71,7 @@ New live readings are stored once per source timestamp (`READING#<timestamp>`) a
 | `aqi-readings` | `CAMPUS#<area>` | `READING#<source timestamp>` | reading (AQI, pollutants, source, dataMode, TTL) |
 | `aqi-readings` | `STATIONS` | `LATEST` | gzip snapshot of all CPCB stations |
 | `alerts-decisions` | `CAMPUS#<area>` | `ALERT#<createdAt>#<alertId>` | alert: message (+Hindi), audience, snapshot, recommendation, delivery, decision, decisionBy, adminName (the sender) |
+| `alerts-decisions` | `IDEMPOTENCY#<user sub>` | `KEY#<Idempotency-Key>` | request hash, status, created alert's key; TTL 24 h |
 | `rules-config` | `RULESET#<id>` | `THRESHOLD#<level>` | one band: minAqi, maxAqi, status, statusLevel, action, color |
 
 Decisions are written with a condition (`attribute_not_exists(decision)`), so they can't be overwritten
@@ -125,7 +126,18 @@ with a rule, without changing producers.
     `fallbackReason`). Results are cached per reading for 30 minutes.
 - Gemini client: `backend/shared/src/gemini.ts` (key from SSM, 6 s timeout, JSON output).
 
-## 9. Security
+## 9. Plans, idempotency and pagination
+
+- **Plans** (`backend/shared/src/plans.ts`): verdict = matrix[CPCB level][activity exertion]; from Moderate air,
+  a plan over 60 minutes or one involving someone more sensitive moves one step stricter. Plans are kept
+  in the browser (localStorage); the API only evaluates them.
+- **Idempotency**: the first request with a key claims it with a conditional put; a retry with the same
+  key and body returns the stored alert (`200`, `Idempotent-Replayed: true`), a different body → `422`,
+  a request still in flight → `409`. A failed create releases the key.
+- **Pagination**: `GET /alerts` returns `nextCursor` (opaque, bound to the area's partition); trend
+  queries follow `LastEvaluatedKey`.
+
+## 10. Security
 
 - Cognito authorizer on POST alert, PATCH decision and notice drafts; frontend sends the ID token and
   refreshes once on 401.
@@ -136,17 +148,28 @@ with a rule, without changing producers.
   stable codes without raw messages.
 - `CpcbApiKey` is a `NoEcho` parameter. Tables and user pool are retained on stack deletion.
 
-## 10. Observability and cost controls
+## 11. Observability and cost controls
 
 - Alarms → `ops` SNS email: API 5XX ≥ 5/5 min, any Lambda throttle, errors in aqi / recommendation /
   alerts / notices / explain ≥ 3/5 min.
-- X-Ray on API Gateway and all functions; 14-day log retention; structured JSON log events.
+- X-Ray on API Gateway and all functions; 14-day log retention; structured JSON log events
+  (`backend/shared/src/observability.ts`).
+- Business metrics via CloudWatch Embedded Metric Format, namespace `BreatheSafe`, dimension `Stage`:
+  `AlertsCreated`, `DecisionsRecorded`, `ExplanationsAI`, `ExplanationsFallback`, `ReadingsUnavailable`
+  (5 names × 2 stages = the 10 free custom metrics).
 - Caching (30 min Open-Meteo per area, 5 min station snapshot and ruleset in memory, 30 min
   explanations), stage throttling, AI rate limit, and an AWS Budget alert on the account.
 
-## 11. Not built (roadmap)
+## 12. Testing
+
+- Vitest (backend): unit tests plus handler-level tests with mocked AWS clients and `fetch`.
+- Playwright (`frontend/e2e`): dashboard → plan verdict → sign in → share alert → record decision,
+  against a production build with the API mocked in the browser.
+
+## 13. Not built (roadmap)
 
 - Hosting the frontend on AWS (S3 + CloudFront or Amplify) and continuous deployment (GitHub Actions with OIDC).
+- SRP sign-in instead of USER_PASSWORD_AUTH, MFA, SES for Cognito email, httpOnly-cookie sessions.
 - Push/SMS notifications (e.g. an `aqi.threshold.crossed` consumer) and subscriptions per area.
 - An admin UI for editing RulesConfig (today: DynamoDB console + validation).
 - Forecasting (e.g. SageMaker) — the MVP shows only current and recent data.

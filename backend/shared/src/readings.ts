@@ -2,6 +2,7 @@ import {
   DynamoDBClient,
   GetItemCommand,
   QueryCommand,
+  QueryCommandOutput,
 } from "@aws-sdk/client-dynamodb";
 import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
 import { AQIReading } from "./types.js";
@@ -75,4 +76,39 @@ export async function getReadingBefore(
     .map((raw) => toReading(unmarshall(raw)))
     .find((reading) => reading.timestamp !== timestamp);
   return item ?? null;
+}
+
+/**
+ * Every stored reading for an area since a time, oldest first. Follows
+ * LastEvaluatedKey, so results past DynamoDB's 1 MB page limit aren't lost;
+ * `maxItems` caps the total.
+ */
+export async function getReadingsSince(
+  dynamodb: DynamoDBClient,
+  tableName: string,
+  campus: string,
+  sinceIso: string,
+  maxItems = 2000
+): Promise<AQIReading[]> {
+  const readings: AQIReading[] = [];
+  let startKey: QueryCommandOutput["LastEvaluatedKey"];
+  do {
+    const result = await dynamodb.send(
+      new QueryCommand({
+        TableName: tableName,
+        KeyConditionExpression: "PK = :pk AND SK BETWEEN :from AND :to",
+        ExpressionAttributeValues: marshall({
+          ":pk": `CAMPUS#${campus}`,
+          ":from": `READING#${sinceIso}`,
+          // "~" sorts after every timestamp character.
+          ":to": "READING#~",
+        }),
+        ScanIndexForward: true,
+        ExclusiveStartKey: startKey,
+      })
+    );
+    for (const item of result.Items ?? []) readings.push(toReading(unmarshall(item)));
+    startKey = result.LastEvaluatedKey;
+  } while (startKey && readings.length < maxItems);
+  return readings.slice(0, maxItems);
 }

@@ -17,6 +17,7 @@ import {
   loadSnapshotFor,
   usesDemo,
 } from "../../../shared/src/area-readings.js";
+import { errorFields, log, metric } from "../../../shared/src/observability.js";
 
 const dynamodb = new DynamoDBClient({});
 const ctx = dataContextFromEnv();
@@ -30,7 +31,7 @@ export async function handler(
     return await handleCurrent(event);
   } catch (err) {
     if (err instanceof ValidationError) return respond(400, { error: err.message });
-    console.error("AQI handler error:", err);
+    log("error", "unhandled_error", { route: event.path, ...errorFields(err) });
     return respond(500, { error: "Internal server error" });
   }
 }
@@ -43,6 +44,7 @@ async function handleCurrent(event: APIGatewayProxyEvent): Promise<APIGatewayPro
     getActiveRuleset(dynamodb),
   ]);
   if (!reading) {
+    if (area) metric("ReadingsUnavailable");
     return area || usesDemo(ctx, scenario)
       ? respond(503, {
           error: "No AQI data available",

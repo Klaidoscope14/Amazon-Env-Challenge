@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { getAlerts } from "@/lib/api";
 import {
   AUDIENCE_LABELS,
@@ -92,10 +92,14 @@ export default function AlertsPage() {
 }
 
 function AlertsLog({ area }: { area: AreaInfo }) {
-  const alertsQuery = useQuery({
+  // Newest first, 10 at a time; "Show older alerts" fetches the next page.
+  const alertsQuery = useInfiniteQuery({
     queryKey: ["alerts", area.id],
-    queryFn: () => getAlerts(area.id),
+    queryFn: ({ pageParam }) => getAlerts(area.id, 10, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
   });
+  const alerts = alertsQuery.data?.pages.flatMap((page) => page.alerts) ?? [];
 
   return (
     <div className="space-y-6">
@@ -132,17 +136,17 @@ function AlertsLog({ area }: { area: AreaInfo }) {
         </div>
       )}
 
-      {alertsQuery.data?.alerts.length === 0 && (
+      {alertsQuery.isSuccess && alerts.length === 0 && (
         <div className="rounded-2xl border border-border bg-surface p-8 text-center">
           <p className="text-muted-strong">No alerts shared for this area yet.</p>
           <p className="text-sm text-muted mt-1">
-            Go to the Dashboard to issue an alert when AQI is elevated.
+            Go to the Dashboard to share an alert when AQI is elevated.
           </p>
         </div>
       )}
 
       <div className="space-y-4">
-        {alertsQuery.data?.alerts.map((alert) => (
+        {alerts.map((alert) => (
           <article
             key={alert.alertId}
             className="rounded-2xl border border-border bg-surface p-6 shadow-sm"
@@ -175,6 +179,18 @@ function AlertsLog({ area }: { area: AreaInfo }) {
           </article>
         ))}
       </div>
+
+      {alertsQuery.hasNextPage && (
+        <div className="text-center">
+          <button
+            onClick={() => alertsQuery.fetchNextPage()}
+            disabled={alertsQuery.isFetchingNextPage}
+            className="px-4 py-2 text-sm font-medium rounded-lg border border-border-strong text-foreground hover:bg-surface-2 disabled:opacity-50"
+          >
+            {alertsQuery.isFetchingNextPage ? "Loading…" : "Show older alerts"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

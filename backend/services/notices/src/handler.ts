@@ -19,11 +19,13 @@ import {
 } from "../../../shared/src/schemas.js";
 import { respond, signedInName, UnauthorizedError } from "../../../shared/src/http.js";
 import {
+  areaDisplayName,
   dataContextFromEnv,
   getAreaReading,
   usesDemo,
 } from "../../../shared/src/area-readings.js";
 import { polishNotice } from "./ai.js";
+import { errorFields, log } from "../../../shared/src/observability.js";
 
 const dynamodb = new DynamoDBClient({});
 const polly = new PollyClient({});
@@ -49,7 +51,7 @@ export async function handler(
   } catch (err) {
     if (err instanceof ValidationError) return respond(400, { error: err.message });
     if (err instanceof UnauthorizedError) return respond(401, { error: err.message });
-    console.error("Notices handler error:", err);
+    log("error", "unhandled_error", { route: event.path, ...errorFields(err) });
     return respond(500, { error: "Internal server error" });
   }
 }
@@ -70,7 +72,7 @@ async function handleDraft(event: APIGatewayProxyEvent): Promise<APIGatewayProxy
   }
 
   const recommendation = reading ? evaluate(reading, ruleset) : null;
-  const areaName = current.area?.name ?? reading?.stationName.replace(/ \(sample values\)$/, "") ?? "your area";
+  const areaName = areaDisplayName(current.area, reading, "your area");
   const place = {
     areaName,
     areaKind: current.area?.kind,

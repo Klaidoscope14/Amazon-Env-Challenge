@@ -1,9 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Every page is a client component fetching from the API at runtime, so
+  // Cache Components / partial prefetching add nothing here.
   turbopack: {
     rules: {
       "*.css": {

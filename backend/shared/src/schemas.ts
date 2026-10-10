@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isDemoScenario } from "./demo.js";
 import { AUDIENCES } from "./notice-templates.js";
 import { isAreaId } from "./area-readings.js";
+import { ACTIVITY_IDS } from "./plans.js";
 
 /*
  * Zod schemas for every API input. Handlers call parse(); the first problem
@@ -98,6 +99,7 @@ export const AlertsQuerySchema = z.object({
   limit: z
     .preprocess((value) => blankToUndefined(value) ?? "25", z.coerce.number().int().catch(25))
     .transform((limit) => Math.min(Math.max(limit, 1), 50)),
+  cursor: optionalText("cursor", 400),
 });
 
 export const NoticeDraftQuerySchema = AreaQuerySchema.extend({
@@ -157,4 +159,35 @@ export const ConfirmBodySchema = z.object({ email, code: requiredText("code", 10
 
 export const SignInBodySchema = z.object({ email: requiredText("email", 254), password });
 
+export const EmailBodySchema = z.object({ email });
+
+export const ResetPasswordBodySchema = z.object({
+  email,
+  code: requiredText("code", 10),
+  password: password.min(8, "Password must be at least 8 characters"),
+});
+
 export const RefreshBodySchema = z.object({ refreshToken: requiredText("refreshToken", 4096) });
+
+export const EvaluatePlansBodySchema = z.object({
+  campus: areaId,
+  scenario,
+  plans: z
+    .array(
+      z.object({
+        id: z.string({ error: "Each plan needs an id" }).min(1).max(40),
+        activity: z.enum(ACTIVITY_IDS, {
+          error: (issue) => `Unknown activity: ${String(issue.input)}`,
+        }),
+        durationMinutes: z
+          .number({ error: "durationMinutes must be a number" })
+          .int()
+          .min(5, "durationMinutes must be between 5 and 600")
+          .max(600, "durationMinutes must be between 5 and 600"),
+        sensitive: z.boolean().optional(),
+      }),
+      { error: "plans must be a list" }
+    )
+    .min(1, "Add at least one plan")
+    .max(12, "At most 12 plans"),
+});

@@ -179,10 +179,16 @@ function ChartSVG({
         viewBox={`0 0 ${width} ${height}`}
         role="img"
         aria-labelledby={`${gradientId}-title`}
+        aria-describedby={`${gradientId}-desc`}
       >
         <title id={`${gradientId}-title`}>
           {`AQI from ${first.aqi} to ${last.aqi} over the selected period; latest ${last.aqi} (${statusForAqi(last.aqi)}).`}
         </title>
+        <desc id={`${gradientId}-desc`}>
+          {`${points.length} readings. Lowest AQI ${Math.min(...points.map((p) => p.aqi))}, highest ${Math.max(
+            ...points.map((p) => p.aqi)
+          )}. Background bands show the CPCB categories.`}
+        </desc>
 
         {bands.map((b) => (
           <rect

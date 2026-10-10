@@ -63,9 +63,14 @@ export default function AlertForm({
   const messageHi = editedHi ?? draftQuery.data?.hi ?? "";
   const edited = editedEn !== null || editedHi !== null;
 
+  // One idempotency key per distinct submission: retrying the same content
+  // (double click, network error) reuses it, so the server never creates or
+  // emails the same alert twice. Editing the content starts a new key.
+  const submission = useRef<{ body: string; key: string } | null>(null);
+
   const mutation = useMutation({
-    mutationFn: () =>
-      createAlert({
+    mutationFn: () => {
+      const data = {
         campus: area.id,
         audience,
         message: messageEn.trim(),
@@ -73,7 +78,13 @@ export default function AlertForm({
         noticeSource: draftQuery.data?.source,
         scenario,
         readingTimestamp,
-      }),
+      };
+      const body = JSON.stringify(data);
+      if (submission.current?.body !== body) {
+        submission.current = { body, key: crypto.randomUUID() };
+      }
+      return createAlert(data, submission.current.key);
+    },
     onSuccess: (alert) => {
       queryClient.invalidateQueries({ queryKey: ["alerts"] });
       onSuccess(alert);

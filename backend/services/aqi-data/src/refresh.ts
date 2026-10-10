@@ -1,6 +1,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { refreshSnapshot } from "../../../shared/src/stations.js";
 import { dataContextFromEnv } from "../../../shared/src/area-readings.js";
+import { log } from "../../../shared/src/observability.js";
 
 const dynamodb = new DynamoDBClient({});
 
@@ -11,7 +12,7 @@ const dynamodb = new DynamoDBClient({});
 export async function handler(): Promise<{ refreshed: boolean; stations?: number }> {
   const ctx = dataContextFromEnv();
   if (ctx.dataMode !== "live" || !ctx.cpcbApiKey) {
-    console.log("Station refresh skipped (not in live mode or no CPCB key)");
+    log("info", "station_refresh_skipped", { reason: "not live mode or no CPCB key" });
     return { refreshed: false };
   }
   // A failed refresh is logged (cpcb_refresh_failed) but not thrown: the API

@@ -1,4 +1,5 @@
 import { GeminiConfig, generateJson } from "../../../shared/src/gemini.js";
+import { log } from "../../../shared/src/observability.js";
 
 /*
  * Optional AI polish for notice text via the Gemini API (free tier).
@@ -70,7 +71,7 @@ export async function polishNotice(
 
   const output = { en: String(parsed.en ?? "").trim(), hi: String(parsed.hi ?? "").trim() };
   if (!isFaithful(output, template, context.aqi, [context.areaName])) {
-    console.warn("Gemini draft failed the faithfulness check; using template");
+    log("warn", "notice_draft_rejected", { reason: "faithfulness" });
     return null;
   }
 

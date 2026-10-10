@@ -25,11 +25,15 @@ No account is needed to check the air; you sign in only to share alerts.
 - **Indian AQI, computed the CPCB way** — 24-hour averages for PM2.5, PM10, NO₂, SO₂, NH₃ and 8-hour averages for O₃ and CO; the AQI is the highest sub-index. Six CPCB categories, Good → Severe.
 - **Rules as data** — recommendations come from a deterministic rules engine whose bands and actions live in a DynamoDB **RulesConfig** table. Edits apply within five minutes, without a redeploy; an invalid edit is rejected by validation and the built-in rules are used instead.
 - **Explain in plain language** — an AI explanation (Google Gemini) written only from evidence the server builds, shown only if it passes **output guardrails** (no invented numbers, no medical advice or safety promises, correct category, place and language). Otherwise a reviewed explanation is shown — and the page says which one you are reading.
+- **My plans today** — add your outdoor plans (walk, run, kids' play, commute…) and get a deterministic **Go / Modify / Avoid** for each, from the current category, how strenuous and long the plan is, and whether someone more sensitive is involved.
 - **Honest data states** — *Live*, *Cached* (≤3 h, labelled), *Stale* warnings, *Unavailable* (never a fake number), and clearly labelled *Demo* data.
 - **Bilingual alerts** — reviewed English + Hindi templates per category and audience (family, neighbourhood, team/group, everyone), optionally polished by AI under a faithfulness check; signed with your name.
 - **Delivery** — public notice page per area (shareable link), email via Amazon SNS (recorded only when actually delivered), WhatsApp share, Amazon Polly audio in English and Hindi.
 - **Audit trail + domain events** — alerts snapshot the exact reading; decisions are append-only and record who decided. Readings, category changes, alerts and decisions are published as events on an **Amazon EventBridge** bus, archived for 30 days and replayable.
 - **Validated everywhere** — every API input and the Open-Meteo response are checked with **Zod** schemas.
+- **Safe to retry** — sharing an alert is idempotent (`Idempotency-Key`), so a double click or a network retry never sends the same alert twice; alert history is paginated.
+- **Accounts** — sign-up with email verification (resend code), forgot/reset password, and sign-out that revokes the session; sign-in state stays in sync across tabs.
+- **Observability** — structured JSON logs and business metrics (alerts, decisions, AI vs fallback explanations, unavailable readings) in CloudWatch via Embedded Metric Format.
 - **Presenter mode** — `?presenter=1` reveals a labelled demo-scenario control for presentations.
 
 ## Architecture
@@ -89,8 +93,9 @@ backend/
   shared/src/      rules engine + RulesConfig loader, Zod schemas, events, AQI maths, areas, data sources, notice templates
   services/*/src/  one folder per Lambda (aqi-data, recommendation, explain, trends, alerts, notices, auth)
   scripts/         seed-rules.ts (seeds the RulesConfig table)
-  tests/           Vitest unit and handler tests
+  tests/           Vitest unit and handler tests (AWS clients mocked)
 frontend/          Next.js app (dashboard, alerts log, public notice, about, auth)
+  e2e/             Playwright end-to-end test against a mocked API
 infrastructure/    SAM template + samconfig (dev and prod stacks)
 .github/workflows/ CI: typecheck, tests, lint, build, SAM validate + build
 ```
@@ -104,9 +109,10 @@ npm run install:all     # backend + frontend dependencies
 npm test                # backend tests (Vitest)
 npm run typecheck       # backend + frontend
 npm run lint            # frontend ESLint
+npm run test:e2e --prefix frontend   # Playwright (first time: npx playwright install chromium)
 ```
 
-CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs the same checks plus a production build, `sam validate --lint` and `sam build` on every push and pull request.
+CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs the same checks plus a production build, the Playwright end-to-end test, `sam validate --lint` and `sam build` on every push and pull request.
 
 ### Run the frontend
 

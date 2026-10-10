@@ -3,6 +3,7 @@ import type { APIGatewayProxyEvent } from "aws-lambda";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { EventBridgeClient } from "@aws-sdk/client-eventbridge";
 import { SSMClient } from "@aws-sdk/client-ssm";
+import { CognitoIdentityProviderClient } from "@aws-sdk/client-cognito-identity-provider";
 import { marshall } from "@aws-sdk/util-dynamodb";
 import { CPCB_THRESHOLDS } from "../shared/src/aqi-categories.js";
 import { rulesetItems } from "../shared/src/rules.js";
@@ -31,7 +32,7 @@ let previousReading: Record<string, unknown> | null = null;
 let readingAlreadyStored = false;
 const { ConditionalCheckFailedException } = await import("@aws-sdk/client-dynamodb");
 
-const dbSend = vi.spyOn(DynamoDBClient.prototype, "send").mockImplementation((async (command: {
+const defaultDb = async (command: {
   constructor: { name: string };
   input: { TableName?: string };
 }) => {
@@ -46,7 +47,8 @@ const dbSend = vi.spyOn(DynamoDBClient.prototype, "send").mockImplementation((as
     return { Items: previousReading ? [marshall(previousReading)] : [] };
   }
   return {};
-}) as never);
+};
+const dbSend = vi.spyOn(DynamoDBClient.prototype, "send").mockImplementation(defaultDb as never);
 
 const eventSend = vi
   .spyOn(EventBridgeClient.prototype, "send")
@@ -82,6 +84,7 @@ const { handler: aqi } = await import("../services/aqi-data/src/handler.js");
 const { handler: recommendation } = await import("../services/recommendation/src/handler.js");
 const { handler: explain } = await import("../services/explain/src/handler.js");
 const { handler: alerts } = await import("../services/alerts/src/handler.js");
+const alerts_ = alerts;
 const { handler: notices } = await import("../services/notices/src/handler.js");
 const { handler: auth } = await import("../services/auth/src/handler.js");
 
@@ -97,7 +100,7 @@ function request(
     body: options.body === undefined ? null : JSON.stringify(options.body),
     headers: {},
     requestContext: options.user
-      ? { authorizer: { claims: { name: options.user, "custom:role": "admin" } } }
+      ? { authorizer: { claims: { name: options.user, sub: `sub-${options.user}`, "custom:role": "admin" } } }
       : {},
   } as unknown as APIGatewayProxyEvent;
 }
@@ -251,5 +254,133 @@ describe("notice drafts and auth", () => {
     const res = await auth(request("POST", "/api/v1/auth/signup", { body: { email: "not-an-email", password: "secret123", name: "A" } }));
     expect(res.statusCode).toBe(400);
     expect(json(res)).toEqual({ error: "Enter a valid email address", code: "INVALID_INPUT" });
+  });
+});
+
+describe("idempotent alert creation", () => {
+  const body = { campus: "city-delhi", audience: "family", message: "Please stay indoors.", scenario: "poor" };
+  const withKey = (key: string, b: unknown = body) => {
+    const e = request("POST", "/api/v1/alerts", { body: b, user: "Asha" });
+    return { ...e, headers: { "Idempotency-Key": key } } as APIGatewayProxyEvent;
+  };
+
+  it("returns the original alert when the same key is retried", async () => {
+    const records = new Map<string, Record<string, unknown>>();
+    const alerts = new Map<string, Record<string, unknown>>();
+    dbSend.mockImplementation((async (command: { constructor: { name: string }; input: Record<string, any> }) => {
+      const name = command.constructor.name;
+      const { unmarshall } = await import("@aws-sdk/util-dynamodb");
+      if (name === "PutItemCommand" && command.input.TableName === "alerts") {
+        const item = unmarshall(command.input.Item);
+        const id = `${item.PK}|${item.SK}`;
+        if (String(item.PK).startsWith("IDEMPOTENCY#")) {
+          if (records.has(id)) {
+            throw new ConditionalCheckFailedException({ message: "exists", $metadata: {}, Item: marshall(records.get(id)!) } as never);
+          }
+          records.set(id, item);
+        } else {
+          alerts.set(id, item);
+        }
+        return {};
+      }
+      if (name === "UpdateItemCommand" && command.input.TableName === "alerts") {
+        const key = unmarshall(command.input.Key);
+        const values = unmarshall(command.input.ExpressionAttributeValues);
+        const record = records.get(`${key.PK}|${key.SK}`);
+        if (record && values[":done"]) Object.assign(record, { status: "done", alertPK: values[":pk"], alertSK: values[":sk"] });
+        return {};
+      }
+      if (name === "GetItemCommand" && command.input.TableName === "alerts") {
+        const key = unmarshall(command.input.Key);
+        const item = alerts.get(`${key.PK}|${key.SK}`);
+        return item ? { Item: marshall(item, { removeUndefinedValues: true }) } : {};
+      }
+      if (name === "QueryCommand" && command.input.TableName === "rules") {
+        return { Items: rulesetItems("cpcb-india-v1", storedRules).map((i) => marshall(i)) };
+      }
+      return {};
+    }) as never);
+
+    try {
+      const first = await alerts_(withKey("key-12345678"));
+      const second = await alerts_(withKey("key-12345678"));
+      expect(first.statusCode).toBe(201);
+      expect(second.statusCode).toBe(200);
+      expect(second.headers?.["Idempotent-Replayed"]).toBe("true");
+      expect(json(second).alertId).toBe(json(first).alertId);
+      expect(alerts.size).toBe(1);
+
+      const reused = await alerts_(withKey("key-12345678", { ...body, message: "Different text" }));
+      expect(reused.statusCode).toBe(422);
+      const bad = await alerts_(withKey("short"));
+      expect(bad.statusCode).toBe(400);
+    } finally {
+      dbSend.mockImplementation(defaultDb as never);
+    }
+  });
+});
+
+describe("POST /plans/evaluate", () => {
+  it("returns a verdict per plan from the current reading", async () => {
+    const res = await recommendation(
+      request("POST", "/api/v1/plans/evaluate", {
+        body: {
+          campus: "city-delhi",
+          scenario: "poor",
+          plans: [
+            { id: "a", activity: "commute", durationMinutes: 20 },
+            { id: "b", activity: "run", durationMinutes: 45 },
+          ],
+        },
+      })
+    );
+    expect(res.statusCode).toBe(200);
+    expect(json(res)).toMatchObject({
+      status: "Poor",
+      verdicts: [
+        { id: "a", verdict: "modify" },
+        { id: "b", verdict: "avoid" },
+      ],
+    });
+  });
+});
+
+describe("account recovery and sign-out", () => {
+  const cognitoSend = vi.spyOn(CognitoIdentityProviderClient.prototype, "send");
+  beforeEach(() => {
+    cognitoSend.mockReset();
+    cognitoSend.mockImplementation((async () => ({})) as never);
+  });
+
+  it("answers forgot-password the same way for unknown emails", async () => {
+    cognitoSend.mockRejectedValueOnce(Object.assign(new Error("no user"), { name: "UserNotFoundException" }));
+    const res = await auth(request("POST", "/api/v1/auth/forgot-password", { body: { email: "nobody@example.com" } }));
+    expect(res.statusCode).toBe(200);
+    expect(json(res).message).toMatch(/If an account exists/);
+  });
+
+  it("resets the password with the emailed code", async () => {
+    cognitoSend.mockResolvedValueOnce({} as never);
+    const res = await auth(
+      request("POST", "/api/v1/auth/reset-password", { body: { email: "a@b.co", code: "123456", password: "newpass123" } })
+    );
+    expect(res.statusCode).toBe(200);
+    expect((cognitoSend.mock.calls[0][0] as { constructor: { name: string } }).constructor.name).toBe("ConfirmForgotPasswordCommand");
+  });
+
+  it("maps a wrong reset code to a stable error", async () => {
+    cognitoSend.mockRejectedValueOnce(Object.assign(new Error("bad code"), { name: "CodeMismatchException" }));
+    const res = await auth(
+      request("POST", "/api/v1/auth/reset-password", { body: { email: "a@b.co", code: "000000", password: "newpass123" } })
+    );
+    expect(res.statusCode).toBe(400);
+    expect(json(res).code).toBe("INVALID_CODE");
+  });
+
+  it("revokes the refresh token on sign-out, and still succeeds if revocation fails", async () => {
+    cognitoSend.mockRejectedValueOnce(Object.assign(new Error("x"), { name: "UnsupportedTokenTypeException" }));
+    const res = await auth(request("POST", "/api/v1/auth/signout", { body: { refreshToken: "rt" } }));
+    expect(res.statusCode).toBe(200);
+    expect((cognitoSend.mock.calls[0][0] as { constructor: { name: string } }).constructor.name).toBe("RevokeTokenCommand");
   });
 });

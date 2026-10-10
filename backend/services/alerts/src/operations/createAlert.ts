@@ -11,11 +11,13 @@ import { getActiveRuleset } from "../../../../shared/src/rules.js";
 import { publishEvents } from "../../../../shared/src/events.js";
 import { getReadingAt } from "../../../../shared/src/readings.js";
 import {
+  areaDisplayName,
   DataContext,
   getAreaReading,
   usesDemo,
 } from "../../../../shared/src/area-readings.js";
 import { hasConfirmedSubscriber, publishAlertEmail } from "./notify.js";
+import { errorFields, log } from "../../../../shared/src/observability.js";
 
 export class NoReadingError extends Error {
   constructor() {
@@ -49,7 +51,7 @@ export async function createAlert(
 
   const canEmail = config.topicArn
     ? await hasConfirmedSubscriber(config.topicArn).catch((err) => {
-        console.error("Could not check SNS subscriptions:", err);
+        log("error", "sns_subscription_check_failed", errorFields(err));
         return false;
       })
     : false;
@@ -97,7 +99,7 @@ export async function createAlert(
         })
       );
     } catch (err) {
-      console.error("Failed to record email delivery status:", err);
+      log("error", "delivery_status_write_failed", errorFields(err));
     }
   }
 
@@ -137,6 +139,6 @@ async function resolveSnapshot(
       reading;
   }
   const areaName =
-    current.area?.name ?? reading?.stationName.replace(/ \(sample values\)$/, "") ?? input.campus;
+    areaDisplayName(current.area, reading, input.campus);
   return { reading, areaName };
 }

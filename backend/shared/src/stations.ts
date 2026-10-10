@@ -8,6 +8,7 @@ import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { AQIReading } from "./types.js";
 import { CITIES, City, distanceKm, matchCity, nearestCity } from "./cities.js";
+import { errorFields, log } from "./observability.js";
 
 /*
  * Live air quality from CPCB's "Real time Air Quality Index" feed on
@@ -256,7 +257,7 @@ export async function getStationSnapshot(
   if (memory && Date.now() - memory.at < MEMORY_CACHE_MS) return memory.snapshot;
 
   let snapshot = await loadSnapshot(dynamodb, table).catch((err) => {
-    console.error("Failed to load station snapshot:", err);
+    log("error", "station_snapshot_load_failed", errorFields(err));
     return null;
   });
 
@@ -510,7 +511,7 @@ export async function persistReading(
     return true;
   } catch (err) {
     if (!(err instanceof ConditionalCheckFailedException)) {
-      console.error("Failed to store reading:", err);
+      log("error", "reading_store_failed", errorFields(err));
     }
     return false;
   }
