@@ -1,11 +1,14 @@
 @import "tailwindcss";
 
 /*
- * Semantic color tokens. The neutral surfaces (page, cards, borders, text) are
- * driven by these so the whole UI flips to a dark theme automatically under
- * prefers-color-scheme: dark — no per-element `dark:` utilities needed for the
- * neutrals. Accent colours (AQI bands, badges) keep their own Tailwind classes.
+ * Theme is driven by a data-theme attribute on <html>, set before paint by the
+ * inline script in layout.tsx (resolving "system" to the OS preference). That
+ * keeps the token variables below and Tailwind's `dark:` utilities in sync in
+ * every mode — including a manual dark choice on a light OS, and vice versa.
  */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Light theme (default). */
 :root {
   color-scheme: light;
   --canvas: #f9fafb; /* gray-50  — page background */
@@ -18,18 +21,17 @@
   --muted-strong: #374151; /* gray-700 */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --canvas: #0b1120; /* slate-950-ish */
-    --surface: #111827; /* gray-900 */
-    --surface-2: #1f2937; /* gray-800 */
-    --border: #1f2937; /* gray-800 */
-    --border-strong: #374151; /* gray-700 */
-    --foreground: #f3f4f6; /* gray-100 */
-    --muted: #9ca3af; /* gray-400 */
-    --muted-strong: #d1d5db; /* gray-300 */
-  }
+/* Dark theme. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #0b1120; /* slate-950-ish */
+  --surface: #111827; /* gray-900 */
+  --surface-2: #1f2937; /* gray-800 */
+  --border: #1f2937; /* gray-800 */
+  --border-strong: #374151; /* gray-700 */
+  --foreground: #f3f4f6; /* gray-100 */
+  --muted: #9ca3af; /* gray-400 */
+  --muted-strong: #d1d5db; /* gray-300 */
 }
 
 @theme inline {
