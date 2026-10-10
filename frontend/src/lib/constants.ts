@@ -126,3 +126,36 @@ const POLLUTANT_LABELS: Record<string, { label: string; unit: string }> = {
 export function formatPollutant(key: string): { label: string; unit: string } {
   return POLLUTANT_LABELS[key.toLowerCase()] ?? { label: key.toUpperCase(), unit: "" };
 }
+
+/**
+ * CPCB National Ambient Air Quality Standards — the averaging-period limit used
+ * to express a measured concentration as a share of what is considered safe.
+ * (PM/NO₂/SO₂/NH₃: 24-hour; O₃/CO: 8-hour. CO is in mg/m³, the rest µg/m³.)
+ */
+export const POLLUTANT_LIMITS: Record<string, { limit: number; averaging: string }> = {
+  pm25: { limit: 60, averaging: "24-hour" },
+  pm10: { limit: 100, averaging: "24-hour" },
+  no2: { limit: 80, averaging: "24-hour" },
+  so2: { limit: 80, averaging: "24-hour" },
+  nh3: { limit: 400, averaging: "24-hour" },
+  o3: { limit: 100, averaging: "8-hour" },
+  co: { limit: 2, averaging: "8-hour" },
+};
+
+/** The CPCB safe limit for a pollutant, or undefined if we don't have one. */
+export function pollutantLimit(key: string): { limit: number; averaging: string } | undefined {
+  return POLLUTANT_LIMITS[key.toLowerCase()];
+}
+
+/**
+ * Maps a concentration's share of its safe limit to a CPCB band, so a bar can
+ * be coloured by severity. 1.0 = exactly at the limit.
+ */
+export function bandForLimitRatio(ratio: number): AQIStatus {
+  if (ratio <= 0.5) return "Good";
+  if (ratio <= 1) return "Satisfactory";
+  if (ratio <= 1.5) return "Moderate";
+  if (ratio <= 2) return "Poor";
+  if (ratio <= 3) return "Very Poor";
+  return "Severe";
+}

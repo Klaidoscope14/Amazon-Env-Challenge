@@ -14,8 +14,10 @@ import type { Alert, AreaInfo } from "@/lib/types";
 import AreaGate from "@/components/AreaGate";
 import AreaHeader from "@/components/AreaHeader";
 import AqiHeroCard from "@/components/AqiHeroCard";
+import PollutantBreakdown from "@/components/PollutantBreakdown";
 import RecommendationCard from "@/components/RecommendationCard";
 import TrendChart from "@/components/TrendChart";
+import Card from "@/components/ui/Card";
 import AlertForm from "@/components/AlertForm";
 import DecisionRecorder from "@/components/DecisionRecorder";
 import WhatsAppShare from "@/components/WhatsAppShare";
@@ -134,7 +136,34 @@ function Dashboard({ area }: { area: AreaInfo }) {
         />
       )}
 
-      {aqiQuery.data && <AqiHeroCard reading={aqiQuery.data} />}
+      {aqiQuery.data && (() => {
+        const hasPollutants =
+          !!aqiQuery.data.pollutants && Object.keys(aqiQuery.data.pollutants).length > 0;
+        return (
+          <div className="grid gap-6 lg:grid-cols-3">
+            <div className={hasPollutants ? "lg:col-span-1" : "lg:col-span-3"}>
+              <AqiHeroCard reading={aqiQuery.data} />
+            </div>
+            {hasPollutants && (
+              <Card className="p-6 lg:col-span-2">
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <h2 className="text-sm font-medium text-muted">Pollutant levels</h2>
+                  <span className="text-xs text-muted">
+                    {aqiQuery.data.pollutantScale === "subindex"
+                      ? "CPCB sub-indices"
+                      : "vs CPCB safe limits"}
+                  </span>
+                </div>
+                <PollutantBreakdown
+                  pollutants={aqiQuery.data.pollutants}
+                  dominantPollutant={aqiQuery.data.dominantPollutant}
+                  scale={aqiQuery.data.pollutantScale}
+                />
+              </Card>
+            )}
+          </div>
+        );
+      })()}
 
       {recQuery.isPending && <CardSkeleton />}
 
