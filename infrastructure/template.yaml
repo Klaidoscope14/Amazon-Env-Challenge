@@ -857,6 +857,147 @@ Resources:
           - '@aws-sdk/*'
 
   # ============================================
+  # Website: static Next.js export in S3, served by CloudFront
+  # ============================================
+  # Private bucket: only this stack's CloudFront distribution can read it.
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: CloudFrontReadOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub ${SiteBucket.Arn}/*
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${SiteDistribution}
+
+  SiteOriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub breathesafe-${Stage}-site
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # Clean URLs for the static export: /about -> /about.html. Unknown pages
+  # get the 404 page (the bucket is private, so it can't 404 by itself).
+  # Keep ROUTES in sync with frontend/src/app (one entry per page).
+  SiteRouteFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub breathesafe-${Stage}-routes
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Maps clean URLs to the exported HTML files
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        var ROUTES = ['/about', '/account', '/alerts', '/forgot-password', '/login', '/notice', '/signup', '/verify'];
+        function handler(event) {
+          var request = event.request;
+          var uri = request.uri.length > 1 ? request.uri.replace(/\/+$/, '') : request.uri;
+          if (uri === '/' || uri === '') {
+            request.uri = '/index.html';
+          } else if (uri.lastIndexOf('.') <= uri.lastIndexOf('/')) {
+            request.uri = ROUTES.indexOf(uri) >= 0 ? uri + '.html' : '/404.html';
+          }
+          return request;
+        }
+
+  SiteSecurityHeaders:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub breathesafe-${Stage}-security-headers
+        SecurityHeadersConfig:
+          ContentSecurityPolicy:
+            Override: true
+            # Next.js inlines its bootstrap and the theme script, hence
+            # 'unsafe-inline' for scripts. Fonts are self-hosted at build time.
+            ContentSecurityPolicy: !Sub "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' data:; font-src 'self'; connect-src 'self' https://cognito-idp.${AWS::Region}.amazonaws.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests"
+          StrictTransportSecurity:
+            Override: true
+            AccessControlMaxAgeSec: 63072000
+            IncludeSubdomains: true
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            Override: true
+            FrameOption: DENY
+          ReferrerPolicy:
+            Override: true
+            ReferrerPolicy: strict-origin-when-cross-origin
+        CustomHeadersConfig:
+          Items:
+            - Header: Permissions-Policy
+              Override: true
+              Value: geolocation=(self), camera=(), microphone=(), payment=()
+
+  SiteDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Comment: !Sub BreatheSafe website and API (${Stage})
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: PriceClass_200 # includes edge locations in India
+        DefaultRootObject: index.html
+        Origins:
+          - Id: site
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt SiteOriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+          # Same-origin API: /api/* goes to API Gateway's stage.
+          - Id: api
+            DomainName: !Sub ${BreatheSafeApi}.execute-api.${AWS::Region}.amazonaws.com
+            OriginPath: !Sub /${Stage}
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+        DefaultCacheBehavior:
+          TargetOriginId: site
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
+          ResponseHeadersPolicyId: !Ref SiteSecurityHeaders
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt SiteRouteFunction.FunctionMetadata.FunctionARN
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: api
+            ViewerProtocolPolicy: https-only
+            Compress: true
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, PATCH, POST, DELETE]
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad # Managed-CachingDisabled
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac # Managed-AllViewerExceptHostHeader
+
+  # ============================================
   # Logs (14-day retention) and monitoring
   # ============================================
   # Functions log to these stack-managed groups instead of the default
@@ -1051,6 +1192,15 @@ Resources:
       AlarmActions: [!Ref OpsTopic]
 
 Outputs:
+  SiteUrl:
+    Description: Website (CloudFront); the API is also served under /api on this address
+    Value: !Sub https://${SiteDistribution.DomainName}
+  SiteBucketName:
+    Description: S3 bucket holding the website build (upload with npm run deploy:web)
+    Value: !Ref SiteBucket
+  SiteDistributionId:
+    Description: CloudFront distribution id (for cache invalidations)
+    Value: !Ref SiteDistribution
   ApiUrl:
     Description: API Gateway endpoint URL
     Value: !Sub https://${BreatheSafeApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}

@@ -9,7 +9,7 @@ keep the original "campus" naming so existing resources are never replaced.)
 
 | Layer | What | Notes |
 |---|---|---|
-| Frontend | Next.js (App Router), TypeScript, Tailwind, TanStack Query | Static pages, client-side data fetching. Runs locally or on any static host. |
+| Frontend | Next.js (App Router, static export), TypeScript, Tailwind, TanStack Query | Static pages, client-side data fetching. Hosted in a private S3 bucket behind CloudFront (Origin Access Control, HTTPS, HTTP/3, security headers incl. CSP/HSTS). A CloudFront Function maps clean URLs to the exported files. `/api/*` on the same address is routed to API Gateway (uncached), so the site and API share an origin. Published with `npm run deploy:web`. |
 | API | Amazon API Gateway (REST) | Throttling 20 rps / burst 40; Cognito authorizer on write routes; CORS on gateway errors; X-Ray. |
 | Compute | 8 AWS Lambda functions (Node.js 22, arm64, esbuild bundles) | One per service, see §2. Timeouts ≤ 25 s (API Gateway limit 29 s). |
 | Data | Amazon DynamoDB, on-demand | `aqi-readings` (TTL 8 days), `alerts-decisions` (deletion protection, PITR), `rules-config` (PITR). All with Retain policy. |
@@ -177,7 +177,7 @@ with a rule, without changing producers.
 
 ## 13. Not built (roadmap)
 
-- Hosting the frontend on AWS (S3 + CloudFront or Amplify) and continuous deployment (GitHub Actions with OIDC).
+- Continuous deployment (GitHub Actions with OIDC) and a custom domain.
 - httpOnly-cookie sessions (needs the frontend hosted on the API's site).
 - Push/SMS notifications (e.g. an `aqi.threshold.crossed` consumer) and subscriptions per area.
 - An admin UI for editing RulesConfig (today: DynamoDB console + validation).

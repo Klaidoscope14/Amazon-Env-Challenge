@@ -13,6 +13,8 @@
     "deploy:dev": "cd infrastructure && sam build && sam deploy --config-env dev",
     "deploy": "cd infrastructure && sam build && sam deploy",
     "seed:rules:dev": "npm run seed:rules --prefix backend -- --stage dev",
-    "seed:rules": "npm run seed:rules --prefix backend -- --stage prod"
+    "seed:rules": "npm run seed:rules --prefix backend -- --stage prod",
+    "deploy:web": "bash scripts/deploy-web.sh prod",
+    "deploy:web:dev": "bash scripts/deploy-web.sh dev"
   }
 }

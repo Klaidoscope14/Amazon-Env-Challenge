@@ -18,7 +18,8 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `npx next build && npx next start -p ${PORT}`,
+    // The app is a static export (out/), served like CloudFront serves it.
+    command: `npx next build && npx serve out -l ${PORT} --no-request-logging`,
     url: `http://localhost:${PORT}`,
     timeout: 240_000,
     reuseExistingServer: false,

@@ -40,7 +40,10 @@ No account is needed to check the air; you sign in only to share alerts.
 
 ```mermaid
 flowchart LR
-  U[Browser<br/>Next.js app] -->|HTTPS| APIGW[Amazon API Gateway<br/>throttling · Cognito authorizer]
+  U[Browser<br/>Next.js app] -->|HTTPS| CF[CloudFront<br/>site · /api/*]
+  CF --> S3[(S3<br/>static site)]
+  CF --> APIGW[Amazon API Gateway<br/>throttling · Cognito authorizer]
+  U -->|SRP sign-in| COG
   APIGW --> L1[AQI & areas]
   APIGW --> L2[Recommendations<br/>& rules]
   APIGW --> L8[Explain<br/>guardrails]
@@ -75,6 +78,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the data model, rules, events, guardr
 | Polly | Spoken English/Hindi notices |
 | SSM Parameter Store | Encrypted third-party API keys |
 | CloudWatch & X-Ray | 14-day logs, 7 alarms, tracing |
+| S3 + CloudFront | The website: a static Next.js export in a private bucket, served over HTTPS with security headers; `/api/*` is routed to API Gateway on the same address |
 | SAM / CloudFormation | All infrastructure as code ([infrastructure/template.yaml](infrastructure/template.yaml)) |
 
 ## Data sources and limitations
@@ -125,6 +129,7 @@ cd infrastructure
 sam build
 sam deploy --guided --parameter-overrides "DataMode=live Stage=prod AlertEmail=you@example.com"
 cd .. && npm run seed:rules        # seed the RulesConfig table (safe to re-run; --force overwrites edits)
+npm run deploy:web                 # build the site and publish it to S3 + CloudFront (prints the URL)
 ```
 
 Optional keys (stored by you in SSM Parameter Store, never in code):

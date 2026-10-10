@@ -16,6 +16,7 @@ const AWS_SERVICES: { name: string; role: string }[] = [
   { name: "Amazon Polly", role: "Spoken English and Hindi versions of each notice" },
   { name: "AWS Systems Manager Parameter Store", role: "Encrypted storage of the Google Air Quality and Gemini API keys" },
   { name: "Amazon CloudWatch & AWS X-Ray", role: "Logs, the event log, alarms and request tracing" },
+  { name: "Amazon S3 & Amazon CloudFront", role: "Host this website over HTTPS with security headers, and route its /api calls to API Gateway" },
   { name: "AWS SAM / CloudFormation", role: "The whole stack is defined as infrastructure as code" },
 ];
 

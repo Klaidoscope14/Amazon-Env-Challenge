@@ -1,10 +1,14 @@
 /**
  * API base URL. Set NEXT_PUBLIC_API_URL (see .env.example) to point the app at
- * your own deployment; the fallback is the project's public demo API.
+ * your own deployment. An empty value means "same site": the CloudFront-hosted
+ * build calls /api/... on its own origin, which CloudFront routes to API
+ * Gateway. Unset falls back to the project's public demo API.
  */
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
 export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://auzr0rreg6.execute-api.ap-south-1.amazonaws.com/prod";
+  configuredApiUrl === undefined
+    ? "https://auzr0rreg6.execute-api.ap-south-1.amazonaws.com/prod"
+    : configuredApiUrl.replace(/\/$/, "");
 
 /**
  * Cognito user pool and app client for sign-in (SRP, straight from the

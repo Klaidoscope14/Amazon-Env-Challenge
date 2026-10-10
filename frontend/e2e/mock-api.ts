@@ -141,7 +141,11 @@ export async function mockApi(page: Page, options: { mfa?: boolean } = {}): Prom
     };
     if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
     const target = (request.headers()["x-amz-target"] ?? "").split(".").pop();
-    const body = request.postDataJSON() as Record<string, any>;
+    const body = request.postDataJSON() as {
+      ChallengeName?: string;
+      ChallengeResponses?: Record<string, string>;
+      Session?: string;
+    };
     const reply = (status: number, payload: unknown) =>
       route.fulfill({ status, headers: { ...cors, "Content-Type": "application/x-amz-json-1.1" }, body: JSON.stringify(payload) });
 

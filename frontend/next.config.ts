@@ -1,8 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Every page is a client component fetching from the API at runtime, so
-  // Cache Components / partial prefetching add nothing here.
+  // Static export (HTML/JS/CSS in `out/`), served from S3 through CloudFront.
+  // Every page fetches its data in the browser, so no server is needed.
+  output: "export",
   turbopack: {
     rules: {
       "*.css": {
