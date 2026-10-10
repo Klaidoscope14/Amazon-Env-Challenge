@@ -1,0 +1,200 @@
+BREATHESAFE CAMPUS — PRODUCT AUDIT & CHANGE LIST
+Hackathon: WeMakeDevs x AWS Environmental Hacks (Air track) — Oct 8–11, 2026
+Audit date: 2026-10-10
+
+Out of scope for this list (owner handling tomorrow):
+  - Making the GitHub repo public
+  - Recording the demo video
+
+Judging criteria (from wemakedevs.org/aws/env): Idea & Impact, Built on AWS,
+Design & Usability, Execution, Demo Video. Rules: judges score ONLY what the video
+shows; the writeup must list AI tools used; the video must visibly show AWS.
+
+Current estimated scores -> achievable:
+  Idea & Impact      6 -> 9   (alert goes nowhere: no recipient view, no delivery)
+  Built on AWS       6 -> 8-9 (Bedrock off in deployment; frontend not on AWS)
+  Design & Usability 4 -> 8   (dark mode unreadable; demo dropdown public; "Delhi (default)")
+  Execution          4 -> 8   (demo-only data; broken live providers; demo-breaking bugs)
+
+
+======================================================================
+P0 — MUST DO (required to be competitive)
+======================================================================
+
+[P0-1] Fix dark mode / unreadable UI                                   ~30 min
+  File: frontend/src/app/globals.css
+  Problem: create-next-app leftovers set body background #0a0a0a and text #ededed
+  under prefers-color-scheme: dark. Cards are bg-white, so station, source,
+  pollutant values and the page title (text-gray-900 on near-black) become invisible.
+  Also `font-family: Arial` overrides the Geist font.
+  Fix: remove the dark-mode :root override and the body font/background rules
+  (or force light mode). Verify on a Mac in system dark mode.
+
+[P0-2] Reading timestamp is overwritten by the API                     ~15 min
+  File: backend/services/aqi-data/src/handler.ts (respond())
+  Problem: respond() spreads the body then sets `timestamp: new Date()`, replacing
+  the reading's real source timestamp. "Last updated" is always "Just now" and the
+  stale/cached states can never appear — undermines the "honest data" pitch.
+  Fix: use a different key (e.g. respondedAt) or don't inject a timestamp.
+
+[P0-3] Recording a decision fails once >10 alerts exist                ~30 min
+  File: backend/services/alerts/src/operations/recordDecision.ts (findAlertSK)
+  Problem: Query with Limit:10 + FilterExpression on alertId. Limit applies BEFORE
+  the filter and the query is ascending, so only the 10 OLDEST alerts are searched.
+  Newer alerts return "not found" -> thrown -> HTTP 500. Will break during rehearsal.
+  Fix: put createdAt in the PATCH request (SK = ALERT#<createdAt>#<id>) and do a
+  direct key lookup, or add a GSI on alertId. Return 404 instead of 500 when missing.
+  Optionally add ConditionExpression attribute_exists(PK) on the update.
+
+[P0-4] Campus key mismatch — existing alerts are invisible             ~45 min
+  Files: frontend/src/lib/useLocation.ts, constants.ts, all useLocation() callers,
+         infrastructure/template.yaml (ScheduledFetchRule input uses campus "delhi")
+  Problem: frontend derives campus "delhi" from geolocation; existing alerts
+  (e.g. "Dr. Sharma") are stored under "dtu-delhi", so the Alerts page shows empty.
+  The header reads "Delhi (default)" — a campus product should name the campus.
+  useLocation() is also called independently in AlertForm and in EVERY
+  DecisionRecorder row, each triggering geolocation + Nominatim requests; AlertForm
+  can save an alert under the default campus before detection finishes.
+  Fix: fix the campus to "dtu-delhi" / "Delhi Technological University" (DEFAULT_CAMPUS
+  already exists in constants.ts), drop geolocation for the demo (removes the location
+  prompt from the video), align the EventBridge scheduled input to the same key.
+
+[P0-5] Close the loop: alert recipients + real delivery  (BIGGEST WIN)   ~2–3 h
+  Problem: "Act" ends at a DynamoDB row. Status says "sent" but nobody receives it.
+  The PRD's Phase 3 student/staff view was never built. Judges will ask "sent to whom?"
+  Fix:
+   a) Public /notice page (no login): latest active alert in plain language,
+      current status, time issued, "Issued by <admin>". Mobile friendly.
+   b) Real delivery via Amazon SNS (email to a verified inbox) on POST /alerts.
+      Show "Email sent" vs "In-app only" in the UI. Adds a visible AWS service.
+   c) WhatsApp share button (wa.me link with prefilled alert text + /notice URL) —
+      zero infra, very India-relevant for parent groups.
+  The demo moment: admin clicks Send -> email lands on screen -> student notice page.
+
+[P0-6] Demo controls and demo-data honesty                              ~45 min
+  Files: frontend/src/app/page.tsx, components/TrendChart.tsx,
+         backend/services/trends/src/handler.ts, aqi-data handler
+  Problems:
+   - "Demo scenario" dropdown is visible to every user in production UI.
+   - In demo mode every GET /aqi call writes a new DynamoDB row; the 60s refetch
+     from every open tab + the 15-min scheduler (which always writes "poor")
+     overwrite whatever scenario the presenter picked; /recommendations then reads
+     whichever was written last (race).
+   - Trend chart: 76 points, 75 of them exactly AQI 268 — a flat line of demo data
+     with NO demo label. Looks broken on video and contradicts the honesty pitch.
+     (One 352 spike was written by audit probe requests on 2026-10-10.)
+   - Trend points do not carry dataMode.
+  Fix: show the scenario control only when dataMode === "demo" (or ?demo=1);
+  pass scenario to /recommendations (or evaluate on the fly) instead of relying on
+  last-write; stop the scheduler writing in demo mode; include dataMode in trend
+  points and label/hide demo trends (or generate a realistic, clearly labelled demo
+  curve). Consider wiping demo rows before recording.
+
+[P0-7] Enable Bedrock and give it a visible job                         ~1.5 h
+  Files: infrastructure/samconfig.toml (BedrockEnabled not overridden -> "false"),
+         backend/services/recommendation/src/handler.ts, AlertForm.tsx
+  Problem: deployed /recommendations has no aiNarrative, so the "AI Insight (Amazon
+  Bedrock)" card never renders. Bedrock is also invoked on every request (every 60s
+  per client) — latency + cost. Model is claude-3-haiku with a hard-coded region.
+  @aws-sdk/client-bedrock-runtime is missing from backend/package.json (works at
+  runtime only because Lambda bundles the SDK; local tsc fails).
+  Fix: set BedrockEnabled=true, verify model access in ap-south-1 (consider a newer
+  model / inference profile), cache narrative per reading. Better use: "Draft parent
+  notice" in English + Hindi from the deterministic recommendation, with an
+  "AI-generated draft — review before sending" badge. Rules engine stays source of truth.
+
+
+======================================================================
+P1 — PODIUM DIFFERENTIATORS (pick 1–2 based on time)
+======================================================================
+
+[P1-1] Live CPCB data that actually works                               2–3 h (time-box)
+  File: backend/services/aqi-data/src/providers/cpcb.ts, openaq.ts
+  Problems:
+   - data.gov.in resource 3b01bcb8... returns ONE ROW PER POLLUTANT per station
+     (pollutant_id, pollutant_avg, ...). Code reads record.pm25/pm10 (don't exist)
+     and uses pollutant_avg of the first row as the "AQI" — not an AQI.
+   - last_update is "dd-mm-yyyy HH:MM:SS", not ISO -> may parse as Invalid Date.
+   - OpenAQ v2 (/v2/latest) is retired — fallback will fail. v3 required.
+   - pm25ToAqi has gaps between bands (e.g. 30.5, 60.5) that fall through and
+     return 500.
+  Fix: get a free data.gov.in key, group rows by station, compute Indian AQI as the
+  max of pollutant sub-indices (CPCB breakpoints, continuous ranges), parse IST
+  timestamps properly, pick the station nearest DTU. Keep demo as labelled fallback.
+  A "Live" badge on real Delhi data in mid-October is a huge credibility boost.
+
+[P1-2] "Today's outdoor schedule" -> per-event decisions                 2–3 h
+  Admin enters today's outdoor events (assembly 8am, PE, sports practice). Engine
+  returns Go / Modify / Move indoors / Cancel per event with the rule applied.
+  Turns a generic category into concrete campus decisions — strongest differentiator
+  vs. the many "AQI dashboard + chatbot" entries expected in the Air track.
+
+[P1-3] Server-side auth on write endpoints                              ~30 min
+  File: infrastructure/template.yaml, alerts handler
+  Problem: no Cognito authorizer on API Gateway — sign-in is UI-only; anyone can
+  POST /alerts or PATCH decisions; adminName is client-supplied (audit trail can be
+  spoofed — undermines the accountability pitch).
+  Fix: add a Cognito authorizer to POST /alerts and PATCH /decision; take adminName
+  from token claims. Frontend: send Authorization header from useAuth tokens.
+
+[P1-4] Host frontend on AWS + CloudWatch dashboard                      ~1–1.5 h
+  Frontend is local only (no Amplify in template). Host on Amplify Hosting (or
+  S3+CloudFront) for a live URL in the writeup. Add a CloudWatch dashboard
+  (invocations, errors, latency per Lambda) as b-roll for the AWS segment.
+
+
+======================================================================
+P2 — POLISH / HYGIENE
+======================================================================
+
+[P2-1] Privacy statement contradicts the app
+  File: frontend/src/app/about/page.tsx
+  Says "does not collect ... personal information, or location tracking", but the
+  app requests geolocation, sends coordinates to Nominatim, and stores admin
+  names/emails in Cognito. Rewrite accurately (or remove geolocation per P0-4).
+
+[P2-2] Docs overclaim / missing
+  - ARCHITECTURE.md describes EventBridge bus between services, RulesConfig table,
+    Zod, Vitest, infrastructure/stacks/, GitHub Actions CI, /explain service —
+    none exist. Trim to reality or mark clearly as "future".
+  - No root README (setup, architecture, data sources, limitations, AWS services,
+    AI tools used). frontend/README.md is the create-next-app default.
+  - .env.example was deleted in the last commit — restore (no secrets).
+  - PRD demo script says AQI 312 = "Severe"; code (correct CPCB naming) says
+    "Very Poor". Update script.
+  - Remove unused public/*.svg (next, vercel, globe, window, file).
+
+[P2-3] Smaller code issues
+  - evaluateUnavailable() returns status "Good" (statusLevel 0) — use a neutral
+    status so "no data" never reads as "Good".
+  - Alerts handler: JSON.parse on malformed body -> 500 (should be 400).
+  - Trends/alerts queries don't paginate (1 MB limit; 7-day window of 60s demo
+    writes can exceed it).
+  - API URL hard-coded as fallback in lib/api.ts and lib/auth.tsx.
+  - CORS AllowOrigin '*' — tighten to the hosted frontend domain.
+  - AqiHeroCard duplicates AQI thresholds client-side; rely on backend status.
+  - ESLint: 3 errors (react-hooks/set-state-in-effect in useLocation.ts).
+  - Auth tokens stored in localStorage (acceptable for hackathon; note it).
+  - Add a few unit tests for evaluate() and the AQI calculation — cheap credibility
+    for judges / fast-track interview reviewers reading the repo.
+
+
+======================================================================
+SUBMISSION DELIVERABLES (besides repo + video)
+======================================================================
+  - Short writeup: problem, build, where AWS fits, AND list of AI tools used (required).
+  - AWS Builder Center blog (problem, stack, challenges) — separate "Top 5 blogs"
+    prize; link it in the submission.
+  - Confirm the exact submission deadline/time on the submission form (rules: strict).
+  - Verify the YouTube link opens in a signed-out browser.
+
+Video notes (for tomorrow): lead with the workflow, not the number. Record in LIGHT
+mode. Show: problem (cite a real headline, no invented stats) -> dashboard ->
+recommendation + evidence -> send -> email/WhatsApp arriving -> /notice page ->
+record decision -> audit log -> AWS console (Lambda, DynamoDB rows from this run,
+CloudWatch logs, SNS). Wipe demo rows and rehearse twice before recording.
+
+
+SUGGESTED ORDER IF TIME IS SHORT
+  P0-1, P0-2, P0-3, P0-4 (bugs, ~2h) -> P0-5 (close the loop) -> P0-6 -> P0-7
+  -> one of P1-1 / P1-2 -> P2-2 README + writeup.

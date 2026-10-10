@@ -9,7 +9,7 @@ interface StatusBadgeProps {
 }
 
 export default function StatusBadge({ status, large }: StatusBadgeProps) {
-  const config = STATUS_CONFIG[status] || STATUS_CONFIG.Good;
+  const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.Unavailable;
 
   return (
     <span

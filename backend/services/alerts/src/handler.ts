@@ -1,13 +1,15 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { CreateAlertInput } from "../../../shared/src/types.js";
+import { isDemoScenario } from "../../../shared/src/demo.js";
 import { createAlert } from "./operations/createAlert.js";
 import { getAlerts } from "./operations/getAlerts.js";
-import { recordDecision } from "./operations/recordDecision.js";
+import { AlertNotFoundError, recordDecision } from "./operations/recordDecision.js";
 
 const dynamodb = new DynamoDBClient({});
 const ALERTS_TABLE = process.env.ALERTS_TABLE_NAME!;
 const AQI_TABLE = process.env.AQI_TABLE_NAME!;
+const DATA_MODE = process.env.DATA_MODE || "demo";
 
 export async function handler(
   event: APIGatewayProxyEvent
@@ -35,6 +37,9 @@ export async function handler(
 
     return respond(404, { error: "Not found" });
   } catch (err) {
+    if (err instanceof AlertNotFoundError) {
+      return respond(404, { error: err.message });
+    }
     console.error("Alerts handler error:", err);
     return respond(500, {
       error: "Internal server error",
@@ -53,7 +58,11 @@ async function handleCreateAlert(
     });
   }
 
-  const alert = await createAlert(dynamodb, ALERTS_TABLE, AQI_TABLE, body);
+  if (body.scenario !== undefined && !isDemoScenario(body.scenario)) {
+    return respond(400, { error: `Unknown demo scenario: ${body.scenario}` });
+  }
+
+  const alert = await createAlert(dynamodb, ALERTS_TABLE, AQI_TABLE, body, DATA_MODE);
   return respond(201, alert);
 }
 
@@ -84,12 +93,15 @@ async function handleRecordDecision(
   }
 
   const campus = event.queryStringParameters?.campus || "dtu-delhi";
+  const createdAt =
+    typeof body.createdAt === "string" ? body.createdAt : undefined;
   const result = await recordDecision(
     dynamodb,
     ALERTS_TABLE,
     campus,
     alertId,
-    body.decision
+    body.decision,
+    createdAt
   );
 
   return respond(200, result);

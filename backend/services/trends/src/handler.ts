@@ -5,15 +5,36 @@ import {
 import { unmarshall, marshall } from "@aws-sdk/util-dynamodb";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { AQIReading, TrendPoint, TrendResponse } from "../../../shared/src/types.js";
+import { buildDemoTrend, isDemoScenario } from "../../../shared/src/demo.js";
 
 const dynamodb = new DynamoDBClient({});
 const AQI_TABLE_NAME = process.env.AQI_TABLE_NAME!;
+const DATA_MODE = process.env.DATA_MODE || "demo";
+const MAX_HOURS = 168;
 
 export async function handler(
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> {
   const campus = event.queryStringParameters?.campus || "dtu-delhi";
-  const hours = Math.min(parseInt(event.queryStringParameters?.hours || "24", 10), 168);
+  const scenario = event.queryStringParameters?.scenario;
+  const requested = Number.parseInt(event.queryStringParameters?.hours || "24", 10);
+  if (!Number.isFinite(requested) || requested < 1) {
+    return respond(400, { error: "hours must be a positive integer" });
+  }
+  const hours = Math.min(requested, MAX_HOURS);
+
+  if (DATA_MODE === "demo") {
+    if (scenario && !isDemoScenario(scenario)) {
+      return respond(400, { error: `Unknown demo scenario: ${scenario}` });
+    }
+    const response: TrendResponse = {
+      campus,
+      points: buildDemoTrend(scenario, hours),
+      period: `${hours}h`,
+      dataMode: "demo",
+    };
+    return respond(200, response);
+  }
 
   try {
     const cutoff = new Date(Date.now() - hours * 3600 * 1000).toISOString();
@@ -37,6 +58,7 @@ export async function handler(
         aqi: row.aqi,
         dominantPollutant: row.dominantPollutant,
         source: row.source,
+        dataMode: row.dataMode,
       };
     });
 
@@ -44,6 +66,7 @@ export async function handler(
       campus,
       points,
       period: `${hours}h`,
+      dataMode: "live",
     };
 
     return respond(200, response);

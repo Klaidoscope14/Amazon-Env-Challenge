@@ -7,17 +7,24 @@ import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
 import { randomUUID } from "crypto";
 import { Alert, AQIReading, CreateAlertInput } from "../../../../shared/src/types.js";
 import { evaluate } from "../../../../shared/src/evaluate.js";
+import { fetchDemoReading } from "../../../../shared/src/demo.js";
 
 export async function createAlert(
   dynamodb: DynamoDBClient,
   alertsTable: string,
   aqiTable: string,
-  input: CreateAlertInput
+  input: CreateAlertInput,
+  dataMode: string
 ): Promise<Alert> {
   const alertId = randomUUID();
   const now = new Date().toISOString();
 
-  const aqiSnapshot = await getLatestReading(dynamodb, aqiTable, input.campus);
+  // In demo mode readings aren't persisted; snapshot the scenario the admin
+  // was looking at so the audit log matches the screen.
+  const aqiSnapshot =
+    dataMode === "demo"
+      ? fetchDemoReading(input.campus, input.scenario)
+      : await getLatestReading(dynamodb, aqiTable, input.campus);
   const recommendation = aqiSnapshot ? evaluate(aqiSnapshot) : null;
 
   const alert: Alert = {

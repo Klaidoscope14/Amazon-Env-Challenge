@@ -1,0 +1,269 @@
+BREATHESAFE CAMPUS — BACKEND AUDIT
+Audit date: 2026-10-10
+Scope: backend/shared, backend/services/{aqi-data, recommendation, alerts, trends, auth}
+Method: full code review; per-package `tsc --noEmit`; local execution of the shared
+rules engine and provider logic against edge cases (scratch copies — prod untouched);
+live probes of external providers; CloudWatch logs from the deployed functions.
+No code was changed.
+
+Legend:  [VERIFIED] = reproduced by running code / live call / prod logs
+         [REVIEW]   = found by code reading
+Related files: Product_Audit.txt, Infra_Audit.txt (overlaps are cross-referenced, not
+repeated in full).
+
+VERDICT: The happy path in demo mode works. Outside it, the backend is not reliable:
+the rules engine maps several classes of bad or fractional input to "Severe", a single
+unauthenticated GET can put the campus into "Emergency protocol", both live data
+providers are broken, the audit trail can be overwritten and cannot be fully read back,
+and there are no tests or input validation. Severity below is for a public demo of an
+"auditable decision engine" — correctness and trust are the product.
+
+
+======================================================================
+CRITICAL — wrong decisions / data integrity
+======================================================================
+
+[B1] Rules engine fails OPEN to "Severe" on any unmatched value          [VERIFIED]
+  shared/src/aqi-categories.ts:65-69 (getThresholdForAqi)
+  Bands are integer ranges (0–50, 51–100, ...). `find` fails for anything in the gaps
+  or out of range and falls back to the LAST band (Severe):
+     50.5, 100.4, 200.7, 300.2 -> Severe     -5 -> Severe     NaN/undefined -> Severe
+  Any fractional AQI (CPCB pollutant_avg, OpenAQ conversion) can therefore trigger
+  "Emergency protocol. Consider campus-wide early dismissal."
+  Fix: use upper-bound comparisons (aqi <= 50, <= 100, ...) on a rounded value;
+  validate input (finite, >= 0) and return an explicit "unknown/invalid" result
+  instead of a band. Add unit tests for every boundary.
+
+[B2] One unauthenticated GET can poison the campus reading               [VERIFIED]
+  services/aqi-data/src/providers/demo.ts:10-11
+  `demoReadings[scenario] || demoReadings.poor` with an unvalidated query param.
+  scenario = constructor / toString / __proto__ / hasOwnProperty resolves to an
+  inherited Object member (truthy), so the spread yields a reading with NO aqi,
+  pollutants, station or source. It is written to DynamoDB as the latest reading;
+  /recommendations then evaluates aqi=undefined -> B1 -> "Severe — Emergency protocol"
+  for every viewer, and trends get a NaN point.
+  Repro (do NOT run against prod): GET /api/v1/aqi/current?campus=dtu-delhi&scenario=constructor
+  Fix: allowlist scenarios (Object.hasOwn / a Map); reject unknown with 400; never
+  write on GET in demo mode (see Infra_Audit C4).
+
+[B3] CPCB provider does not produce an AQI                               [VERIFIED/REVIEW]
+  services/aqi-data/src/providers/cpcb.ts:35-55
+  - The data.gov.in resource (3b01bcb8...) returns ONE ROW PER POLLUTANT per station
+    (station, last_update, pollutant_id, pollutant_min/max/avg). The code reads
+    record.pm25/pm10/no2/... (fields that don't exist) and uses `records[0]`'s
+    pollutant_avg — the concentration of whichever pollutant row comes first — as
+    the AQI. Station choice is arbitrary (limit=5).
+  - Missing values are the string "NA": parseFloat("NA") = NaN -> marshall/PutItem
+    failure or NaN AQI -> B1 -> Severe.
+  - `parseFloat(... || "0")` -> if both fields are absent the AQI is 0 = "Good".
+    Missing data must never read as Good.
+  - last_update is "dd-mm-yyyy HH:MM:SS" in IST, stored raw. Parsed by `new Date()`:
+       25-10-2026 14:00:00 -> Invalid Date (day > 12)
+       03-11-2026 09:00:00 -> 2026-03-11 (day/month swapped)
+    and Lambda runs in UTC, so even "valid" parses are off by 5h30m.
+  Fix: group rows by station; compute Indian NAQI = max of pollutant sub-indices
+  using CPCB breakpoints (PM2.5/PM10 24h, NO2, SO2, CO, O3, NH3), require >= 3
+  pollutants incl. PM2.5 or PM10; pick the station nearest the campus; parse
+  last_update explicitly as Asia/Kolkata and store ISO UTC; treat "NA" as missing.
+
+[B4] OpenAQ fallback is dead and its AQI math is wrong                   [VERIFIED]
+  services/aqi-data/src/providers/openaq.ts:3, 89-99
+  - GET https://api.openaq.org/v2/latest -> HTTP 410 "Gone. Version 1 and Version 2
+    API endpoints are retired". Fallback always returns null.
+  - v3 requires X-API-Key and has a different schema (locations/sensors).
+  - pm25ToAqi: 30.5, 60.7, 90.2, 120.9, 250.5, -1, NaN all return 500 (gaps between
+    integer breakpoints; out-of-range -> 500). It also uses `measurements[0].lastUpdated`
+    and labels the result "OpenAQ" live data.
+  Fix: migrate to v3 or remove the fallback (and its claims in docs); continuous
+  breakpoints; return null on invalid input.
+
+[B5] Timestamp integrity: reading time is overwritten and never validated [VERIFIED]
+  - aqi-data/src/handler.ts:123 — respond() adds `timestamp: now`, overwriting the
+    reading's source timestamp in every /aqi response. Stale/cached states can never
+    show (also Product_Audit P0-2).
+  - shared/src/aqi-categories.ts:90 (getDataAge) — invalid timestamps give
+    minutes=NaN -> isStale=false and label "NaN hour ago": unparseable time is
+    treated as FRESH. Future timestamps (IST misparsed as UTC) -> "Just now".
+  - shared/src/evaluate.ts — dataQuality only becomes "stale" when dataMode is "live";
+    a 3-hour-old "cached" or "demo" reading stays "cached"/"demo" (verified).
+  Fix: rename response metadata key (respondedAt); treat NaN/future ages as
+  stale-unknown; derive staleness independent of dataMode.
+
+[B6] Audit trail can be silently rewritten and is unverifiable           [REVIEW]
+  services/alerts/src/operations/recordDecision.ts, createAlert.ts
+  - PATCH /decision overwrites an existing decision with no condition, no history,
+    and no record of WHO decided (only adminName on the alert, client-supplied).
+  - No authentication on POST/PATCH (Infra_Audit C4): anyone can create alerts
+    under any adminName or change any decision.
+  - createAlert snapshots "latest reading in the table", not the reading the admin
+    actually saw. With the demo/scheduler races (Product_Audit P0-6) the stored AQI
+    can differ from the screen — the "evidence" in the audit log is not trustworthy.
+  - status is always "sent" although nothing is delivered.
+  Fix: ConditionExpression attribute_not_exists(decision) (or append-only decision
+  history list with decidedBy from JWT claims + timestamp); client sends the
+  fetchedAt/SK of the displayed reading and createAlert snapshots exactly that item
+  (reject if missing); status "recorded"/"in-app" until real delivery exists.
+
+[B7] Decisions can't be recorded once a campus has >10 alerts            [REVIEW]
+  services/alerts/src/operations/recordDecision.ts:45-60 (findAlertSK)
+  Query (ascending) with Limit: 10 + FilterExpression alertId — Limit applies before
+  the filter, so only the 10 OLDEST alerts are ever searched. Not found -> throw ->
+  HTTP 500 (handler catch-all). Also campus comes from a query param defaulting to
+  "dtu-delhi"; a mismatch with the creation campus is also "not found".
+  Fix: key lookup — include createdAt in the route/body (SK = ALERT#<createdAt>#<id>)
+  or add a GSI on alertId; return 404 when absent.
+
+
+======================================================================
+HIGH — robustness, API contract, Bedrock
+======================================================================
+
+[B8] Input validation is absent; malformed input -> 500                  [VERIFIED]
+  - alerts/src/handler.ts:48,81 and auth handler: JSON.parse unguarded -> 500 on bad
+    JSON (confirmed in prod logs: "SyntaxError ... at handleCreateAlert").
+  - trends/src/handler.ts:16: ?hours=abc -> NaN -> new Date(NaN).toISOString() throws
+    RangeError -> 500 (verified locally). Negative hours -> future cutoff -> empty.
+  - alerts: `audience` not checked against all|students|staff|parents; message,
+    adminName, decision, campus have no length/charset limits (DynamoDB 400 KB item
+    limit -> 500); `limit` not bounded.
+  - campus is free text everywhere -> unlimited partitions (CAMPUS#patna exists).
+  Fix: one zod (or hand-rolled) schema per route in a shared validate() helper;
+  400 with field errors; campus allowlist; max lengths (message 1000, names 100).
+
+[B9] Error handling and status codes                                     [REVIEW]
+  - Not-found and validation failures surface as 500 (B7, B8).
+  - auth/src/handler.ts:30 maps EVERY error to 400, including Cognito throttling /
+    internal errors, and returns raw Cognito messages + exception names
+    (UsernameExistsException on signup enables account enumeration;
+    PreventUserExistenceErrors does not cover SignUp).
+  - Error body shapes differ per service ({error}, {error,message,dataMode},
+    {error,code}); shared APIResponse<T> type exists but is unused.
+  Fix: shared HttpError class + respond(); map Cognito errors to 400/401/403/409/
+  429/500 with generic user-facing messages; one error envelope.
+
+[B10] Bedrock integration                                                [VERIFIED]
+  services/recommendation/src/handler.ts:15,33,84
+  - Every invocation fails in prod ("ValidationException: Operation not allowed";
+    account not authorised — Infra_Audit C1). Failure is swallowed with no metric.
+  - Called synchronously on every /recommendations request (60s polling per client),
+    no timeout, no caching -> latency + cost once enabled; Lambda timeout 60s > API
+    Gateway 29s.
+  - Region hard-coded "ap-south-1"; model id hard-coded (not an env var).
+  - Output is not validated, contrary to ARCHITECTURE.md ("reject output if it contains
+    medical advice, invented numbers"). Prompt asks "what specific action to take NOW"
+    — invites advice beyond the rule; station name / pollutant keys from external data
+    are interpolated into the prompt unescaped.
+  - Prompt's "Recent trend" mixes demo readings as if real.
+  - @aws-sdk/client-bedrock-runtime is not declared in any package.json (tsc fails;
+    works only because the Lambda runtime bundles the SDK).
+  Fix: env-configured model/region; AbortSignal timeout (~6s); cache narrative per
+  reading SK (store on the reading item); post-check output (length, no numbers not
+  in evidence, banned medical terms) else drop; emit a metric on failure.
+
+[B11] Data model / query correctness                                     [REVIEW]
+  - No pagination anywhere: getAlerts, trends, getRecentReadings ignore
+    LastEvaluatedKey (1 MB page cap; 7-day trend of 60s demo writes can exceed it).
+  - Readings SK uses fetchedAt: in live mode the same hourly CPCB reading is re-stored
+    every cache miss (5 min) -> duplicate trend points. Use the source timestamp in the
+    SK + attribute_not_exists conditional put.
+  - TTL 48h vs trends up to 168h (Infra_Audit H7).
+  - Alert snapshot copies internal attributes (TTL) from the reading item.
+  - createAlert with no reading stores aqiSnapshot {} and recommendation {} (cast via
+    `as any`) — UI then shows "AQI N/A" with a "Good" badge. Reject or store an
+    explicit "unavailable" snapshot.
+  - getAlerts returns full snapshot + recommendation per alert (payload bloat); no
+    GET /alerts/{id}.
+
+[B12] Live-mode cache semantics                                          [REVIEW]
+  aqi-data/src/handler.ts:31-58
+  - A reading cached as dataMode "live" is evaluated as "live" by /recommendations
+    for up to 2h, though it may be 2h old; only the /aqi response relabels "cached".
+  - getCachedReading is queried twice on the failure path.
+  - Demo mode writes a fresh row on EVERY request (+ scheduler every 15 min) — write
+    amplification and scenario races (Product_Audit P0-6).
+  - Demo fixtures say source "CPCB", station "ITO, Delhi" for any campus/city (e.g.
+    patna) — misleading even with the demo badge.
+
+[B13] Routing is fragile                                                 [REVIEW]
+  alerts/src/handler.ts:15-36,73-75; auth/src/handler.ts:20-26
+  Routes are inferred by splitting event.path / endsWith(). Use event.resource +
+  event.pathParameters.alertId (already provided by API Gateway); 405 for wrong
+  methods.
+
+
+======================================================================
+MEDIUM — maintainability, build, tests
+======================================================================
+
+[B14] No tests at all. The rules engine, AQI calculation and timestamp parsing are
+      exactly where the bugs above live. Add vitest (or node:test) unit tests for
+      getThresholdForAqi, getDataAge, evaluate, NAQI sub-index calc, CPCB parsing,
+      demo scenario lookup; one handler test per route with a mocked DynamoDB client.
+
+[B15] Per-package builds are broken                                     [VERIFIED]
+      `tsc --noEmit` fails in aqi-data, recommendation, alerts (TS6059: shared/src not
+      under rootDir; TS2307: client-bedrock-runtime missing). So root
+      `npm run build:backend` fails; only SAM's esbuild works. trends/ and auth/ have
+      no package.json/tsconfig and are not in the root build scripts.
+      Fix: single backend tsconfig (rootDir backend/, noEmit) used for type-checking
+      in CI; import shared via a workspace package or path alias; declare all deps
+      (@aws-sdk/client-bedrock-runtime, @types/aws-lambda) in backend/package.json;
+      delete the unused per-service tsc build scripts.
+
+[B16] Duplicated code: getLatestReading exists 3x (aqi-data, recommendation,
+      createAlert), respond() 5x with drifting CORS headers (aqi/alerts/trends lack
+      Authorization in Allow-Headers). Move readings repository + http helpers to
+      shared/.
+
+[B17] Types duplicated between backend/shared/src/types.ts and
+      frontend/src/lib/types.ts (manual sync, already drifting in practice: frontend
+      DataBadge handles modes the backend never sends for readings). Export shared
+      types to the frontend or generate from one schema.
+
+[B18] Inconsistent defaults: backend default campus "dtu-delhi"; frontend/scheduler
+      use "delhi"; CPCB_API_KEY defaults "" in code but 'none' in the template (so
+      CPCB is called with api-key=none and fails noisily every cache miss).
+
+[B19] Logging/observability in code: unstructured console.error, no request ID /
+      campus / route context, no business metrics (alerts created, decisions
+      recorded, provider failures, Bedrock failures). Use JSON logs (or Powertools
+      Logger/Metrics) with EMF metrics.
+
+[B20] Auth service: role is self-asserted at signup (custom:role, any value incl.
+      "admin") — fine only while nothing authorises on it; no forgot-password routes;
+      passwords transit this Lambda (USER_PASSWORD_AUTH) — never log event bodies.
+
+[B21] Docs vs code: ARCHITECTURE.md promises Zod validation, Vitest, RulesConfig
+      table (rules in DynamoDB), EventBridge events, GET /alerts/{id}, an /explain
+      service with guardrails — none exist. Trim or implement before the repo is public.
+
+
+======================================================================
+VERIFIED EVIDENCE LOG
+======================================================================
+  getThresholdForAqi: 0,50 -> Good; 50.5,100.4,200.7,300.2,500,650,-5,NaN -> Severe
+  getDataAge("garbage")          -> {label:"NaN hour ago", minutes:NaN, isStale:false}
+  getDataAge(now + 1h)           -> {label:"Just now", minutes:-60, isStale:false}
+  evaluate(3h-old demo/cached)   -> dataQuality "demo"/"cached" (never "stale")
+  evaluateUnavailable()          -> status "Good", statusLevel 0
+  pm25ToAqi: 30.5,60.7,90.2,120.9,250.5,600,-1,NaN -> 500
+  CPCB date parse (UTC): "25-10-2026 14:00:00" -> Invalid Date;
+                         "03-11-2026 09:00:00" -> 2026-03-11T09:00Z
+  demo scenario "constructor"/"toString"/"__proto__" -> reading with aqi undefined
+  trends hours="abc" -> RangeError: Invalid time value (HTTP 500)
+  OpenAQ v2 /latest -> HTTP 410 Gone; v3 without key -> 401
+  Prod logs: 28x Bedrock ValidationException; SyntaxError 500 on malformed POST body
+  tsc: aqi-data/recommendation/alerts fail (TS6059, TS2307); shared passes
+
+
+======================================================================
+SUGGESTED ORDER
+======================================================================
+  1. B1 + B2 + B5 (engine bounds, scenario allowlist, timestamps)      ~1.5 h
+     + unit tests for them (B14, partial)                              ~45 min
+  2. B7 + B8 + B9 (decision lookup, validation helper, status codes)   ~1.5 h
+  3. B6 (snapshot exact reading, no decision overwrite, authz)         ~1.5 h
+  4. B10 (Bedrock timeout/cache/config/output check) after the
+     account is authorised (Infra_Audit C1)                            ~1 h
+  5. B3 (+ remove/upgrade B4) only if going live for the demo          2–3 h
+  6. B11–B21 as time allows; B15 + B21 before making the repo public.

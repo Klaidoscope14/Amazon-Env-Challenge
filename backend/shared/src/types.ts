@@ -33,17 +33,24 @@ export interface Recommendation {
   disclaimer: string;
 }
 
+export interface AQIReadingResponse extends AQIReading {
+  status: AQIStatus;
+  statusLevel: number;
+}
+
 export interface TrendPoint {
   timestamp: string;
   aqi: number;
   dominantPollutant: string;
   source: string;
+  dataMode: AQIReading["dataMode"];
 }
 
 export interface TrendResponse {
   campus: string;
   points: TrendPoint[];
   period: string;
+  dataMode: "live" | "demo";
 }
 
 export type AQIStatus =
@@ -52,7 +59,8 @@ export type AQIStatus =
   | "Moderate"
   | "Poor"
   | "Very Poor"
-  | "Severe";
+  | "Severe"
+  | "Unavailable";
 
 export interface AQIThreshold {
   minAqi: number;
@@ -82,6 +90,7 @@ export interface CreateAlertInput {
   audience: Alert["audience"];
   message: string;
   adminName: string;
+  scenario?: string;
 }
 
 export interface RecordDecisionInput {

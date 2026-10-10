@@ -4,8 +4,9 @@ Description: BreatheSafe Campus - Air Quality Action Engine
 
 Globals:
   Function:
-    Runtime: nodejs20.x
-    Timeout: 30
+    Runtime: nodejs22.x
+    # API Gateway gives up at 29s; keep every function well below that.
+    Timeout: 20
     MemorySize: 256
     Architectures:
       - arm64
@@ -113,9 +114,12 @@ Resources:
   # ============================================
   AQIReadingsTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub breathesafe-aqi-readings-${Stage}
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
       AttributeDefinitions:
         - AttributeName: PK
           AttributeType: S
@@ -130,11 +134,18 @@ Resources:
         AttributeName: TTL
         Enabled: true
 
+  # The alert/decision audit trail is the product's core record: never let a
+  # stack delete or replacement take it with it, and keep point-in-time backups.
   AlertsDecisionsTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: !Sub breathesafe-alerts-decisions-${Stage}
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
       AttributeDefinitions:
         - AttributeName: PK
           AttributeType: S
@@ -192,7 +203,7 @@ Resources:
       FunctionName: !Sub breathesafe-recommendation-${Stage}
       CodeUri: ../backend/
       Handler: handler.handler
-      Timeout: 60
+      Timeout: 25
       Description: Evaluates AQI data against CPCB rules and returns AI-enhanced recommendations
       Environment:
         Variables:
@@ -319,7 +330,7 @@ Resources:
             {
               "httpMethod": "GET",
               "path": "/api/v1/aqi/current",
-              "queryStringParameters": { "campus": "delhi", "city": "Delhi" },
+              "queryStringParameters": { "campus": "dtu-delhi", "city": "Delhi" },
               "headers": {},
               "body": null
             }

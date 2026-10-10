@@ -62,11 +62,22 @@ export const CACHE_FRESH_MINUTES = 5;
 export const DISCLAIMER =
   "This is decision support, not medical advice. Consult official CPCB guidance and local health authorities for health decisions.";
 
-export function getThresholdForAqi(aqi: number): AQIThreshold {
-  const threshold = CPCB_THRESHOLDS.find(
-    (t) => aqi >= t.minAqi && aqi <= t.maxAqi
+// Tolerated clock skew before a timestamp counts as "in the future".
+const FUTURE_SKEW_MINUTES = 5;
+
+/**
+ * Returns the CPCB band for an AQI value, or null when the value is not a
+ * usable AQI (missing, NaN, negative). Bands are matched on the rounded value
+ * by upper bound, so fractional readings never fall between bands; anything
+ * above 500 is still Severe.
+ */
+export function getThresholdForAqi(aqi: unknown): AQIThreshold | null {
+  if (typeof aqi !== "number" || !Number.isFinite(aqi) || aqi < 0) return null;
+  const rounded = Math.round(aqi);
+  return (
+    CPCB_THRESHOLDS.find((t) => rounded <= t.maxAqi) ??
+    CPCB_THRESHOLDS[CPCB_THRESHOLDS.length - 1]
   );
-  return threshold ?? CPCB_THRESHOLDS[CPCB_THRESHOLDS.length - 1];
 }
 
 export function getDataAge(timestamp: string): {
@@ -74,10 +85,16 @@ export function getDataAge(timestamp: string): {
   minutes: number;
   isStale: boolean;
 } {
-  const now = Date.now();
   const then = new Date(timestamp).getTime();
-  const diffMs = now - then;
-  const minutes = Math.floor(diffMs / 60000);
+  // An unparseable timestamp must never be treated as fresh.
+  if (!Number.isFinite(then)) {
+    return { label: "Unknown time", minutes: Number.NaN, isStale: true };
+  }
+
+  const minutes = Math.floor((Date.now() - then) / 60000);
+  if (minutes < -FUTURE_SKEW_MINUTES) {
+    return { label: "Timestamp in the future", minutes, isStale: true };
+  }
 
   let label: string;
   if (minutes < 1) label = "Just now";

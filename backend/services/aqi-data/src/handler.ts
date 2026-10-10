@@ -5,10 +5,11 @@ import {
 } from "@aws-sdk/client-dynamodb";
 import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { AQIReading } from "../../../shared/src/types.js";
+import { AQIReading, AQIReadingResponse } from "../../../shared/src/types.js";
+import { getThresholdForAqi } from "../../../shared/src/aqi-categories.js";
+import { fetchDemoReading, isDemoScenario } from "../../../shared/src/demo.js";
 import { fetchFromCPCB } from "./providers/cpcb.js";
 import { fetchFromOpenAQ } from "./providers/openaq.js";
-import { fetchDemoReading } from "./providers/demo.js";
 
 const dynamodb = new DynamoDBClient({});
 const TABLE_NAME = process.env.AQI_TABLE_NAME!;
@@ -28,14 +29,18 @@ export async function handler(
     let reading: AQIReading | null = null;
 
     if (DATA_MODE === "demo") {
-      reading = fetchDemoReading(campus, scenario || undefined);
-      await cacheReading(reading);
+      if (scenario && !isDemoScenario(scenario)) {
+        return respond(400, { error: `Unknown demo scenario: ${scenario}` });
+      }
+      // Demo fixtures are generated per request and never persisted, so one
+      // viewer's scenario can't leak into another viewer's dashboard.
+      return respond(200, withStatus(fetchDemoReading(campus, scenario)));
     } else {
       reading = await getCachedReading(campus);
 
       if (reading && !isCacheStale(reading.fetchedAt)) {
         reading.dataMode = "cached";
-        return respond(200, reading);
+        return respond(200, withStatus(reading));
       }
 
       reading = await fetchFromCPCB(campus, CPCB_API_KEY, city);
@@ -49,7 +54,7 @@ export async function handler(
         const cached = await getCachedReading(campus);
         if (cached) {
           cached.dataMode = "cached";
-          return respond(200, cached);
+          return respond(200, withStatus(cached));
         }
         return respond(503, {
           error: "No AQI data available",
@@ -60,7 +65,7 @@ export async function handler(
       }
     }
 
-    return respond(200, reading);
+    return respond(200, withStatus(reading));
   } catch (err) {
     console.error("AQI handler error:", err);
     return respond(500, { error: "Internal server error" });
@@ -109,9 +114,23 @@ async function getCachedReading(campus: string): Promise<AQIReading | null> {
 }
 
 function isCacheStale(fetchedAt: string): boolean {
-  return Date.now() - new Date(fetchedAt).getTime() > CACHE_FRESH_MS;
+  const age = Date.now() - new Date(fetchedAt).getTime();
+  return !Number.isFinite(age) || age > CACHE_FRESH_MS;
 }
 
+// Status comes from the shared rules engine so the dashboard never derives
+// its own (possibly different) category from the raw number.
+function withStatus(reading: AQIReading): AQIReadingResponse {
+  const threshold = getThresholdForAqi(reading.aqi);
+  return {
+    ...reading,
+    status: threshold?.status ?? "Unavailable",
+    statusLevel: threshold?.statusLevel ?? 0,
+  };
+}
+
+// `timestamp` in a reading is the source's observation time; responses must
+// not overwrite it, or staleness can never be detected.
 function respond(statusCode: number, body: unknown): APIGatewayProxyResult {
   return {
     statusCode,
@@ -120,6 +139,6 @@ function respond(statusCode: number, body: unknown): APIGatewayProxyResult {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Headers": "Content-Type",
     },
-    body: JSON.stringify({ ...Object(body), timestamp: new Date().toISOString() }),
+    body: JSON.stringify(body),
   };
 }

@@ -1,0 +1,242 @@
+BREATHESAFE CAMPUS — INFRASTRUCTURE AUDIT
+Audit date: 2026-10-10   Region: ap-south-1   Stack: breathesafe-campus (UPDATE_COMPLETE)
+Scope: infrastructure/template.yaml, samconfig.toml, SAM build output, live API probes,
+and a read-only inspection of the AWS account (Lambda, API Gateway, DynamoDB, Cognito,
+Bedrock, IAM, CloudWatch, CloudTrail, Budgets, drift detection).
+Nothing was changed or deployed during this audit.
+
+Legend:  [VERIFIED] = confirmed in the live AWS account / live API
+         [IaC]      = from template/config review (deployed state matches: drift = IN_SYNC)
+
+VERDICT: Core path (API Gateway -> Lambda -> DynamoDB) works (~1.2s, 0 throttles,
+scheduler 0 failed invocations). NOT bulletproof: Bedrock is failing on every call,
+the audit-trail table is unprotected against deletion, there is no abuse/cost
+protection, and zero monitoring/alarms exist.
+
+
+======================================================================
+ACCOUNT SNAPSHOT (VERIFIED)
+======================================================================
+  Stack status ............ UPDATE_COMPLETE, drift IN_SYNC, termination protection OFF
+  Deployed params ......... DataMode=demo, Stage=prod, BedrockEnabled=true,
+                            CpcbApiKey + OpenAqApiKey set (stored in plaintext — see H3)
+  Lambda (5 functions) .... nodejs20.x, arm64, 256 MB, X-Ray PassThrough (off),
+                            timeouts 30s (recommendation 60s), no reserved concurrency,
+                            no async on-failure destination, source maps enabled
+  Last 24h metrics ........ fetch-aqi 125 inv / 2 errors (deploy-time ImportModuleError
+                            at 21:55Z, resolved); recommendation 71 / 0; alerts 20 / 0;
+                            trends 34 / 0; auth 7 / 0; throttles 0; max concurrency 1
+  Lambda concurrency quota  10 (account limit)  <-- see C7
+  Scheduler ............... rate(15 minutes), ENABLED, 52 invocations, 0 failed
+  Log groups .............. 5, retention = Never expire, not stack-managed
+  API Gateway stage ....... no throttling, no access logs, no tracing, no WAF,
+                            no usage plans, no authorizers, no custom gateway responses,
+                            no CloudWatch role set at account level
+  DynamoDB ................ readings: 106 items, TTL on; alerts: 2 items, TTL off;
+                            BOTH: deletion protection OFF, PITR DISABLED, 0 backups
+                            Partitions: CAMPUS#delhi 82, CAMPUS#dtu-delhi 37,
+                            CAMPUS#patna 4 (created by a visitor's geolocation)
+  Cognito ................. ESSENTIALS tier, 1 user, MFA OFF, deletion protection OFF,
+                            email via COGNITO_DEFAULT, client Read/Write attrs unrestricted,
+                            token revocation on, PreventUserExistenceErrors on
+  Bedrock ................. claude-3-haiku ACTIVE in ap-south-1 but account
+                            NOT_AUTHORIZED; Anthropic use-case form never submitted
+  IAM ..................... CLI session is the ROOT user (root MFA on, no root keys).
+                            3 IAM users (teammates): console access, NO MFA, and no
+                            permissions beyond IAMUserChangePassword. No password policy.
+  CloudTrail .............. no trail (only 90-day event history)
+  Budgets / billing alarms  none
+  CloudWatch alarms ....... none
+  GuardDuty ............... not subscribed
+  SES ..................... sandbox (200/day, verified recipients only)
+  Cost MTD ................ ~$0.00
+  Local CLI config ........ ~/.aws/config has a profile with `region = ap-sout`
+                            (typo) — any command without explicit region fails
+
+
+======================================================================
+CRITICAL — fix before recording / judging
+======================================================================
+
+[C1] Bedrock fails on EVERY request — AI Insight never appears          [VERIFIED]
+  Evidence: 28x "Bedrock narrative failed ... ValidationException: Operation not
+  allowed" in /aws/lambda/breathesafe-recommendation-prod (last 24h).
+  get-foundation-model-availability -> authorizationStatus NOT_AUTHORIZED,
+  agreementAvailability NOT_AVAILABLE; get-use-case-for-model-access -> "You have not
+  filled out the request form". Error is caught, so it fails silently.
+  CORRECTION to earlier audit: claude-3-haiku-20240307 is still ACTIVE in ap-south-1;
+  model EOL is NOT the cause.
+  Fix:
+   1. (Owner action) Bedrock console -> Model catalog -> Anthropic model -> submit
+      the Anthropic first-time-use / use-case form. Then run one prompt in the
+      Bedrock playground (as an admin principal) so the Marketplace subscription is
+      created — the Lambda role has no aws-marketplace permissions to do it itself.
+   2. Consider moving to a current model via India geo inference profile, e.g.
+      in.anthropic.claude-haiku-4-5-20251001-v1:0 (keeps data in India). IAM must then
+      allow the inference-profile ARN AND the underlying foundation-model ARNs.
+   3. Remove hard-coded region in BedrockRuntimeClient; add a 5–8s timeout; cache
+      the narrative per reading (currently invoked on every request / 60s refetch).
+   4. Log a WARN metric when narrative generation fails so this is visible.
+
+[C2] Audit trail can be permanently deleted                             [VERIFIED]
+  AlertsDecisionsTable (the product's core asset) and AQIReadingsTable: no
+  DeletionPolicy/UpdateReplacePolicy, DeletionProtectionEnabled=false, PITR DISABLED,
+  0 backups. Explicit TableName means any replacement-requiring change fails the
+  stack update. Stack termination protection is OFF.
+  Fix: DeletionPolicy: Retain + UpdateReplacePolicy: Retain + DeletionProtectionEnabled:
+  true on both tables; PointInTimeRecoverySpecification on alerts table; enable stack
+  termination protection.
+
+[C3] Deploying "dev" would destroy prod data                            [IaC]
+  samconfig.toml fixes stack_name = "breathesafe-campus". `sam deploy
+  --parameter-overrides Stage=dev` renames tables inside the PROD stack -> creates new
+  tables and deletes the old ones (no Retain).
+  Fix: add a [dev.deploy.parameters] section with stack_name breathesafe-campus-dev;
+  rehearse demos there, not in prod.
+
+[C4] No abuse / cost protection on a public API                         [VERIFIED]
+  - Stage has no throttling (account default 10,000 rps / 5,000 burst), no usage plan,
+    no WAF, no authorizers.
+  - POST /alerts and PATCH /decision are unauthenticated; /alerts is publicly readable
+    (includes admin names).
+  - In demo mode every GET /aqi writes a DynamoDB row; `campus` accepts any string
+    (CAMPUS#patna already exists).
+  - No AWS Budget or billing alarm.
+  Fix: stage MethodSettings throttling (e.g. 20 rps / burst 40); Cognito authorizer
+  on POST /alerts and PATCH /decision (adminName from token claims); campus
+  allowlist; GET must not write in demo mode; AWS Budget with $5/$10 email alerts.
+
+[C5] Lambda timeouts exceed API Gateway's 29s limit                     [VERIFIED]
+  All functions 30s, recommendation 60s. Client gets 504 while Lambda keeps running.
+  Fix: Timeout <= 25s; bound Bedrock call with AbortSignal/timeout.
+
+[C6] Deprecated runtime nodejs20.x                                      [VERIFIED]
+  Node.js 20 reached EOL 2026-04-30 (no security patches). Function updates still
+  succeed today (deploy on 2026-10-10 worked), but AWS block dates are approaching.
+  Fix: Globals Runtime: nodejs22.x (or nodejs24.x); rebuild + smoke test all routes.
+
+[C7] Account concurrency quota is 10                                    [VERIFIED]
+  All 5 functions share 10 concurrent executions. A burst (judges + demo + scheduler,
+  or a simple loop script) -> 429/502s. Observed max is 1 today, so low risk for a
+  recorded demo, but it's a hard ceiling.
+  Fix: request increase via Service Quotas ("Concurrent executions", Lambda,
+  ap-south-1) — free, may take time. Do NOT add reserved concurrency until raised
+  (it would eat into the 10).
+
+[C8] Working as ROOT; teammates have no usable IAM access              [VERIFIED]
+  CLI session is arn:...:root. Teammate IAM users have console access but no MFA and
+  no permissions (only IAMUserChangePassword) -> encourages sharing root.
+  No account password policy.
+  Fix: create an admin IAM group (or IAM Identity Center) for the team, require MFA,
+  set a password policy, use that identity for `aws login`/SAM. Keep root for
+  break-glass only.
+
+
+======================================================================
+HIGH — reliability, security, and a credible repo
+======================================================================
+
+[H1] Zero observability                                                 [VERIFIED]
+  No alarms, no dashboards, X-Ray off, no API access logs, no API GW CloudWatch
+  role, log groups "Never expire" and not managed by the stack, no CloudTrail trail.
+  Fix: AWS::Logs::LogGroup per function (14-day retention); alarms on API 5XXError,
+  Lambda Errors/Throttles, Bedrock-failure metric -> SNS email; Tracing: Active on
+  functions + API (X-Ray service map is good demo footage); API access logging;
+  one CloudTrail management-events trail.
+  (Source maps are already enabled — NODE_OPTIONS is set by SAM esbuild; stack traces
+  show handler.ts lines. Earlier audit note on this is withdrawn.)
+
+[H2] API-Gateway-generated errors lack CORS headers                     [VERIFIED]
+  403 MissingAuthenticationToken returned without Access-Control-* headers. Once an
+  authorizer is added, 401s will surface in the browser as opaque CORS failures.
+  Fix: GatewayResponses DEFAULT_4XX / DEFAULT_5XX with CORS headers in the SAM Api.
+
+[H3] API keys stored in plaintext                                       [VERIFIED]
+  CpcbApiKey and OpenAqApiKey are visible in CloudFormation stack parameters and as
+  plain Lambda env vars (CPCB_API_KEY, OPENAQ_API_KEY). Parameters lack NoEcho.
+  DO NOT show the Lambda Configuration -> Environment tab or stack Parameters tab in
+  the demo video.
+  Fix: SSM Parameter Store SecureString (read at cold start, cached) or Secrets
+  Manager; at minimum NoEcho: true. Rotate both keys after the hackathon (repo will
+  be public; keys are not in git, but treat them as exposed to anyone with console
+  access, including shared root).
+  Note: samconfig parameter_overrides only sets DataMode/Stage — confirm a plain
+  `sam deploy` keeps the key values (risk of silently resetting to 'none').
+
+[H4] IAM broader than needed                                            [VERIFIED]
+  - FetchAQI and Alerts use DynamoDBCrudPolicy (includes DeleteItem, Scan, BatchWrite).
+  - Auth role grants cognito-idp:AdminGetUser/AdminUpdateUserAttributes — unused.
+  - Recommendation role: fine (read-only + one Bedrock ARN).
+  Fix: explicit actions — FetchAQI: PutItem, Query; Alerts: PutItem, Query, UpdateItem
+  (+ Query on readings); drop unused Cognito admin permissions.
+
+[H5] Cognito gaps                                                       [VERIFIED]
+  - App client Read/WriteAttributes unrestricted -> any user can set custom:role on
+    themselves (UpdateUserAttributes with own access token).
+  - Email via COGNITO_DEFAULT (~50 emails/day account cap) -> sign-ups can stall.
+  - MFA OFF; DeletionProtection INACTIVE; no DeletionPolicy on UserPool.
+  - No forgot-password route in the auth Lambda/frontend (recovery is configured in
+    the pool but unreachable from the app).
+  - USER_PASSWORD_AUTH sends passwords through our Lambda (SRP preferred).
+  - SignUp errors reveal whether an email is registered.
+  Fix: restrict WriteAttributes (exclude custom:role), DeletionProtection ACTIVE +
+  Retain, add forgot/confirm-forgot routes, SES for email post-hackathon.
+
+[H6] Input handling returns 500s                                        [VERIFIED]
+  Malformed JSON -> 500 ("SyntaxError ... at handleCreateAlert"). Missing alert on
+  PATCH -> 500. No length cap on message/adminName (DynamoDB 400 KB item limit).
+  Fix: 400 on bad JSON, 404 on missing alert, field length limits, API GW request
+  validators/models.
+
+[H7] TTL (48h) vs Trends window (up to 7d)                              [VERIFIED]
+  Readings expire after 48h but /trends accepts hours up to 168 and UI offers "7d".
+  Fix: align TTL with the longest window, or remove 48h/7d options.
+
+[H8] Scheduled fetch                                                    [VERIFIED]
+  Healthy (0 failures), but: no on-failure destination/DLQ or alarm; in demo mode it
+  writes a fixed "poor" reading to CAMPUS#delhi every 15 min, overwriting the
+  presenter's chosen scenario; campus key differs from frontend/alerts (dtu-delhi).
+  Fix: skip writes in demo mode; align campus key; add OnFailure destination + alarm.
+
+
+======================================================================
+MEDIUM — production hygiene (mention as next steps in the writeup)
+======================================================================
+  [M1] No CI/CD — deploys from a laptop as root. Add GitHub Actions with an OIDC
+       deploy role (no static keys), `sam validate --lint` + cfn-lint, build, deploy.
+  [M2] Frontend not hosted on AWS and not in IaC. All pages are client components ->
+       S3 + CloudFront (OAC) or Amplify Hosting; verify `output: "export"` works with
+       cacheComponents. Add security headers; restrict write-route CORS to that origin
+       (currently AllowOrigin '*').
+  [M3] No idempotency on POST /alerts (double submit -> duplicate alert).
+  [M4] Trends/alerts queries don't paginate (1 MB page limit).
+  [M5] No cost-allocation tags on stack resources.
+  [M6] GuardDuty not enabled (30-day free trial) — optional.
+  [M7] Housekeeping: stale .aws-sam/ at repo root; backend/package.json missing
+       @aws-sdk/client-bedrock-runtime; per-service package.json/tsc builds unused by
+       SAM; ALERTS_TABLE_NAME injected into every function via Globals.
+  [M8] Fix ~/.aws/config profile with `region = ap-sout`.
+  [M9] SES is in sandbox (verified recipients only, 200/day) — fine for an SNS/SES
+       demo to a verified inbox; request production access only if needed.
+
+
+======================================================================
+OWNER-ONLY ACTIONS (console / account level)
+======================================================================
+  1. Submit Anthropic use-case form in Bedrock + run one playground prompt   (C1)
+  2. Request Lambda concurrency quota increase (Service Quotas)              (C7)
+  3. Create team admin IAM group/Identity Center + MFA; stop using root      (C8)
+  4. Create AWS Budget ($5/$10 alerts)                                       (C4)
+  5. Enable stack termination protection                                    (C2)
+  6. Fix `region = ap-sout` in ~/.aws/config                                 (M8)
+
+
+======================================================================
+SUGGESTED ORDER
+======================================================================
+  Owner actions 1, 4, 5 (15 min)
+  -> C2 + C3 (table protection, dev stack)                ~30 min
+  -> C1 code part + C5 + C6 (Bedrock model/timeout, runtime) ~1 h
+  -> C4 (throttling, authorizer, campus allowlist) + H2    ~1.5 h
+  -> H1 (log retention, alarms, X-Ray)                     ~1 h
+  -> H3–H8, then Medium items as time allows.

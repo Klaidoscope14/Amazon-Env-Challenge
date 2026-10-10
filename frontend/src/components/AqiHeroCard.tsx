@@ -1,61 +1,40 @@
 "use client";
 
-import type { AQIReading } from "@/lib/types";
+import type { AQIReadingResponse } from "@/lib/types";
+import { STATUS_CONFIG, formatPollutant } from "@/lib/constants";
+import { describeAge, useNow } from "@/lib/useNow";
 import DataBadge from "./DataBadge";
 
 interface AqiHeroCardProps {
-  reading: AQIReading;
-}
-
-const AQI_COLORS: Record<string, string> = {
-  Good: "text-green-600",
-  Satisfactory: "text-lime-600",
-  Moderate: "text-yellow-600",
-  Poor: "text-orange-600",
-  "Very Poor": "text-red-600",
-  Severe: "text-red-800",
-};
-
-function getStatus(aqi: number): string {
-  if (aqi <= 50) return "Good";
-  if (aqi <= 100) return "Satisfactory";
-  if (aqi <= 200) return "Moderate";
-  if (aqi <= 300) return "Poor";
-  if (aqi <= 400) return "Very Poor";
-  return "Severe";
+  reading: AQIReadingResponse;
 }
 
 function formatTimestamp(ts: string): string {
-  try {
-    return new Date(ts).toLocaleString("en-IN", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  } catch {
-    return ts;
-  }
-}
-
-function getTimeDiff(ts: string): string {
-  const diff = Date.now() - new Date(ts).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  return `${hours}h ago`;
+  const date = new Date(ts);
+  if (!Number.isFinite(date.getTime())) return ts;
+  return date.toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 export default function AqiHeroCard({ reading }: AqiHeroCardProps) {
-  const status = getStatus(reading.aqi);
-  const aqiColor = AQI_COLORS[status] || "text-gray-600";
-  const isStale =
-    Date.now() - new Date(reading.timestamp).getTime() > 2 * 60 * 60 * 1000;
+  const now = useNow();
+  // Status comes from the backend rules engine — the same one that produces
+  // the recommendation — so the two cards can never disagree.
+  const config = STATUS_CONFIG[reading.status] ?? STATUS_CONFIG.Unavailable;
+  const age = describeAge(reading.timestamp, now);
+  const isStale = reading.dataMode !== "demo" && age.isStale;
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
       {isStale && (
-        <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-          This reading is over 2 hours old. Check{" "}
+        <div
+          role="alert"
+          className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800"
+        >
+          This reading is {age.label === "Unknown time" ? "of unknown age" : `from ${age.label.toLowerCase()}`}
+          {" "}(older than 2 hours). Check{" "}
           <a
             href="https://cpcb.nic.in"
             target="_blank"
@@ -68,62 +47,64 @@ export default function AqiHeroCard({ reading }: AqiHeroCardProps) {
         </div>
       )}
 
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm text-gray-500 mb-1">Air Quality Index</p>
-          <div className="flex items-baseline gap-3">
-            <span className={`text-6xl font-bold tabular-nums ${aqiColor}`}>
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <span className={`text-6xl font-bold tabular-nums ${config.color}`}>
               {reading.aqi}
             </span>
-            <span
-              className={`text-2xl font-semibold ${aqiColor}`}
-            >
-              {status}
+            <span className={`text-2xl font-semibold ${config.color}`}>
+              {config.text}
             </span>
           </div>
         </div>
-        <DataBadge mode={reading.dataMode} />
+        <DataBadge mode={isStale ? "stale" : reading.dataMode} />
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+      <dl className="mt-4 grid grid-cols-2 gap-4 text-sm">
         <div>
-          <span className="text-gray-500">Dominant Pollutant</span>
-          <p className="font-medium mt-0.5">{reading.dominantPollutant}</p>
+          <dt className="text-gray-500">Dominant Pollutant</dt>
+          <dd className="font-medium mt-0.5 text-gray-900">
+            {formatPollutant(reading.dominantPollutant).label}
+          </dd>
         </div>
         <div>
-          <span className="text-gray-500">Station</span>
-          <p className="font-medium mt-0.5">{reading.stationName}</p>
+          <dt className="text-gray-500">Station</dt>
+          <dd className="font-medium mt-0.5 text-gray-900">{reading.stationName}</dd>
         </div>
         <div>
-          <span className="text-gray-500">Source</span>
-          <p className="font-medium mt-0.5">{reading.source}</p>
+          <dt className="text-gray-500">Source</dt>
+          <dd className="font-medium mt-0.5 text-gray-900">{reading.source}</dd>
         </div>
         <div>
-          <span className="text-gray-500">Last Updated</span>
-          <p className="font-medium mt-0.5">
-            {getTimeDiff(reading.timestamp)}
-            <span className="text-gray-400 ml-1 text-xs">
+          <dt className="text-gray-500">Last Updated</dt>
+          <dd className="font-medium mt-0.5 text-gray-900">
+            {age.label}
+            <span className="text-gray-500 ml-1 text-xs font-normal">
               ({formatTimestamp(reading.timestamp)})
             </span>
-          </p>
+          </dd>
         </div>
-      </div>
+      </dl>
 
       {reading.pollutants && Object.keys(reading.pollutants).length > 0 && (
         <div className="mt-4 pt-4 border-t border-gray-100">
           <p className="text-xs text-gray-500 mb-2">Pollutant Levels</p>
           <div className="flex flex-wrap gap-2">
-            {Object.entries(reading.pollutants).map(([key, value]) => (
-              <span
-                key={key}
-                className="inline-flex items-center bg-gray-50 rounded px-2 py-1 text-xs"
-              >
-                <span className="text-gray-500 mr-1">
-                  {key.toUpperCase()}:
+            {Object.entries(reading.pollutants).map(([key, value]) => {
+              const p = formatPollutant(key);
+              return (
+                <span
+                  key={key}
+                  className="inline-flex items-center bg-gray-50 rounded px-2 py-1 text-xs text-gray-900"
+                >
+                  <span className="text-gray-600 mr-1">{p.label}:</span>
+                  <span className="font-medium">{value}</span>
+                  {p.unit && <span className="text-gray-500 ml-0.5">{p.unit}</span>}
                 </span>
-                <span className="font-medium">{value}</span>
-              </span>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

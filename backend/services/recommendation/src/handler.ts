@@ -10,19 +10,31 @@ import {
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { AQIReading } from "../../../shared/src/types.js";
 import { evaluate, evaluateUnavailable } from "../../../shared/src/evaluate.js";
+import { fetchDemoReading, isDemoScenario } from "../../../shared/src/demo.js";
 
 const dynamodb = new DynamoDBClient({});
 const bedrock = new BedrockRuntimeClient({ region: "ap-south-1" });
 const AQI_TABLE_NAME = process.env.AQI_TABLE_NAME!;
 const BEDROCK_ENABLED = process.env.BEDROCK_ENABLED === "true";
+const DATA_MODE = process.env.DATA_MODE || "demo";
 
 export async function handler(
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> {
   const campus = event.queryStringParameters?.campus || "dtu-delhi";
+  const scenario = event.queryStringParameters?.scenario;
+
+  if (DATA_MODE === "demo" && scenario && !isDemoScenario(scenario)) {
+    return respond(400, { error: `Unknown demo scenario: ${scenario}` });
+  }
 
   try {
-    const reading = await getLatestReading(campus);
+    // In demo mode, evaluate the same fixture the dashboard is showing rather
+    // than whatever reading happens to be newest in the table.
+    const reading =
+      DATA_MODE === "demo"
+        ? fetchDemoReading(campus, scenario)
+        : await getLatestReading(campus);
 
     if (!reading) {
       return respond(200, evaluateUnavailable());
@@ -30,7 +42,7 @@ export async function handler(
 
     const recommendation = evaluate(reading);
 
-    if (BEDROCK_ENABLED && recommendation.statusLevel >= 2) {
+    if (BEDROCK_ENABLED && DATA_MODE !== "demo" && recommendation.statusLevel >= 2) {
       try {
         const recentReadings = await getRecentReadings(campus, 6);
         recommendation.aiNarrative = await generateNarrative(

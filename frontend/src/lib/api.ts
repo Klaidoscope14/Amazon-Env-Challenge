@@ -1,8 +1,19 @@
-import { AQIReading, Recommendation, Alert, TrendResponse } from "./types";
+import { AQIReadingResponse, Recommendation, Alert, TrendResponse } from "./types";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
   "https://auzr0rreg6.execute-api.ap-south-1.amazonaws.com/prod";
+
+/** Carries the HTTP status so callers can tell "no data" (503) from failures. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
 
 async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
@@ -15,28 +26,36 @@ async function fetchApi<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: "Request failed" }));
-    throw new Error(error.error || `API error: ${res.status}`);
+    throw new ApiError(error.error || `API error: ${res.status}`, res.status);
   }
 
   return res.json();
+}
+
+function query(params: Record<string, string | number | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") search.set(key, String(value));
+  }
+  return search.toString();
 }
 
 export async function getAQI(
   campus: string,
   scenario?: string,
   city?: string
-): Promise<AQIReading> {
-  const params = new URLSearchParams({ campus });
-  if (scenario) params.set("scenario", scenario);
-  if (city) params.set("city", city);
-  return fetchApi<AQIReading>(`/api/v1/aqi/current?${params}`);
+): Promise<AQIReadingResponse> {
+  return fetchApi<AQIReadingResponse>(
+    `/api/v1/aqi/current?${query({ campus, scenario, city })}`
+  );
 }
 
 export async function getRecommendation(
-  campus: string
+  campus: string,
+  scenario?: string
 ): Promise<Recommendation> {
   return fetchApi<Recommendation>(
-    `/api/v1/recommendations/current?campus=${campus}`
+    `/api/v1/recommendations/current?${query({ campus, scenario })}`
   );
 }
 
@@ -45,6 +64,7 @@ export async function createAlert(data: {
   audience: string;
   message: string;
   adminName: string;
+  scenario?: string;
 }): Promise<Alert> {
   return fetchApi<Alert>("/api/v1/alerts", {
     method: "POST",
@@ -56,30 +76,31 @@ export async function getAlerts(
   campus: string
 ): Promise<{ alerts: Alert[]; count: number }> {
   return fetchApi<{ alerts: Alert[]; count: number }>(
-    `/api/v1/alerts?campus=${campus}`
+    `/api/v1/alerts?${query({ campus })}`
   );
 }
 
 export async function recordDecision(
-  alertId: string,
-  decision: string,
-  campus: string
+  alert: Pick<Alert, "alertId" | "createdAt" | "campus">,
+  decision: string
 ): Promise<{ success: boolean }> {
   return fetchApi<{ success: boolean }>(
-    `/api/v1/alerts/${alertId}/decision?campus=${campus}`,
+    `/api/v1/alerts/${encodeURIComponent(alert.alertId)}/decision?${query({ campus: alert.campus })}`,
     {
       method: "PATCH",
-      body: JSON.stringify({ decision }),
+      // createdAt lets the backend address the alert by its exact key.
+      body: JSON.stringify({ decision, createdAt: alert.createdAt }),
     }
   );
 }
 
 export async function getTrends(
   campus: string,
-  hours: number = 24
+  hours: number = 24,
+  scenario?: string
 ): Promise<TrendResponse> {
   return fetchApi<TrendResponse>(
-    `/api/v1/trends?campus=${campus}&hours=${hours}`
+    `/api/v1/trends?${query({ campus, hours, scenario })}`
   );
 }
 

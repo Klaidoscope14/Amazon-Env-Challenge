@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect, useId, useRef, useState } from "react";
 import type { TrendResponse } from "@/lib/types";
+import { AQI_BANDS, STATUS_CONFIG, statusForAqi } from "@/lib/constants";
+import DataBadge from "./DataBadge";
 
 interface TrendChartProps {
   trends: TrendResponse;
@@ -16,32 +19,7 @@ const PERIOD_OPTIONS = [
   { value: 168, label: "7d" },
 ];
 
-const ZONE_COLORS = [
-  { max: 50, color: "#22c55e", label: "Good" },
-  { max: 100, color: "#84cc16", label: "Satisfactory" },
-  { max: 200, color: "#eab308", label: "Moderate" },
-  { max: 300, color: "#f97316", label: "Poor" },
-  { max: 400, color: "#ef4444", label: "Very Poor" },
-  { max: 500, color: "#7f1d1d", label: "Severe" },
-];
-
-function getColor(aqi: number): string {
-  for (const zone of ZONE_COLORS) {
-    if (aqi <= zone.max) return zone.color;
-  }
-  return ZONE_COLORS[ZONE_COLORS.length - 1].color;
-}
-
-function formatTime(ts: string): string {
-  try {
-    return new Date(ts).toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "";
-  }
-}
+const Y_STOPS = [100, 200, 300, 400, 500];
 
 export default function TrendChart({
   trends,
@@ -49,68 +27,69 @@ export default function TrendChart({
   onHoursChange,
 }: TrendChartProps) {
   const points = trends.points;
+  const isDemo = trends.dataMode === "demo";
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-medium text-gray-500">AQI Trend</h3>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
-          <div className="hidden sm:flex items-center gap-2 mr-3 text-xs text-gray-400">
-            {ZONE_COLORS.slice(0, 4).map((z) => (
-              <span key={z.label} className="flex items-center gap-1">
-                <span
-                  className="w-2 h-2 rounded-full inline-block"
-                  style={{ backgroundColor: z.color }}
-                />
-                {z.label}
-              </span>
-            ))}
-          </div>
-          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-            {PERIOD_OPTIONS.map((opt) => (
-              <button
-                key={opt.value}
-                onClick={() => onHoursChange(opt.value)}
-                className={`px-2.5 py-1 text-xs font-medium transition-colors ${
-                  selectedHours === opt.value
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-500 hover:bg-gray-50"
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+          <h2 className="text-sm font-medium text-gray-700">AQI Trend</h2>
+          {isDemo && <DataBadge mode="demo" />}
+        </div>
+        <div
+          role="group"
+          aria-label="Trend period"
+          className="flex rounded-lg border border-gray-200 overflow-hidden"
+        >
+          {PERIOD_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => onHoursChange(opt.value)}
+              aria-pressed={selectedHours === opt.value}
+              className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+                selectedHours === opt.value
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
       </div>
 
+      {isDemo && (
+        <p className="text-xs text-purple-700 mb-3">
+          Synthetic demo series shaped like a typical Delhi day — not measured data.
+        </p>
+      )}
+
+      <ul className="flex flex-wrap gap-x-3 gap-y-1 mb-3 text-xs text-gray-600">
+        {AQI_BANDS.map((band) => (
+          <li key={band.status} className="flex items-center gap-1">
+            <span
+              className="w-2.5 h-2.5 rounded-sm inline-block"
+              style={{ backgroundColor: STATUS_CONFIG[band.status].hex }}
+              aria-hidden="true"
+            />
+            {band.status}
+          </li>
+        ))}
+      </ul>
+
       {points.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
-          <svg
-            className="w-12 h-12 text-gray-200 mb-3"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={1.5}
-              d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
-            />
-          </svg>
-          <p className="text-sm font-medium text-gray-400">
-            No trend data yet
+          <p className="text-sm font-medium text-gray-600">
+            No readings stored for this period yet
           </p>
-          <p className="text-xs text-gray-300 mt-1 max-w-xs">
-            The system fetches AQI readings every 15 minutes. Trend data will
-            appear here as readings accumulate.
+          <p className="text-xs text-gray-500 mt-1 max-w-xs">
+            Readings appear here as they are collected. Try a longer period.
           </p>
         </div>
       ) : (
         <>
-          <ChartSVG points={points} />
-          <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
+          <ChartSVG points={points} hours={selectedHours} />
+          <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
             <span>{points.length} readings</span>
             <span>
               Range: {Math.min(...points.map((p) => p.aqi))} &ndash;{" "}
@@ -123,118 +102,164 @@ export default function TrendChart({
   );
 }
 
+/** Tracks an element's width so the SVG can draw at real pixel size. */
+function useWidth<T extends HTMLElement>(fallback: number) {
+  const ref = useRef<T>(null);
+  const [width, setWidth] = useState(fallback);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setWidth(Math.max(240, Math.round(entry.contentRect.width)));
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return [ref, width] as const;
+}
+
+function formatTick(ts: string, hours: number): string {
+  const date = new Date(ts);
+  return hours > 24
+    ? date.toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric" })
+    : date.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+}
+
 function ChartSVG({
   points,
+  hours,
 }: {
   points: TrendResponse["points"];
+  hours: number;
 }) {
-  const maxAqi = Math.max(...points.map((p) => p.aqi), 50);
-  const chartHeight = 160;
-  const chartWidth = 100;
-  const yMax = Math.ceil(maxAqi / 50) * 50;
+  const [containerRef, width] = useWidth<HTMLDivElement>(640);
+  const gradientId = useId();
 
-  const pathPoints = points.map((p, i) => {
-    const x =
-      points.length === 1 ? 50 : (i / (points.length - 1)) * chartWidth;
-    const y = chartHeight - (p.aqi / yMax) * chartHeight;
-    return { x, y, aqi: p.aqi, time: p.timestamp };
-  });
+  const height = 220;
+  const pad = { top: 8, right: 8, bottom: 26, left: 36 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
 
-  const linePath =
-    "M " + pathPoints.map((p) => `${p.x} ${p.y}`).join(" L ");
+  const maxAqi = Math.max(...points.map((p) => p.aqi));
+  const yMax = Y_STOPS.find((stop) => stop >= maxAqi * 1.05) ?? Math.ceil(maxAqi / 100) * 100;
+  const y = (aqi: number) => pad.top + plotH - (Math.min(aqi, yMax) / yMax) * plotH;
+  const x = (i: number) =>
+    pad.left + (points.length === 1 ? plotW / 2 : (i / (points.length - 1)) * plotW);
 
+  const coords = points.map((p, i) => ({ x: x(i), y: y(p.aqi), p }));
+  const linePath = "M " + coords.map((c) => `${c.x} ${c.y}`).join(" L ");
   const areaPath =
     linePath +
-    ` L ${pathPoints[pathPoints.length - 1].x} ${chartHeight} L ${pathPoints[0].x} ${chartHeight} Z`;
+    ` L ${coords[coords.length - 1].x} ${pad.top + plotH} L ${coords[0].x} ${pad.top + plotH} Z`;
+  const latestColor = STATUS_CONFIG[statusForAqi(points[points.length - 1].aqi)].hex;
 
-  const latestColor = getColor(points[points.length - 1].aqi);
+  // Faint CPCB band backgrounds, clipped to the visible range.
+  const bands = AQI_BANDS.map((band, i) => ({
+    status: band.status,
+    from: i === 0 ? 0 : AQI_BANDS[i - 1].max,
+    to: Math.min(band.max, yMax),
+  })).filter((b) => b.from < yMax);
 
-  const yTicks = [];
-  const yStep = Math.max(50, Math.floor(yMax / 4 / 50) * 50);
-  for (let v = 0; v <= yMax; v += yStep) {
-    yTicks.push(v);
-  }
+  const tickCount = Math.min(points.length, width < 420 ? 3 : 5);
+  const tickIndices = Array.from({ length: tickCount }, (_, k) =>
+    tickCount === 1 ? 0 : Math.round((k / (tickCount - 1)) * (points.length - 1))
+  );
 
-  const labelIndices: number[] = [];
-  if (points.length <= 6) {
-    labelIndices.push(...points.map((_, i) => i));
-  } else {
-    const step = Math.floor(points.length / 5);
-    for (let i = 0; i < points.length; i += step) labelIndices.push(i);
-    if (!labelIndices.includes(points.length - 1))
-      labelIndices.push(points.length - 1);
-  }
+  const first = points[0];
+  const last = points[points.length - 1];
 
   return (
-    <svg
-      viewBox={`-30 -10 ${chartWidth + 40} ${chartHeight + 30}`}
-      className="w-full"
-      preserveAspectRatio="none"
-      style={{ height: 200 }}
-    >
-      {yTicks.map((v) => {
-        const y = chartHeight - (v / yMax) * chartHeight;
-        return (
+    <div ref={containerRef} className="w-full">
+      <svg
+        width={width}
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-labelledby={`${gradientId}-title`}
+      >
+        <title id={`${gradientId}-title`}>
+          {`AQI from ${first.aqi} to ${last.aqi} over the selected period; latest ${last.aqi} (${statusForAqi(last.aqi)}).`}
+        </title>
+
+        {bands.map((b) => (
+          <rect
+            key={b.status}
+            x={pad.left}
+            width={plotW}
+            y={y(b.to)}
+            height={y(b.from) - y(b.to)}
+            fill={STATUS_CONFIG[b.status].hex}
+            opacity={0.06}
+          />
+        ))}
+
+        {[0, ...Y_STOPS.filter((s) => s <= yMax)].map((v) => (
           <g key={v}>
             <line
-              x1={0}
-              y1={y}
-              x2={chartWidth}
-              y2={y}
+              x1={pad.left}
+              x2={pad.left + plotW}
+              y1={y(v)}
+              y2={y(v)}
               stroke="#e5e7eb"
-              strokeWidth={0.3}
+              strokeWidth={1}
             />
             <text
-              x={-4}
-              y={y + 1}
+              x={pad.left - 6}
+              y={y(v)}
               textAnchor="end"
-              fontSize={3}
-              fill="#9ca3af"
+              dominantBaseline="middle"
+              fontSize={11}
+              fill="#6b7280"
             >
               {v}
             </text>
           </g>
-        );
-      })}
+        ))}
 
-      <defs>
-        <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={latestColor} stopOpacity={0.3} />
-          <stop offset="100%" stopColor={latestColor} stopOpacity={0.02} />
-        </linearGradient>
-      </defs>
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={latestColor} stopOpacity={0.25} />
+            <stop offset="100%" stopColor={latestColor} stopOpacity={0.02} />
+          </linearGradient>
+        </defs>
 
-      <path d={areaPath} fill="url(#trendFill)" />
-      <path
-        d={linePath}
-        fill="none"
-        stroke={latestColor}
-        strokeWidth={0.8}
-        strokeLinejoin="round"
-      />
-
-      {pathPoints.map((p, i) => (
-        <circle
-          key={i}
-          cx={p.x}
-          cy={p.y}
-          r={points.length < 20 ? 1 : 0.5}
-          fill={getColor(p.aqi)}
+        <path d={areaPath} fill={`url(#${gradientId})`} />
+        <path
+          d={linePath}
+          fill="none"
+          stroke={latestColor}
+          strokeWidth={2}
+          strokeLinejoin="round"
         />
-      ))}
 
-      {labelIndices.map((i) => (
-        <text
-          key={i}
-          x={pathPoints[i].x}
-          y={chartHeight + 8}
-          textAnchor="middle"
-          fontSize={2.5}
-          fill="#9ca3af"
-        >
-          {formatTime(points[i].timestamp)}
-        </text>
-      ))}
-    </svg>
+        {points.length <= 80 &&
+          coords.map((c, i) => (
+            <circle
+              key={i}
+              cx={c.x}
+              cy={c.y}
+              r={3}
+              fill={STATUS_CONFIG[statusForAqi(c.p.aqi)].hex}
+            >
+              <title>{`AQI ${c.p.aqi} · ${formatTick(c.p.timestamp, 48)}`}</title>
+            </circle>
+          ))}
+
+        {tickIndices.map((i, k) => (
+          <text
+            key={i}
+            x={coords[i].x}
+            y={height - 6}
+            textAnchor={k === 0 ? "start" : k === tickIndices.length - 1 ? "end" : "middle"}
+            fontSize={11}
+            fill="#6b7280"
+          >
+            {formatTick(points[i].timestamp, hours)}
+          </text>
+        ))}
+      </svg>
+    </div>
   );
 }

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { Recommendation } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
+import { formatPollutant } from "@/lib/constants";
 import StatusBadge from "./StatusBadge";
 import DataBadge from "./DataBadge";
 
@@ -102,7 +103,7 @@ export default function RecommendationCard({
             <span className="text-gray-500 font-medium">Evidence:</span>
             <p className="mt-0.5">
               AQI {recommendation.evidence.aqi} (
-              {recommendation.evidence.dominantPollutant}) at{" "}
+              {formatPollutant(recommendation.evidence.dominantPollutant).label}) at{" "}
               {recommendation.evidence.stationName}
             </p>
             <p className="text-xs text-gray-400">
@@ -118,7 +119,7 @@ export default function RecommendationCard({
                   {Object.entries(recommendation.evidence.pollutants).map(
                     ([k, v]) => (
                       <span key={k} className="bg-white rounded px-2 py-0.5 text-xs border">
-                        {k.toUpperCase()}: {v}
+                        {formatPollutant(k).label}: {v} {formatPollutant(k).unit}
                       </span>
                     )
                   )}

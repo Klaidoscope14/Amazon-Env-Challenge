@@ -59,8 +59,12 @@ export async function fetchFromOpenAQ(
       }
     }
 
-    const pm25 = pollutants["pm25"] ?? pollutants["pm2.5"] ?? 0;
+    const pm25 = pollutants["pm25"] ?? pollutants["pm2.5"];
     const aqi = pm25ToAqi(pm25);
+    if (aqi === null) {
+      console.warn(`OpenAQ returned no usable PM2.5 value for ${city}`);
+      return null;
+    }
 
     return {
       campus,
@@ -79,18 +83,23 @@ export async function fetchFromOpenAQ(
   }
 }
 
-function pm25ToAqi(pm25: number): number {
+// CPCB PM2.5 (24h, µg/m³) breakpoints, matched by upper bound so fractional
+// concentrations between the published integer ranges are interpolated
+// instead of falling through. Returns null for unusable input.
+function pm25ToAqi(pm25: number | undefined): number | null {
+  if (typeof pm25 !== "number" || !Number.isFinite(pm25) || pm25 < 0) return null;
+
   const breakpoints = [
     { cLow: 0, cHigh: 30, iLow: 0, iHigh: 50 },
-    { cLow: 31, cHigh: 60, iLow: 51, iHigh: 100 },
-    { cLow: 61, cHigh: 90, iLow: 101, iHigh: 200 },
-    { cLow: 91, cHigh: 120, iLow: 201, iHigh: 300 },
-    { cLow: 121, cHigh: 250, iLow: 301, iHigh: 400 },
-    { cLow: 251, cHigh: 500, iLow: 401, iHigh: 500 },
+    { cLow: 30, cHigh: 60, iLow: 50, iHigh: 100 },
+    { cLow: 60, cHigh: 90, iLow: 100, iHigh: 200 },
+    { cLow: 90, cHigh: 120, iLow: 200, iHigh: 300 },
+    { cLow: 120, cHigh: 250, iLow: 300, iHigh: 400 },
+    { cLow: 250, cHigh: 500, iLow: 400, iHigh: 500 },
   ];
 
   for (const bp of breakpoints) {
-    if (pm25 >= bp.cLow && pm25 <= bp.cHigh) {
+    if (pm25 <= bp.cHigh) {
       return Math.round(
         ((bp.iHigh - bp.iLow) / (bp.cHigh - bp.cLow)) * (pm25 - bp.cLow) + bp.iLow
       );

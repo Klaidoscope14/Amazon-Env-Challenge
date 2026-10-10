@@ -1,6 +1,9 @@
 # SAM deploy configuration
-# Run: cd infrastructure && sam deploy --guided (first time)
-# Then: cd infrastructure && sam deploy (subsequent deploys)
+# Prod:  cd infrastructure && sam build && sam deploy
+# Dev:   cd infrastructure && sam build && sam deploy --config-env dev
+# Each environment is its own stack. Never deploy Stage=dev into the prod stack:
+# changing Stage renames the tables and CloudFormation would replace them.
+# Parameters not listed here (e.g. API keys) keep their previously deployed values.
 
 version = 0.1
 
@@ -11,4 +14,13 @@ s3_prefix = "breathesafe-campus"
 region = "ap-south-1"
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
-parameter_overrides = "DataMode=demo Stage=prod"
+parameter_overrides = "DataMode=demo Stage=prod BedrockEnabled=false"
+
+[dev.deploy.parameters]
+stack_name = "breathesafe-campus-dev"
+resolve_s3 = true
+s3_prefix = "breathesafe-campus-dev"
+region = "ap-south-1"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false
+parameter_overrides = "DataMode=demo Stage=dev BedrockEnabled=false"

@@ -1,0 +1,329 @@
+BREATHESAFE CAMPUS — CONSOLIDATED AUDIT REPORT
+WeMakeDevs x AWS Environmental Hacks (Air track) — submission window ends Sun 11 Oct 2026
+Report date: 2026-10-10
+Sources: Product_Audit.txt (P*), Infra_Audit.txt (C*/H*/M*), Backend_Audit.txt (B*),
+         Frontend_Audit.txt (F*). Original IDs are cited on every item so details,
+         evidence and file/line references can be looked up in the source audit.
+
+----------------------------------------------------------------------
+1. EXECUTIVE SUMMARY
+----------------------------------------------------------------------
+The idea fits the track exactly ("school safety on bad days" is a listed Air topic)
+and the core AWS path works. The build is NOT podium-ready yet. Four themes cut
+across all four audits:
+
+  A. WRONG OR UNTRUSTWORTHY OUTPUT — the rules engine treats fractional/invalid AQI as
+     "Severe"; one public GET can push the campus to "Emergency protocol"; timestamps
+     are overwritten or misparsed; the audit log can snapshot a different AQI than the
+     admin saw and decisions can be silently overwritten. For an "auditable decision
+     engine" this is the biggest risk.
+  B. THE DEMO WILL VISIBLY BREAK — dark mode hides content, existing alerts don't show
+     (campus key mismatch), decision recording fails after 10 alerts, the trend chart
+     is an unlabeled flat line of demo data, and Bedrock fails on every call.
+  C. "ACT" GOES NOWHERE — alerts are marked "sent" but no one receives them: no
+     recipient view and no delivery. This is the main product gap for "Idea & Impact".
+  D. NO GUARDRAILS — public write endpoints, no throttling/budget, an unprotected audit
+     table, no monitoring, root-account usage, plaintext API keys.
+
+Raw findings: 77 (Product 14, Infra 25, Backend 21, Frontend 17)
+Consolidated: 60 items after de-duplication, in 7 phases (0–6).
+
+  Phase 0  Owner / console actions ............  7 items   ~45 min   TODAY
+  Phase 1  Demo-breakers & correctness ......... 12 items   ~7 h      BEFORE RECORDING
+  Phase 2  Close the loop (win factor) .........  6 items   ~5–6 h    BEFORE RECORDING
+  Phase 3  Security & hardening ................ 10 items   ~4–5 h    BEFORE REPO PUBLIC
+  Phase 4  Submission & credibility ............  8 items   ~4 h      BEFORE SUBMITTING
+  Phase 5  Stretch differentiators .............  4 items   2–3 h each IF TIME
+  Phase 6  Post-hackathon backlog .............. 13 items   —         AFTER EVENT
+  (+ out of scope here, owner-handled tomorrow: make repo public, record video)
+
+CUT LINE if time runs short: Phase 0 -> Phase 1 -> items 2.1–2.3 of Phase 2 ->
+3.1–3.3 of Phase 3 -> Phase 4. Record the video only after Phase 1 + 2.1–2.3.
+
+Areas: [FE] frontend  [BE] backend  [INF] SAM/AWS  [CON] AWS console  [DOC] docs
+
+
+======================================================================
+PHASE 0 — OWNER / CONSOLE ACTIONS (today, ~45 min, no code)
+======================================================================
+STATUS (2026-10-10 evening):
+  0.3 DONE  termination protection enabled
+  0.4 DONE  quota increase 10 -> 1000 requested (PENDING with AWS)
+  0.6 DONE  ~/.aws/config default region fixed (backup kept)
+  0.1 BLOCKED  Use-case form rejected: "Your account is not authorized...".
+        Root cause: account is on the AWS FREE plan (accountPlanType FREE, $120
+        credits left, expires 2027-03-25). Bedrock is blocked for ALL models,
+        including first-party Amazon Nova (test Converse -> "Operation not
+        allowed"); Amazon Translate and GuardDuty return
+        SubscriptionRequiredException (same free-plan signature).
+        Amazon Polly WORKS (Hindi neural voice Kajal tested OK).
+        Options: (a) upgrade to the Paid plan (likely lifts the restriction — not
+        confirmed; spend beyond credits is billed; prefer Nova over Anthropic since
+        Marketplace models may not be credit-eligible), (b) free "Account and
+        billing" support case (slow), (c) design without Bedrock — see 2.5.
+  0.1 RESOLVED (alternative): no paid services. AI notice drafting will use the
+        Gemini API free tier (no billing on the Google project) layered on top of
+        reviewed EN+HI templates (fallback on error/429) + Amazon Polly audio.
+        Key stored by owner in SSM SecureString /breathesafe/gemini-api-key
+        (aws/ssm KMS key, v1). Lambda IAM must allow ssm:GetParameter on that ARN only.
+  0.2 DONE  Budget "breathesafe-monthly": $10/month, credits excluded (alerts reflect
+        real usage), email alerts at 50% actual, 100% actual, 100% forecasted.
+  0.4 IN PROGRESS  AWS opened support case 179163500300904 for the 10 -> 1000
+        request; owner to watch Support Center and answer if AWS asks for details.
+  0.5, 0.7 — pending owner action.
+
+0.1 Authorise Bedrock for Anthropic models                          [CON]  10 min
+    Submit the Anthropic use-case form in the Bedrock console, then run one prompt
+    in the playground so the Marketplace subscription is created. Without this every
+    Bedrock call fails ("Operation not allowed", 28x in 24h).      (C1, B10, P0-7)
+0.2 Create an AWS Budget ($5 / $10 email alerts)                     [CON]   5 min
+    No budget or billing alarm exists; API is public and unthrottled.     (C4)
+0.3 Enable stack termination protection                             [CON]   2 min
+                                                                          (C2)
+0.4 Request Lambda concurrency increase (Service Quotas, ap-south-1) [CON]   5 min
+    Account limit is 10 shared by 5 functions; approval can take time.    (C7)
+0.5 Stop using root: team admin IAM group (or Identity Center) + MFA,
+    password policy; use that identity for `aws login` / SAM.        [CON]  15 min
+                                                                          (C8)
+0.6 Fix `region = ap-sout` typo in ~/.aws/config                    [local] 1 min
+                                                                          (M8)
+0.7 Before recording: delete demo rows from the prod AQI table (incl. the 352
+    spike and audit-generated rows) and rehearse in a dev stack (see 1.10).
+                                                       (P0-6, Frontend note)
+
+
+======================================================================
+PHASE 1 — DEMO-BREAKERS & CORRECTNESS (before recording, ~7 h)
+Everything here is visible on screen or produces a wrong decision.
+======================================================================
+STATUS (2026-10-10 night): all 12 items IMPLEMENTED in the working tree (not yet
+committed or deployed). Verified locally: sam validate --lint, sam build, built
+handlers in demo mode (scenario allowlist 400s, no DB writes, synthetic labelled
+trend, hours=abc -> 400), engine edge cases (fractional/invalid AQI, NaN/future
+timestamps), frontend tsc + next build, lint 3 -> 1 (auth.tsx, Phase 4.5), UI
+against a local mock API (OS dark mode, parallel fetch, hero/recommendation agree,
+chart legible desktop + 375px, 7d date ticks). Pending: deploy to dev stack ->
+end-to-end alerts/decision test -> prod deploy; error-card rendering to be checked
+on the dev stack (browser pane was hidden during local test).
+Notes: demo mode no longer persists readings; recommendations/trends/alerts take
+`scenario`; demo source/station relabelled "Demo fixture" / "(sample values)";
+backend now declares @aws-sdk/client-bedrock-runtime; BedrockEnabled=false.
+1.1 Fix dark mode                                                   [FE]  30 min
+    globals.css leftovers make card values #ededed on white and the H1 near-black on
+    black; Arial overrides Geist. Remove the dark :root override + body rules.
+                                                                  (P0-1, F1)
+1.2 Rules engine must fail safe, not "Severe"                       [BE]  45 min
+    getThresholdForAqi maps 50.5/100.4/200.7/-5/NaN/undefined to Severe. Use upper-
+    bound comparisons on a rounded value; invalid input -> explicit "unknown" state.
+    Same gap bug in pm25ToAqi (returns 500).                    (B1, B4, F3)
+1.3 Close the "?scenario=constructor" poisoning hole                [BE]  20 min
+    Unvalidated scenario lookup hits Object prototype members, stores a reading with
+    no AQI, and the whole campus shows "Emergency protocol". Allowlist scenarios,
+    400 on unknown.                                                       (B2)
+1.4 Timestamps: stop overwriting, validate, derive staleness       [BE+FE] 45 min
+    respond() replaces reading.timestamp with server time (stale banner can never
+    show); NaN ages count as fresh; future times show "Just now"; demo/cached never
+    become stale. Rename response key, treat invalid/future as stale-unknown.
+                                                      (P0-2, B5, F4)
+1.5 One campus key everywhere; remove geolocation for the demo     [FE+INF] 45 min
+    Frontend uses "delhi", alerts live under "dtu-delhi" (Alerts page shows empty);
+    useLocation runs per component and per alert row; header says "Delhi (default)".
+    Use DEFAULT_CAMPUS / CAMPUS_DISPLAY_NAME via context; align scheduler input.
+                                         (P0-4, F2, B18, H8)
+1.6 Fix decision recording for >10 alerts                           [BE]  30 min
+    Query Limit is applied before the alertId filter on the 10 oldest items -> 500.
+    Key lookup via createdAt (or GSI); 404 when missing.            (P0-3, B7)
+1.7 Demo mode honesty & control                                [FE+BE+INF] 1.5 h
+    - GET /aqi must not write in demo mode; scheduler must not write demo readings
+      (stops write amplification and scenario races between viewers).
+    - Show the "Demo scenario" control only in demo mode, labelled as presenter-only.
+    - Recommendation must use the scenario/reading on screen, not "latest row".
+    - Trend chart: include dataMode in points; demo badge or hide trends in demo.
+                               (P0-6, F4, F11, B12, H8, C4 partial)
+1.8 Single source of truth for status + parallel fetch              [FE]  45 min
+    Hero card computes status client-side; recommendation card shows backend status
+    — they can disagree. Render backend status only; fetch AQI + recommendation in
+    parallel (currently ~3.2s waterfall vs PRD's 3s target).    (F3, F10)
+1.9 Error / unavailable states on every query                       [FE]  45 min
+    Recommendation and trend errors render nothing; backend 503 shows a generic
+    error instead of "Data unavailable — last reading at …"; add app/error.tsx.
+                                                   (F4, F13, P2-3)
+1.10 Protect the audit trail + isolate rehearsal environment        [INF] 30 min
+    Both tables: DeletionPolicy/UpdateReplacePolicy Retain, DeletionProtectionEnabled,
+    PITR on alerts. Add [dev] samconfig with its own stack_name (a Stage=dev deploy
+    today would replace prod tables).                              (C2, C3)
+1.11 Lambda timeouts <= 25s and runtime nodejs22.x                  [INF] 45 min
+    API Gateway cuts at 29s; functions allow 30/60s. Node 20 is EOL (unpatched).
+    Rebuild + smoke-test every route after the runtime bump.        (C5, C6)
+1.12 Trend chart legibility                                         [FE]  45 min
+    preserveAspectRatio="none" distorts text/points; 2.5–3 unit fonts are unreadable;
+    legend omits Very Poor and Severe; no dates on 48h/7d.                (F9)
+
+
+======================================================================
+PHASE 2 — CLOSE THE LOOP: SEE -> ACT -> RECORD (before recording, ~5–6 h)
+This is what separates the entry from "another AQI dashboard".
+======================================================================
+2.1 Public recipient view /notice (no login)                        [FE]  1.5 h
+    Latest active alert in plain language, status, time, "Issued by". This is the
+    PRD's student/staff view that was never built.              (P0-5, F7)
+2.2 Real delivery: SNS email (+ WhatsApp share link)             [BE+INF+FE] 1.5 h
+    Publish on POST /alerts to an SNS topic with a verified inbox; show "Email sent"
+    vs "In-app only". wa.me share with prefilled text + /notice link. SES is in
+    sandbox (verified recipients only) — fine for the demo.   (P0-5, M9)
+2.3 "Record your decision" prompt right after sending               [FE]  30 min
+    PRD flow; today decisions are only reachable from the Alerts page.     (F7)
+2.4 Make the audit trail trustworthy                                [BE+FE] 1 h
+    Client sends fetchedAt/SK of the displayed reading; createAlert snapshots exactly
+    that item (reject if missing, no empty {} snapshots); decisions append-only or
+    conditional (no silent overwrite) with decidedBy + timestamp; alert status
+    "in-app"/"emailed" instead of always "sent".            (B6, B11, F7)
+2.5 Bedrock with a visible job (after 0.1)                          [BE+FE] 1.5 h
+    "Draft parent notice" in English + Hindi from the deterministic recommendation,
+    with an "AI draft — review before sending" badge. Env-configured model (consider
+    in.anthropic.claude-haiku-4-5 India profile + IAM for profile and model ARNs),
+    ~6s timeout, cache per reading, output post-check, failure metric.
+                                                (P0-7, C1, B10)
+    FALLBACK if Bedrock stays blocked (see Phase 0 status): pre-written, reviewed
+    English + Hindi notice templates per CPCB band (deterministic — fits the "no
+    hallucination" principle) + Amazon Polly "PA announcement" audio (verified working
+    on this account, Hindi neural voice). Hide the "AI Insight" card and set
+    BedrockEnabled=false so nothing on screen depends on Bedrock.
+2.6 Alerts page polish                                             [FE]  30 min
+    Expandable evidence per alert, readable audience labels, show AQI 0 correctly,
+    decision timestamp/author, confirmation before broadcasting to "All".  (F7)
+
+
+======================================================================
+PHASE 3 — SECURITY & HARDENING (before the repo goes public, ~4–5 h)
+======================================================================
+3.1 Authenticate write endpoints end-to-end                      [INF+BE+FE] 1.5 h
+    Cognito authorizer on POST /alerts and PATCH /decision; adminName/decidedBy from
+    token claims (remove the editable name field); fetchApi sends the token and
+    refreshes once on 401. Add GatewayResponses DEFAULT_4XX/5XX with CORS headers or
+    401s appear as CORS errors.                (P1-3, C4, F5, H2, B6)
+3.2 Throttling + campus allowlist                                   [INF+BE] 30 min
+    Stage throttling (e.g. 20 rps / burst 40); reject unknown campus values (stops
+    arbitrary partitions like CAMPUS#patna).                           (C4, B8)
+3.3 Input validation & status codes                                 [BE]  1.5 h
+    Shared validate()/HttpError: 400 on bad JSON (today 500), ?hours=abc (RangeError
+    500), audience enum, field length caps; 404 not-found; map Cognito errors to
+    proper codes with generic messages (no signup enumeration).
+                                                 (H6, B8, B9, B13)
+3.4 Secrets out of plaintext                                        [INF] 30 min
+    CPCB/OpenAQ keys are visible in stack params and Lambda env. Move to SSM
+    SecureString (or NoEcho at minimum). Never show those console tabs on video;
+    rotate keys after the event.                                           (H3)
+3.5 IAM least privilege                                             [INF] 20 min
+    Replace DynamoDBCrudPolicy with explicit actions; remove unused Cognito admin
+    permissions from the auth role.                                        (H4)
+3.6 Cognito hardening (minimum)                                     [INF] 20 min
+    Restrict client WriteAttributes (users can set custom:role today); pool
+    DeletionProtection + Retain.                                    (H5, B20)
+3.7 Login open redirect                                             [FE]  10 min
+    Validate ?redirect= is a same-site path.                               (F6)
+3.8 Monitoring baseline                                             [INF]  1 h
+    Stack-managed log groups (14-day retention; today never expire), alarms on API
+    5XX / Lambda errors & throttles / Bedrock failures -> SNS email, X-Ray tracing
+    (service map is good video footage), API access logs.      (H1, B19)
+3.9 Scheduled fetch resilience                                      [INF] 15 min
+    On-failure destination + alarm.                                        (H8)
+3.10 TTL vs trends window                                           [INF+FE] 10 min
+    Readings expire at 48h but UI offers 7d — align.                (H7, B11)
+
+
+======================================================================
+PHASE 4 — SUBMISSION & CREDIBILITY (before submitting, ~4 h)
+Judges and fast-track reviewers will read the repo.
+======================================================================
+4.1 Root README + .env.example                                     [DOC] 1 h
+    Setup, architecture (as built), data sources, limitations, AWS services, AI tools.
+                                                                (P2-2)
+4.2 Trim docs to reality                                           [DOC] 30 min
+    ARCHITECTURE.md promises EventBridge bus, RulesConfig table, Zod, Vitest, CI,
+    /explain with guardrails — none exist. Mark as roadmap or remove.  (P2-2, B21)
+4.3 Content accuracy on the About page                             [FE]  30 min
+    Privacy statement contradicts geolocation/Nominatim/Cognito; rule table text
+    differs from engine output (render from shared config); AWS list omits Cognito,
+    EventBridge, Bedrock; pollutant labels "PM25" -> "PM2.5" with units.
+                                                         (P2-1, F12)
+4.4 Unit tests for the engine and parsers                          [BE]  1 h
+    getThresholdForAqi boundaries, getDataAge, evaluate, scenario allowlist, AQI calc.
+    These are exactly where the critical bugs were.                  (B14)
+4.5 Lint + build hygiene                                           [FE+BE] 45 min
+    Fix 3 ESLint errors; fix per-package tsc (TS6059/TS2307) with one backend
+    tsconfig; declare @aws-sdk/client-bedrock-runtime; remove unused build scripts
+    and template leftovers (public SVGs, default README, stale .aws-sam/).
+                                           (F14, B15, F17, M7)
+4.6 Accessibility essentials                                       [FE]  45 min
+    Associate labels (0/5 labelled on signup), autocomplete attributes, modal
+    role/focus/Escape, aria-expanded, disclaimer contrast (gray-400 ~2.5:1). (F8)
+4.7 Per-route page titles                                          [FE]  15 min
+                                                                          (F13)
+4.8 Writeup + blog + checks                                        [DOC]  —
+    Writeup must list AI tools used (rule); AWS Builder Center blog for the Top-5
+    blogs prize; confirm exact deadline time; YouTube link opens signed-out; video
+    shows AWS (Lambda, DynamoDB rows from the run, CloudWatch/X-Ray, SNS) in LIGHT
+    mode, never the env-var/parameter tabs.          (Product submission notes, H3)
+
+
+======================================================================
+PHASE 5 — STRETCH DIFFERENTIATORS (only after Phases 1–2; pick one)
+======================================================================
+5.1 Live CPCB data with a correct Indian AQI                       [BE]  2–3 h
+    Group per-pollutant rows by station, NAQI = max sub-index, parse IST dd-mm-yyyy
+    explicitly, "NA" = missing (never 0/"Good"), nearest station to campus; remove or
+    migrate the dead OpenAQ v2 fallback (HTTP 410). A real "Live" badge in mid-
+    October Delhi is a big credibility boost.           (P1-1, B3, B4)
+5.2 "Today's outdoor schedule" -> per-event Go/Modify/Cancel       [FE+BE] 2–3 h
+    Strongest product differentiator vs dashboard entries.                (P1-2)
+5.3 Host the frontend on AWS (S3+CloudFront OAC or Amplify)         [INF]  1 h
+    Live URL for judges; then tighten write-route CORS to that origin; add security
+    headers (CSP etc.).                                    (P1-4, M2, F16)
+5.4 CloudWatch dashboard for the AWS segment of the video           [INF] 30 min
+                                                                  (P1-4, H1)
+
+
+======================================================================
+PHASE 6 — POST-HACKATHON BACKLOG
+======================================================================
+6.1  CI/CD: GitHub Actions + OIDC deploy role, sam validate --lint, cfn-lint,
+     lint/test gates                                                       (M1)
+6.2  Pagination everywhere (alerts, trends, recent readings)          (B11, M4)
+6.3  Idempotency on POST /alerts                                 (M3, F7)
+6.4  Live-mode data model: SK on source timestamp + conditional put (no duplicate
+     hourly readings); cached-vs-live semantics in /recommendations      (B11, B12)
+6.5  Auth UX & session: forgot-password, resend code, UserNotConfirmed handling,
+     token revocation on sign-out, refresh-on-401, cross-tab sync, reconsider
+     localStorage tokens; SRP instead of USER_PASSWORD_AUTH; MFA; SES for Cognito
+     email (50/day default cap)                                    (F6, H5, B20)
+6.6  Shared types/config between FE and BE (status bands, labels, actions)
+                                                                    (B17, F17, F3)
+6.7  De-duplicate backend helpers (getLatestReading x3, respond x5)        (B16)
+6.8  Structured logging + business metrics (Powertools/EMF)               (B19)
+6.9  Remaining a11y: skip link, aria-current, chart title/desc, reduced motion
+                                                                          (F8)
+6.10 Next.js config: drop cacheComponents/partialPrefetching or adopt server
+     components                                                          (F15)
+6.11 Account security: CloudTrail trail, GuardDuty, cost-allocation tags   (H1, M5, M6)
+6.12 E2E test (Playwright): dashboard -> sign in -> alert -> decision      (F17)
+6.13 Rotate CPCB/OpenAQ keys                                               (H3)
+
+
+----------------------------------------------------------------------
+TRACEABILITY — source finding -> report item
+----------------------------------------------------------------------
+Product   P0-1>1.1  P0-2>1.4  P0-3>1.6  P0-4>1.5  P0-5>2.1,2.2  P0-6>1.7,0.7
+          P0-7>0.1,2.5  P1-1>5.1  P1-2>5.2  P1-3>3.1  P1-4>5.3,5.4
+          P2-1>4.3  P2-2>4.1,4.2  P2-3>1.9,3.3,4.5
+Infra     C1>0.1,2.5  C2>0.3,1.10  C3>1.10  C4>0.2,1.7,3.1,3.2  C5>1.11  C6>1.11
+          C7>0.4  C8>0.5  H1>3.8,5.4,6.11  H2>3.1  H3>3.4,4.8,6.13  H4>3.5
+          H5>3.6,6.5  H6>3.3  H7>3.10  H8>1.5,1.7,3.9  M1>6.1  M2>5.3  M3>6.3
+          M4>6.2  M5,M6>6.11  M7>4.5  M8>0.6  M9>2.2
+Backend   B1>1.2  B2>1.3  B3>5.1  B4>1.2,5.1  B5>1.4  B6>2.4,3.1  B7>1.6
+          B8>3.2,3.3  B9>3.3  B10>0.1,2.5  B11>2.4,3.10,6.2,6.4  B12>1.7,6.4
+          B13>3.3  B14>4.4  B15>4.5  B16>6.7  B17>6.6  B18>1.5  B19>3.8,6.8
+          B20>3.6,6.5  B21>4.2
+Frontend  F1>1.1  F2>1.5  F3>1.2,1.8,6.6  F4>1.4,1.7,1.9  F5>3.1  F6>3.7,6.5
+          F7>2.1,2.3,2.4,2.6,6.3  F8>4.6,6.9  F9>1.12  F10>1.8  F11>1.7
+          F12>4.3  F13>1.9,4.7  F14>4.5  F15>6.10  F16>5.3  F17>4.5,6.6,6.12

@@ -3,16 +3,24 @@ import { getThresholdForAqi, getDataAge, DISCLAIMER } from "./aqi-categories.js"
 
 export function evaluate(reading: AQIReading): Recommendation {
   const threshold = getThresholdForAqi(reading.aqi);
+  if (!threshold) {
+    return evaluateUnavailable(
+      "The latest reading has no valid AQI value. Check official CPCB sources directly."
+    );
+  }
+
   const age = getDataAge(reading.timestamp);
 
+  // Demo fixtures are stamped at request time and are labelled separately;
+  // any other reading that is too old (or has an unusable time) is stale.
   let dataQuality: Recommendation["dataQuality"] = reading.dataMode;
-  if (reading.dataMode === "live" && age.isStale) {
+  if (reading.dataMode !== "demo" && age.isStale) {
     dataQuality = "stale";
   }
 
   let action = threshold.action;
-  if (age.isStale) {
-    action = `[Data is ${age.label} — verify with official sources] ${action}`;
+  if (dataQuality === "stale") {
+    action = `[Data is ${age.label.toLowerCase()} — verify with official sources] ${action}`;
   }
 
   return {
@@ -38,12 +46,13 @@ export function evaluate(reading: AQIReading): Recommendation {
   };
 }
 
-export function evaluateUnavailable(): Recommendation {
+export function evaluateUnavailable(
+  action = "Air quality data is currently unavailable. Check official CPCB sources directly."
+): Recommendation {
   return {
-    status: "Good",
+    status: "Unavailable",
     statusLevel: 0,
-    action:
-      "Air quality data is currently unavailable. Check official CPCB sources directly.",
+    action,
     evidence: {
       aqi: 0,
       dominantPollutant: "Unknown",

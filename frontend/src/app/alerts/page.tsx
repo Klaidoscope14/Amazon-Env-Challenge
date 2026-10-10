@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { getAlerts, recordDecision } from "@/lib/api";
-import { DECISION_OPTIONS } from "@/lib/constants";
-import { useLocation } from "@/lib/useLocation";
+import { DECISION_OPTIONS, DEFAULT_CAMPUS } from "@/lib/constants";
 import { useAuth } from "@/lib/auth";
+import type { Alert } from "@/lib/types";
 import StatusBadge from "@/components/StatusBadge";
 import DataBadge from "@/components/DataBadge";
 
@@ -21,23 +21,15 @@ function formatTime(ts: string): string {
   }
 }
 
-function DecisionRecorder({
-  alertId,
-  currentDecision,
-}: {
-  alertId: string;
-  currentDecision: string | null;
-}) {
+function DecisionRecorder({ alert }: { alert: Alert }) {
+  const currentDecision = alert.decision;
   const [showForm, setShowForm] = useState(false);
   const [customDecision, setCustomDecision] = useState("");
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
 
-  const location = useLocation();
-
   const mutation = useMutation({
-    mutationFn: (decision: string) =>
-      recordDecision(alertId, decision, location.campus),
+    mutationFn: (decision: string) => recordDecision(alert, decision),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["alerts"] });
       setShowForm(false);
@@ -114,12 +106,9 @@ function DecisionRecorder({
 }
 
 export default function AlertsPage() {
-  const location = useLocation();
-
   const alertsQuery = useQuery({
-    queryKey: ["alerts", location.campus],
-    queryFn: () => getAlerts(location.campus),
-    enabled: !location.isDetecting,
+    queryKey: ["alerts", DEFAULT_CAMPUS],
+    queryFn: () => getAlerts(DEFAULT_CAMPUS),
   });
 
   return (
@@ -212,10 +201,7 @@ export default function AlertsPage() {
               <p className="text-sm text-gray-800">{alert.message}</p>
             </div>
 
-            <DecisionRecorder
-              alertId={alert.alertId}
-              currentDecision={alert.decision}
-            />
+            <DecisionRecorder alert={alert} />
           </div>
         ))}
       </div>

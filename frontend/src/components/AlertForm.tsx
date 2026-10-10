@@ -3,19 +3,21 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createAlert } from "@/lib/api";
-import { AUDIENCE_OPTIONS } from "@/lib/constants";
-import { useLocation } from "@/lib/useLocation";
+import { AUDIENCE_OPTIONS, DEFAULT_CAMPUS } from "@/lib/constants";
 import { useAuth } from "@/lib/auth";
 import type { Recommendation } from "@/lib/types";
 
 interface AlertFormProps {
   recommendation: Recommendation | null;
+  /** Demo scenario on screen, so the stored snapshot matches what was shown. */
+  scenario?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
 export default function AlertForm({
   recommendation,
+  scenario,
   onClose,
   onSuccess,
 }: AlertFormProps) {
@@ -28,15 +30,15 @@ export default function AlertForm({
   const [message, setMessage] = useState(defaultMessage);
   const [adminName, setAdminName] = useState(user?.name || "");
   const queryClient = useQueryClient();
-  const location = useLocation();
 
   const mutation = useMutation({
     mutationFn: () =>
       createAlert({
-        campus: location.campus,
+        campus: DEFAULT_CAMPUS,
         audience,
         message,
         adminName: adminName || "Campus Admin",
+        scenario,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["alerts"] });

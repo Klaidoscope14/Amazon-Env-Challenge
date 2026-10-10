@@ -10,13 +10,20 @@ export interface AQIReading {
   dataMode: "live" | "cached" | "demo";
 }
 
+/** Shape returned by GET /aqi/current: the reading plus its CPCB band. */
+export interface AQIReadingResponse extends AQIReading {
+  status: AQIStatus;
+  statusLevel: number;
+}
+
 export type AQIStatus =
   | "Good"
   | "Satisfactory"
   | "Moderate"
   | "Poor"
   | "Very Poor"
-  | "Severe";
+  | "Severe"
+  | "Unavailable";
 
 export interface Recommendation {
   status: AQIStatus;
@@ -46,12 +53,14 @@ export interface TrendPoint {
   aqi: number;
   dominantPollutant: string;
   source: string;
+  dataMode: AQIReading["dataMode"];
 }
 
 export interface TrendResponse {
   campus: string;
   points: TrendPoint[];
   period: string;
+  dataMode: "live" | "demo";
 }
 
 export interface Alert {

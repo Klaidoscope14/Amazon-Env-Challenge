@@ -44,9 +44,16 @@ export async function fetchFromCPCB(
 
     const dominantPollutant = record.predominant_parameter || findDominantPollutant(pollutants);
 
+    // Missing values ("NA" or absent) must never become AQI 0 ("Good").
+    const aqi = parseFloat(record.pollutant_avg ?? record.pm25 ?? "");
+    if (!Number.isFinite(aqi)) {
+      console.warn(`CPCB record for ${city} has no usable AQI value`);
+      return null;
+    }
+
     return {
       campus,
-      aqi: parseFloat(record.pollutant_avg || record.pm25 || "0"),
+      aqi,
       dominantPollutant,
       pollutants,
       source: "CPCB",
