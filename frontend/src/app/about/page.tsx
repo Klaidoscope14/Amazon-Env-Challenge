@@ -35,15 +35,15 @@ export default function AboutPage() {
   return (
     <div className="space-y-8 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">How BreatheSafe Campus Works</h1>
-        <p className="text-sm text-gray-600 mt-1">
+        <h1 className="text-2xl font-bold text-foreground">How BreatheSafe Campus Works</h1>
+        <p className="text-sm text-muted mt-1">
           See → Act → Record: from an air-quality reading to a campus decision, with an audit trail.
         </p>
       </div>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-gray-900">The recommendation engine</h2>
-        <p className="text-sm text-gray-700">
+      <section className="rounded-2xl border border-border bg-surface p-6 space-y-4">
+        <h2 className="text-lg font-semibold text-foreground">The recommendation engine</h2>
+        <p className="text-sm text-muted-strong">
           Recommendations come from a <strong>deterministic, rule-based engine</strong> using India&apos;s
           National Air Quality Index categories (CPCB) — not machine learning. Every recommendation shows
           the AQI value, the pollutant, the rule that fired and the time of the reading.
@@ -51,26 +51,26 @@ export default function AboutPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
             <thead>
-              <tr className="border-b border-gray-200">
-                <th scope="col" className="text-left py-2 px-3 text-gray-600 font-medium">AQI range</th>
-                <th scope="col" className="text-left py-2 px-3 text-gray-600 font-medium">Category</th>
-                <th scope="col" className="text-left py-2 px-3 text-gray-600 font-medium">Recommended action</th>
+              <tr className="border-b border-border">
+                <th scope="col" className="text-left py-2 px-3 text-muted font-medium">AQI range</th>
+                <th scope="col" className="text-left py-2 px-3 text-muted font-medium">Category</th>
+                <th scope="col" className="text-left py-2 px-3 text-muted font-medium">Recommended action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-border">
               {RULES.map((rule) => (
                 <tr key={rule.status}>
                   <td className="py-2 px-3 tabular-nums whitespace-nowrap">{rule.range}</td>
                   <td className="py-2 px-3">
                     <span className={`font-medium ${STATUS_CONFIG[rule.status].color}`}>{rule.status}</span>
                   </td>
-                  <td className="py-2 px-3 text-gray-800">{rule.action}</td>
+                  <td className="py-2 px-3 text-foreground">{rule.action}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="text-sm text-gray-700">
+        <p className="text-sm text-muted-strong">
           Alert notices are drafted from reviewed English and Hindi templates for each category. An AI
           model (Google Gemini) may rephrase a draft for readability; drafts that change any number or
           drop the location are discarded and the template is used. An administrator reviews every
@@ -78,9 +78,9 @@ export default function AboutPage() {
         </p>
       </section>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
-        <h2 className="text-lg font-semibold text-gray-900">Data sources</h2>
-        <ul className="text-sm text-gray-700 space-y-2 list-disc list-inside">
+      <section className="rounded-2xl border border-border bg-surface p-6 space-y-3">
+        <h2 className="text-lg font-semibold text-foreground">Data sources</h2>
+        <ul className="text-sm text-muted-strong space-y-2 list-disc list-inside">
           <li>
             <strong>CPCB monitoring stations</strong> (via data.gov.in) — used when a station near you
             has reported within the last 3 hours.
@@ -102,9 +102,9 @@ export default function AboutPage() {
         </ul>
       </section>
 
-      <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 space-y-3">
-        <h2 className="text-lg font-semibold text-amber-900">Limitations</h2>
-        <ul className="text-sm text-amber-900 space-y-2 list-disc list-inside">
+      <section className="rounded-2xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 p-6 space-y-3">
+        <h2 className="text-lg font-semibold text-amber-900 dark:text-amber-200">Limitations</h2>
+        <ul className="text-sm text-amber-900 dark:text-amber-200 space-y-2 list-disc list-inside">
           <li>
             <strong>Not medical advice.</strong> This is decision support for administrators; it does
             not diagnose conditions or guarantee safety.
@@ -129,9 +129,9 @@ export default function AboutPage() {
         </ul>
       </section>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
-        <h2 className="text-lg font-semibold text-gray-900">Privacy</h2>
-        <ul className="text-sm text-gray-700 space-y-2 list-disc list-inside">
+      <section className="rounded-2xl border border-border bg-surface p-6 space-y-3">
+        <h2 className="text-lg font-semibold text-foreground">Privacy</h2>
+        <ul className="text-sm text-muted-strong space-y-2 list-disc list-inside">
           <li>
             <strong>Location:</strong> with your permission, your browser&apos;s location is rounded to
             about 1&nbsp;km and used once to find your area. Coordinates are not stored or logged; only
@@ -148,9 +148,9 @@ export default function AboutPage() {
         </ul>
       </section>
 
-      <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
-        <h2 className="text-lg font-semibold text-gray-900">Built on AWS</h2>
-        <ul className="text-sm text-gray-700 space-y-1.5">
+      <section className="rounded-2xl border border-border bg-surface p-6 space-y-3">
+        <h2 className="text-lg font-semibold text-foreground">Built on AWS</h2>
+        <ul className="text-sm text-muted-strong space-y-1.5">
           {AWS_SERVICES.map((service) => (
             <li key={service.name}>
               <strong>{service.name}</strong> — {service.role}
@@ -159,7 +159,7 @@ export default function AboutPage() {
         </ul>
       </section>
 
-      <p className="text-xs text-gray-600 text-center pb-4">
+      <p className="text-xs text-muted text-center pb-4">
         BreatheSafe Campus — built for the WeMakeDevs × AWS Environmental Hacks (Air track).
       </p>
     </div>

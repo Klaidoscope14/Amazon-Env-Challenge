@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ApiError, authSignIn } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import Card from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -45,17 +47,17 @@ function LoginForm() {
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
       <div className="w-full max-w-md">
-        <div className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm">
-          <h1 className="text-2xl font-bold text-gray-900 text-center mb-2">
+        <Card className="p-8">
+          <h1 className="text-2xl font-bold text-foreground text-center mb-2">
             Sign In
           </h1>
-          <p className="text-sm text-gray-500 text-center mb-6">
+          <p className="text-sm text-muted text-center mb-6">
             Access your BreatheSafe Campus dashboard
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="login-email" className="block text-sm font-medium text-muted-strong mb-1">
                 Email
               </label>
               <input
@@ -65,13 +67,13 @@ function LoginForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="you@campus.edu"
               />
             </div>
 
             <div>
-              <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="login-password" className="block text-sm font-medium text-muted-strong mb-1">
                 Password
               </label>
               <input
@@ -81,13 +83,13 @@ function LoginForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Your password"
               />
             </div>
 
             {error && (
-              <p role="alert" className="text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2">
+              <p role="alert" className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 rounded-lg px-3 py-2">
                 {error}
                 {needsVerification && (
                   <>
@@ -103,16 +105,12 @@ function LoginForm() {
               </p>
             )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
+            <Button type="submit" fullWidth disabled={loading}>
               {loading ? "Signing in..." : "Sign In"}
-            </button>
+            </Button>
           </form>
 
-          <p className="mt-6 text-sm text-gray-500 text-center">
+          <p className="mt-6 text-sm text-muted text-center">
             Don&apos;t have an account?{" "}
             <Link
               href="/signup"
@@ -121,7 +119,7 @@ function LoginForm() {
               Sign Up
             </Link>
           </p>
-        </div>
+        </Card>
       </div>
     </div>
   );
@@ -132,7 +130,7 @@ export default function LoginPage() {
     <Suspense
       fallback={
         <div className="flex items-center justify-center min-h-[60vh]">
-          <p className="text-gray-500">Loading...</p>
+          <p className="text-muted">Loading...</p>
         </div>
       }
     >

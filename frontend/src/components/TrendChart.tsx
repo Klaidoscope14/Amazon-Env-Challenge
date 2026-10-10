@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { TrendResponse } from "@/lib/types";
 import { AQI_BANDS, STATUS_CONFIG, statusForAqi } from "@/lib/constants";
 import DataBadge from "./DataBadge";
+import Card from "./ui/Card";
 
 interface TrendChartProps {
   trends: TrendResponse;
@@ -30,26 +31,26 @@ export default function TrendChart({
   const isDemo = trends.dataMode === "demo";
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+    <Card className="p-6">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-medium text-gray-700">AQI Trend</h2>
+          <h2 className="text-sm font-medium text-muted-strong">AQI Trend</h2>
           {isDemo && <DataBadge mode="demo" />}
         </div>
         <div
           role="group"
           aria-label="Trend period"
-          className="flex rounded-lg border border-gray-200 overflow-hidden"
+          className="flex rounded-lg border border-border overflow-hidden"
         >
           {PERIOD_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               onClick={() => onHoursChange(opt.value)}
               aria-pressed={selectedHours === opt.value}
-              className={`px-2.5 py-1 text-xs font-medium transition-colors ${
+              className={`inline-flex min-h-11 items-center px-3 text-xs font-medium transition-colors ${
                 selectedHours === opt.value
                   ? "bg-blue-600 text-white"
-                  : "text-gray-600 hover:bg-gray-50"
+                  : "text-muted hover:bg-surface-2"
               }`}
             >
               {opt.label}
@@ -59,12 +60,12 @@ export default function TrendChart({
       </div>
 
       {isDemo && (
-        <p className="text-xs text-purple-700 mb-3">
+        <p className="text-xs text-purple-700 dark:text-purple-300 mb-3">
           Synthetic demo series shaped like a typical Delhi day — not measured data.
         </p>
       )}
 
-      <ul className="flex flex-wrap gap-x-3 gap-y-1 mb-3 text-xs text-gray-600">
+      <ul className="flex flex-wrap gap-x-3 gap-y-1 mb-3 text-xs text-muted">
         {AQI_BANDS.map((band) => (
           <li key={band.status} className="flex items-center gap-1">
             <span
@@ -79,17 +80,17 @@ export default function TrendChart({
 
       {points.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-sm font-medium text-gray-600">
+          <p className="text-sm font-medium text-muted">
             No readings stored for this period yet
           </p>
-          <p className="text-xs text-gray-500 mt-1 max-w-xs">
+          <p className="text-xs text-muted mt-1 max-w-xs">
             Readings appear here as they are collected. Try a longer period.
           </p>
         </div>
       ) : (
         <>
           <ChartSVG points={points} hours={selectedHours} />
-          <div className="mt-2 flex items-center justify-between text-xs text-gray-500">
+          <div className="mt-2 flex items-center justify-between text-xs text-muted">
             <span>{points.length} readings</span>
             <span>
               Range: {Math.min(...points.map((p) => p.aqi))} &ndash;{" "}
@@ -98,7 +99,7 @@ export default function TrendChart({
           </div>
         </>
       )}
-    </div>
+    </Card>
   );
 }
 

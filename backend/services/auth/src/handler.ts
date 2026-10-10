@@ -4,11 +4,38 @@ import {
   ConfirmSignUpCommand,
   InitiateAuthCommand,
   GetUserCommand,
+  AdminUpdateUserAttributesCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 
 const cognito = new CognitoIdentityProviderClient({});
 const CLIENT_ID = process.env.USER_POOL_CLIENT_ID!;
+const USER_POOL_ID = process.env.USER_POOL_ID!;
+
+/**
+ * Grants the server-controlled "admin" role to a verified administrator
+ * account. Users cannot self-assign it (custom:role is not a writable
+ * attribute), so the write routes — which require role === "admin" — can only
+ * be reached by accounts the server has deliberately promoted. In the MVP every
+ * self-registered, email-verified account is promoted here; to restrict access,
+ * remove this call and promote accounts manually (e.g. via the Cognito console).
+ *
+ * Best-effort: a failure never blocks sign-up/sign-in. The role check simply
+ * denies alert actions until the attribute is set (e.g. on the next sign-in).
+ */
+async function grantAdminRole(username: string): Promise<void> {
+  try {
+    await cognito.send(
+      new AdminUpdateUserAttributesCommand({
+        UserPoolId: USER_POOL_ID,
+        Username: username,
+        UserAttributes: [{ Name: "custom:role", Value: "admin" }],
+      })
+    );
+  } catch (err) {
+    console.error("grantAdminRole failed:", err);
+  }
+}
 
 export async function handler(
   event: APIGatewayProxyEvent
@@ -78,6 +105,9 @@ async function signUp(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResul
     })
   );
 
+  // Promote the new account to the admin role (server-side only).
+  await grantAdminRole(email);
+
   return respond(200, {
     message: "Sign up successful. Check your email for a verification code.",
     email,
@@ -108,6 +138,10 @@ async function signIn(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResul
   if (!email || !password) {
     return respond(400, { error: "email and password are required" });
   }
+
+  // Ensure the role claim is present before the ID token is minted below. This
+  // also back-fills accounts created before role enforcement existed.
+  await grantAdminRole(email);
 
   const result = await cognito.send(
     new InitiateAuthCommand({

@@ -563,8 +563,14 @@ Resources:
         Variables:
           USER_POOL_ID: !Ref UserPool
           USER_POOL_CLIENT_ID: !Ref UserPoolClient
-      # Uses only public Cognito client APIs (SignUp, InitiateAuth, GetUser),
-      # which need no IAM permissions.
+      # Public Cognito client APIs (SignUp, InitiateAuth, GetUser) need no IAM.
+      # The admin API that assigns the server-controlled "admin" role does.
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminUpdateUserAttributes
+              Resource: !GetAtt UserPool.Arn
       LoggingConfig:
         LogGroup: !Ref AuthLogGroup
       Events:

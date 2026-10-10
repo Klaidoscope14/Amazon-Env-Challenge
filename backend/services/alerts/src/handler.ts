@@ -25,6 +25,20 @@ const MAX_TIMESTAMP = 40;
 
 class BadRequestError extends Error {}
 class UnauthorizedError extends Error {}
+class ForbiddenError extends Error {}
+
+/**
+ * Requires the caller to hold the server-assigned "admin" role claim. The
+ * authorizer already proves a verified identity; this additionally gates the
+ * write routes on the role, so a verified account without it cannot issue
+ * alerts or record decisions.
+ */
+function requireAdmin(event: APIGatewayProxyEvent): void {
+  const claims = (event.requestContext?.authorizer?.claims ?? {}) as Record<string, unknown>;
+  if (claims["custom:role"] !== "admin") {
+    throw new ForbiddenError("Administrator access is required to perform this action");
+  }
+}
 
 /**
  * The signed-in admin, from the claims API Gateway's Cognito authorizer
@@ -71,6 +85,9 @@ export async function handler(
     }
     if (err instanceof UnauthorizedError) {
       return respond(401, { error: err.message });
+    }
+    if (err instanceof ForbiddenError) {
+      return respond(403, { error: err.message });
     }
     if (err instanceof AlertNotFoundError) {
       return respond(404, { error: err.message });
@@ -120,6 +137,7 @@ function readString(
 async function handleCreateAlert(
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> {
+  requireAdmin(event);
   const adminName = signedInName(event);
   const body = parseBody(event);
 
@@ -183,6 +201,7 @@ async function handleRecordDecision(
     return respond(400, { error: "Missing alert ID in path" });
   }
 
+  requireAdmin(event);
   const decidedBy = signedInName(event);
   const body = parseBody(event);
   const decision = readString(body, "decision", MAX_DECISION, true)!;
