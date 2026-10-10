@@ -1,4 +1,4 @@
-import type { AQIStatus } from "./types";
+import type { AlertDelivery, AQIStatus, Audience } from "./types";
 
 export const STATUS_CONFIG: Record<
   AQIStatus,
@@ -76,6 +76,24 @@ export const AUDIENCE_OPTIONS = [
   { value: "staff", label: "Staff" },
   { value: "parents", label: "Parents" },
 ] as const;
+
+export const AUDIENCE_LABELS: Record<Audience, string> = {
+  all: "All stakeholders",
+  students: "Students",
+  staff: "Staff",
+  parents: "Parents",
+};
+
+/** Label + style for the email part of an alert's delivery record. */
+export const EMAIL_DELIVERY: Record<
+  AlertDelivery["email"],
+  { label: string; className: string }
+> = {
+  sent: { label: "Email sent", className: "bg-green-100 text-green-800" },
+  pending: { label: "Email pending", className: "bg-amber-100 text-amber-800" },
+  failed: { label: "Email failed", className: "bg-red-100 text-red-800" },
+  not_configured: { label: "In-app only", className: "bg-gray-100 text-gray-700" },
+};
 
 export const DECISION_OPTIONS = [
   "Moved activities indoors",

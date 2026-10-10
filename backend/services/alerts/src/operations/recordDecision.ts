@@ -14,14 +14,22 @@ export class AlertNotFoundError extends Error {
   }
 }
 
+export class DecisionAlreadyRecordedError extends Error {
+  constructor(alertId: string) {
+    super(`A decision is already recorded for alert ${alertId}`);
+    this.name = "DecisionAlreadyRecordedError";
+  }
+}
+
 export async function recordDecision(
   dynamodb: DynamoDBClient,
   tableName: string,
   campus: string,
   alertId: string,
   decision: string,
-  createdAt?: string
-): Promise<{ success: boolean; alertId: string }> {
+  createdAt?: string,
+  decidedBy?: string
+): Promise<{ success: boolean; alertId: string; decisionTimestamp: string }> {
   // The sort key is ALERT#<createdAt>#<alertId>; when the client knows
   // createdAt (it always has it from GET /alerts) we can address the item
   // directly instead of searching for it.
@@ -32,32 +40,42 @@ export async function recordDecision(
     throw new AlertNotFoundError(alertId);
   }
 
+  const decisionTimestamp = new Date().toISOString();
   try {
+    // Decisions are part of the audit trail: record once, never overwrite.
     await dynamodb.send(
       new UpdateItemCommand({
         TableName: tableName,
         Key: marshall({ PK: `CAMPUS#${campus}`, SK: sk }),
         UpdateExpression:
-          "SET #decision = :decision, #decisionTimestamp = :ts",
-        ConditionExpression: "attribute_exists(PK)",
+          "SET #decision = :decision, #decisionTimestamp = :ts, #decisionBy = :by",
+        ConditionExpression:
+          "attribute_exists(PK) AND (attribute_not_exists(#decision) OR attribute_type(#decision, :nullType))",
         ExpressionAttributeNames: {
           "#decision": "decision",
           "#decisionTimestamp": "decisionTimestamp",
+          "#decisionBy": "decisionBy",
         },
         ExpressionAttributeValues: marshall({
           ":decision": decision,
-          ":ts": new Date().toISOString(),
+          ":ts": decisionTimestamp,
+          ":by": decidedBy ?? null,
+          ":nullType": "NULL",
         }),
+        ReturnValuesOnConditionCheckFailure: "ALL_OLD",
       })
     );
   } catch (err) {
     if (err instanceof ConditionalCheckFailedException) {
+      // With ALL_OLD, an existing item comes back only if it was the
+      // "already decided" half of the condition that failed.
+      if (err.Item) throw new DecisionAlreadyRecordedError(alertId);
       throw new AlertNotFoundError(alertId);
     }
     throw err;
   }
 
-  return { success: true, alertId };
+  return { success: true, alertId, decisionTimestamp };
 }
 
 // Fallback for clients that don't send createdAt. Pages through the whole

@@ -1,4 +1,11 @@
-import { AQIReadingResponse, Recommendation, Alert, TrendResponse } from "./types";
+import {
+  AQIReadingResponse,
+  Recommendation,
+  Alert,
+  Audience,
+  NoticeDraft,
+  TrendResponse,
+} from "./types";
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
@@ -61,10 +68,15 @@ export async function getRecommendation(
 
 export async function createAlert(data: {
   campus: string;
-  audience: string;
+  audience: Audience;
   message: string;
+  messageHi?: string;
+  noticeSource?: NoticeDraft["source"];
   adminName: string;
+  /** Demo mode: scenario on screen. */
   scenario?: string;
+  /** Live mode: fetchedAt of the reading on screen. */
+  readingFetchedAt?: string;
 }): Promise<Alert> {
   return fetchApi<Alert>("/api/v1/alerts", {
     method: "POST",
@@ -73,25 +85,52 @@ export async function createAlert(data: {
 }
 
 export async function getAlerts(
-  campus: string
+  campus: string,
+  limit?: number
 ): Promise<{ alerts: Alert[]; count: number }> {
   return fetchApi<{ alerts: Alert[]; count: number }>(
-    `/api/v1/alerts?${query({ campus })}`
+    `/api/v1/alerts?${query({ campus, limit })}`
   );
 }
 
 export async function recordDecision(
   alert: Pick<Alert, "alertId" | "createdAt" | "campus">,
-  decision: string
-): Promise<{ success: boolean }> {
-  return fetchApi<{ success: boolean }>(
+  decision: string,
+  decidedBy?: string
+): Promise<{ success: boolean; decisionTimestamp: string }> {
+  return fetchApi<{ success: boolean; decisionTimestamp: string }>(
     `/api/v1/alerts/${encodeURIComponent(alert.alertId)}/decision?${query({ campus: alert.campus })}`,
     {
       method: "PATCH",
       // createdAt lets the backend address the alert by its exact key.
-      body: JSON.stringify({ decision, createdAt: alert.createdAt }),
+      body: JSON.stringify({ decision, createdAt: alert.createdAt, decidedBy }),
     }
   );
+}
+
+export async function getNoticeDraft(params: {
+  campus: string;
+  audience: Audience;
+  scenario?: string;
+  readingFetchedAt?: string;
+}): Promise<NoticeDraft> {
+  return fetchApi<NoticeDraft>(`/api/v1/notices/draft?${query(params)}`);
+}
+
+/** Spoken version (Amazon Polly) of an issued alert, as a playable data URL. */
+export async function getNoticeAudio(
+  alert: Pick<Alert, "alertId" | "createdAt" | "campus">,
+  lang: "en" | "hi"
+): Promise<string> {
+  const result = await fetchApi<{ contentType: string; audioBase64: string }>(
+    `/api/v1/notices/audio?${query({
+      campus: alert.campus,
+      alertId: alert.alertId,
+      createdAt: alert.createdAt,
+      lang,
+    })}`
+  );
+  return `data:${result.contentType};base64,${result.audioBase64}`;
 }
 
 export async function getTrends(

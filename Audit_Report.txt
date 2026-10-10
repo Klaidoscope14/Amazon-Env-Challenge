@@ -96,8 +96,12 @@ STATUS (2026-10-10 evening):
 PHASE 1 — DEMO-BREAKERS & CORRECTNESS (before recording, ~7 h)
 Everything here is visible on screen or produces a wrong decision.
 ======================================================================
-STATUS (2026-10-10 night): all 12 items IMPLEMENTED in the working tree (not yet
-committed or deployed). Verified locally: sam validate --lint, sam build, built
+STATUS (2026-10-10 night): all 12 items DONE — committed by owner (9b2b32c) and
+deployed to dev (breathesafe-campus-dev) and prod (UPDATE_COMPLETE 13:19Z). Prod
+verified read-only: nodejs22.x + 20/25s timeouts on all functions, deletion
+protection on both tables, PITR on alerts, scheduler -> dtu-delhi, scenario/hours
+validation 400s, decision 404, both existing alerts visible, 0 Lambda errors and
+no readings written since deploy. Earlier notes: Verified locally: sam validate --lint, sam build, built
 handlers in demo mode (scenario allowlist 400s, no DB writes, synthetic labelled
 trend, hours=abc -> 400), engine edge cases (fractional/invalid AQI, NaN/future
 timestamps), frontend tsc + next build, lint 3 -> 1 (auth.tsx, Phase 4.5), UI

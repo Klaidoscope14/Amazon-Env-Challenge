@@ -2,14 +2,28 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { CreateAlertInput } from "../../../shared/src/types.js";
 import { isDemoScenario } from "../../../shared/src/demo.js";
-import { createAlert } from "./operations/createAlert.js";
+import { isAudience } from "../../../shared/src/notice-templates.js";
+import { createAlert, NoReadingError } from "./operations/createAlert.js";
 import { getAlerts } from "./operations/getAlerts.js";
-import { AlertNotFoundError, recordDecision } from "./operations/recordDecision.js";
+import {
+  AlertNotFoundError,
+  DecisionAlreadyRecordedError,
+  recordDecision,
+} from "./operations/recordDecision.js";
 
 const dynamodb = new DynamoDBClient({});
 const ALERTS_TABLE = process.env.ALERTS_TABLE_NAME!;
 const AQI_TABLE = process.env.AQI_TABLE_NAME!;
 const DATA_MODE = process.env.DATA_MODE || "demo";
+const TOPIC_ARN = process.env.ALERTS_TOPIC_ARN || undefined;
+const NOTICE_URL = process.env.NOTICE_URL || "";
+
+const MAX_MESSAGE = 2000;
+const MAX_NAME = 100;
+const MAX_DECISION = 500;
+const MAX_TIMESTAMP = 40;
+
+class BadRequestError extends Error {}
 
 export async function handler(
   event: APIGatewayProxyEvent
@@ -37,8 +51,17 @@ export async function handler(
 
     return respond(404, { error: "Not found" });
   } catch (err) {
+    if (err instanceof BadRequestError) {
+      return respond(400, { error: err.message });
+    }
     if (err instanceof AlertNotFoundError) {
       return respond(404, { error: err.message });
+    }
+    if (err instanceof DecisionAlreadyRecordedError) {
+      return respond(409, { error: err.message });
+    }
+    if (err instanceof NoReadingError) {
+      return respond(422, { error: err.message });
     }
     console.error("Alerts handler error:", err);
     return respond(500, {
@@ -47,22 +70,72 @@ export async function handler(
   }
 }
 
+function parseBody(event: APIGatewayProxyEvent): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(event.body || "{}");
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+  } catch {
+    // fall through
+  }
+  throw new BadRequestError("Request body must be a JSON object");
+}
+
+/** Trimmed string within limits, or undefined when absent and optional. */
+function readString(
+  body: Record<string, unknown>,
+  field: string,
+  max: number,
+  required: boolean
+): string | undefined {
+  const value = body[field];
+  if (value === undefined || value === null || value === "") {
+    if (required) throw new BadRequestError(`Missing required field: ${field}`);
+    return undefined;
+  }
+  if (typeof value !== "string") throw new BadRequestError(`${field} must be a string`);
+  const trimmed = value.trim();
+  if (required && !trimmed) throw new BadRequestError(`Missing required field: ${field}`);
+  if (trimmed.length > max) throw new BadRequestError(`${field} must be at most ${max} characters`);
+  return trimmed || undefined;
+}
+
 async function handleCreateAlert(
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> {
-  const body = JSON.parse(event.body || "{}") as CreateAlertInput;
+  const body = parseBody(event);
 
-  if (!body.campus || !body.audience || !body.message || !body.adminName) {
-    return respond(400, {
-      error: "Missing required fields: campus, audience, message, adminName",
-    });
+  const campus = readString(body, "campus", 64, true)!;
+  const audience = readString(body, "audience", 20, true)!;
+  if (!isAudience(audience)) {
+    throw new BadRequestError(`Unknown audience: ${audience}`);
+  }
+  const scenario = readString(body, "scenario", 40, false);
+  if (scenario !== undefined && !isDemoScenario(scenario)) {
+    throw new BadRequestError(`Unknown demo scenario: ${scenario}`);
+  }
+  const noticeSource = readString(body, "noticeSource", 20, false);
+  if (noticeSource !== undefined && noticeSource !== "template" && noticeSource !== "ai") {
+    throw new BadRequestError("noticeSource must be template or ai");
   }
 
-  if (body.scenario !== undefined && !isDemoScenario(body.scenario)) {
-    return respond(400, { error: `Unknown demo scenario: ${body.scenario}` });
-  }
+  const input: CreateAlertInput = {
+    campus,
+    audience,
+    message: readString(body, "message", MAX_MESSAGE, true)!,
+    messageHi: readString(body, "messageHi", MAX_MESSAGE, false),
+    noticeSource,
+    adminName: readString(body, "adminName", MAX_NAME, true)!,
+    scenario,
+    readingFetchedAt: readString(body, "readingFetchedAt", MAX_TIMESTAMP, false),
+  };
 
-  const alert = await createAlert(dynamodb, ALERTS_TABLE, AQI_TABLE, body, DATA_MODE);
+  const alert = await createAlert(dynamodb, input, {
+    alertsTable: ALERTS_TABLE,
+    aqiTable: AQI_TABLE,
+    dataMode: DATA_MODE,
+    topicArn: TOPIC_ARN,
+    noticeUrl: NOTICE_URL,
+  });
   return respond(201, alert);
 }
 
@@ -70,7 +143,8 @@ async function handleGetAlerts(
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> {
   const campus = event.queryStringParameters?.campus || "dtu-delhi";
-  const limit = parseInt(event.queryStringParameters?.limit || "25", 10);
+  const requested = Number.parseInt(event.queryStringParameters?.limit || "25", 10);
+  const limit = Number.isFinite(requested) ? Math.min(Math.max(requested, 1), 50) : 25;
 
   const alerts = await getAlerts(dynamodb, ALERTS_TABLE, campus, limit);
   return respond(200, { alerts, count: alerts.length });
@@ -83,25 +157,24 @@ async function handleRecordDecision(
   const alertIdIndex = pathParts.indexOf("alerts") + 1;
   const alertId = pathParts[alertIdIndex];
 
-  if (!alertId) {
+  if (!alertId || alertId === "decision" || alertId.length > 64) {
     return respond(400, { error: "Missing alert ID in path" });
   }
 
-  const body = JSON.parse(event.body || "{}");
-  if (!body.decision) {
-    return respond(400, { error: "Missing required field: decision" });
-  }
+  const body = parseBody(event);
+  const decision = readString(body, "decision", MAX_DECISION, true)!;
+  const createdAt = readString(body, "createdAt", MAX_TIMESTAMP, false);
+  const decidedBy = readString(body, "decidedBy", MAX_NAME, false);
 
   const campus = event.queryStringParameters?.campus || "dtu-delhi";
-  const createdAt =
-    typeof body.createdAt === "string" ? body.createdAt : undefined;
   const result = await recordDecision(
     dynamodb,
     ALERTS_TABLE,
     campus,
     alertId,
-    body.decision,
-    createdAt
+    decision,
+    createdAt,
+    decidedBy
   );
 
   return respond(200, result);
@@ -113,7 +186,7 @@ function respond(statusCode: number, body: unknown): APIGatewayProxyResult {
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Content-Type,Authorization",
       "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
     },
     body: JSON.stringify(body),

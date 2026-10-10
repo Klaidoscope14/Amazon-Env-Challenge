@@ -7,6 +7,9 @@
     "@aws-sdk/client-bedrock-runtime": "^3.1149.0",
     "@aws-sdk/client-cognito-identity-provider": "^3.650.0",
     "@aws-sdk/client-dynamodb": "^3.650.0",
+    "@aws-sdk/client-polly": "^3.1149.0",
+    "@aws-sdk/client-sns": "^3.1149.0",
+    "@aws-sdk/client-ssm": "^3.1149.0",
     "@aws-sdk/util-dynamodb": "^3.650.0"
   }
 }

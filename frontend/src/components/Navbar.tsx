@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard" },
   { href: "/alerts", label: "Alerts & Decisions" },
+  { href: "/notice", label: "Campus Notice" },
   { href: "/about", label: "About" },
 ];
 
@@ -75,7 +76,7 @@ export default function Navbar() {
         </div>
 
         {/* Mobile nav */}
-        <nav className="sm:hidden flex gap-1 pb-3 -mt-1">
+        <nav className="sm:hidden flex flex-wrap gap-1 pb-3 -mt-1">
           {NAV_ITEMS.map((item) => (
             <Link
               key={item.href}

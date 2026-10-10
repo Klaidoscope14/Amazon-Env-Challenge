@@ -45,6 +45,32 @@ Parameters:
     AllowedValues:
       - prod
       - dev
+  AlertEmail:
+    Type: String
+    Default: ''
+    Description: Email subscribed to alert notifications (SNS). Leave empty to disable email delivery.
+  PublicSiteUrl:
+    Type: String
+    Default: ''
+    Description: Public URL of the campus notice page, included in alert emails (e.g. https://example.com/notice). Optional.
+  NoticeAIEnabled:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Polish notice drafts with the Gemini API (falls back to reviewed templates on any error)
+  GeminiModel:
+    Type: String
+    Default: gemini-flash-lite-latest
+    Description: Gemini model used for notice drafts
+  GeminiApiKeyParam:
+    Type: String
+    Default: /breathesafe/gemini-api-key
+    Description: SSM SecureString parameter holding the Gemini API key
+
+Conditions:
+  HasAlertEmail: !Not [!Equals [!Ref AlertEmail, '']]
 
 Resources:
 
@@ -158,6 +184,25 @@ Resources:
           KeyType: RANGE
 
   # ============================================
+  # Alert delivery (email via SNS)
+  # ============================================
+  AlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub breathesafe-alerts-${Stage}
+      DisplayName: BreatheSafe Campus
+
+  # AWS emails a confirmation link to this address; delivery starts once it
+  # is confirmed. Until then alerts are recorded as "email not configured".
+  AlertsEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlertEmail
+    Properties:
+      TopicArn: !Ref AlertsTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+  # ============================================
   # Lambda Functions
   # ============================================
   FetchAQIFunction:
@@ -244,11 +289,21 @@ Resources:
       CodeUri: ../backend/
       Handler: handler.handler
       Description: Alert creation, decision recording, and history
+      Environment:
+        Variables:
+          ALERTS_TOPIC_ARN: !Ref AlertsTopic
+          NOTICE_URL: !Ref PublicSiteUrl
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref AlertsDecisionsTable
         - DynamoDBReadPolicy:
             TableName: !Ref AQIReadingsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sns:Publish
+                - sns:ListSubscriptionsByTopic
+              Resource: !Ref AlertsTopic
       Events:
         CreateAlert:
           Type: Api
@@ -279,6 +334,58 @@ Resources:
           - .js=.mjs
         EntryPoints:
           - services/alerts/src/handler.ts
+        External:
+          - '@aws-sdk/*'
+
+  NoticesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub breathesafe-notices-${Stage}
+      CodeUri: ../backend/
+      Handler: handler.handler
+      Timeout: 15
+      Description: Bilingual notice drafts (reviewed templates + optional Gemini polish) and Polly audio
+      Environment:
+        Variables:
+          NOTICE_AI_ENABLED: !Ref NoticeAIEnabled
+          GEMINI_MODEL: !Ref GeminiModel
+          GEMINI_API_KEY_PARAM: !Ref GeminiApiKeyParam
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref AQIReadingsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref AlertsDecisionsTable
+        - Statement:
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GeminiApiKeyParam}
+            - Effect: Allow
+              Action: polly:SynthesizeSpeech
+              Resource: '*'
+      Events:
+        GetDraft:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/notices/draft
+            Method: GET
+        GetAudio:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/notices/audio
+            Method: GET
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        EntryPoints:
+          - services/notices/src/handler.ts
         External:
           - '@aws-sdk/*'
 
@@ -422,6 +529,12 @@ Outputs:
   TrendsEndpoint:
     Description: AQI trends endpoint
     Value: !Sub https://${BreatheSafeApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/api/v1/trends
+  NoticesEndpoint:
+    Description: Notice draft endpoint
+    Value: !Sub https://${BreatheSafeApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/api/v1/notices/draft
+  AlertsTopicArn:
+    Description: SNS topic for alert emails
+    Value: !Ref AlertsTopic
   UserPoolId:
     Description: Cognito User Pool ID
     Value: !Ref UserPool

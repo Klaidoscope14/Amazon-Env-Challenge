@@ -11,17 +11,21 @@ import {
   DEFAULT_CAMPUS,
   DEFAULT_DEMO_SCENARIO,
   DEMO_SCENARIO_OPTIONS,
+  EMAIL_DELIVERY,
 } from "@/lib/constants";
+import type { Alert } from "@/lib/types";
 import AqiHeroCard from "@/components/AqiHeroCard";
 import RecommendationCard from "@/components/RecommendationCard";
 import TrendChart from "@/components/TrendChart";
 import AlertForm from "@/components/AlertForm";
+import DecisionRecorder from "@/components/DecisionRecorder";
+import WhatsAppShare from "@/components/WhatsAppShare";
 
 const CPCB_URL = "https://cpcb.nic.in";
 
 export default function DashboardPage() {
   const [showAlertForm, setShowAlertForm] = useState(false);
-  const [alertSent, setAlertSent] = useState(false);
+  const [sentAlert, setSentAlert] = useState<Alert | null>(null);
   const [scenario, setScenario] = useState<string>(DEFAULT_DEMO_SCENARIO);
   const [trendHours, setTrendHours] = useState(24);
 
@@ -82,22 +86,8 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {alertSent && (
-        <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800 flex items-center justify-between">
-          <span>
-            Alert sent successfully.{" "}
-            <Link href="/alerts" className="underline font-medium">
-              View in Alerts & Decisions
-            </Link>
-          </span>
-          <button
-            onClick={() => setAlertSent(false)}
-            aria-label="Dismiss"
-            className="text-green-600 hover:text-green-800 ml-4"
-          >
-            &times;
-          </button>
-        </div>
+      {sentAlert && (
+        <SentAlertPanel alert={sentAlert} onDismiss={() => setSentAlert(null)} />
       )}
 
       {aqiQuery.isPending && <CardSkeleton tall />}
@@ -168,14 +158,69 @@ export default function DashboardPage() {
         <AlertForm
           recommendation={recQuery.data || null}
           scenario={isDemo ? scenario : undefined}
+          readingFetchedAt={isDemo ? undefined : aqiQuery.data?.fetchedAt}
           onClose={() => setShowAlertForm(false)}
-          onSuccess={() => {
+          onSuccess={(alert) => {
             setShowAlertForm(false);
-            setAlertSent(true);
+            setSentAlert(alert);
           }}
         />
       )}
     </div>
+  );
+}
+
+// Shown right after an alert is issued: what was delivered, where people can
+// read it, and the prompt to record the decision (See -> Act -> Record).
+function SentAlertPanel({ alert, onDismiss }: { alert: Alert; onDismiss: () => void }) {
+  const email = alert.delivery ? EMAIL_DELIVERY[alert.delivery.email] : null;
+  return (
+    <section
+      aria-label="Alert sent"
+      className="rounded-2xl border border-green-200 bg-green-50 p-5 text-green-900"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-semibold">Alert sent</p>
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+            <span className="rounded-full bg-green-100 px-2 py-0.5 text-green-800">
+              In-app notice published
+            </span>
+            {email && (
+              <span className={`rounded-full px-2 py-0.5 ${email.className}`}>{email.label}</span>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          className="text-green-700 hover:text-green-900 text-xl leading-none"
+        >
+          &times;
+        </button>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Link
+          href="/notice"
+          className="rounded-lg border border-green-300 bg-white px-3 py-1.5 text-sm font-medium text-green-900 hover:bg-green-100"
+        >
+          View public notice
+        </Link>
+        <WhatsAppShare alert={alert} />
+        <Link href="/alerts" className="text-sm underline">
+          Alerts & Decisions
+        </Link>
+      </div>
+
+      <div className="mt-4 rounded-xl bg-white p-4 text-gray-900">
+        <p className="text-sm font-medium">Record your decision</p>
+        <p className="text-xs text-gray-600">
+          Log the action you took so the audit trail is complete.
+        </p>
+        <DecisionRecorder alert={alert} startOpen />
+      </div>
+    </section>
   );
 }
 
