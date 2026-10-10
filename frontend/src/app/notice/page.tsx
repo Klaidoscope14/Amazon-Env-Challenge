@@ -50,23 +50,23 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
         <AreaHeader area={area} title="Campus Air Quality Notice · for students, staff and parents" />
       ) : (
         <div>
-          <p className="text-sm text-gray-600">Campus Air Quality Notice · for students, staff and parents</p>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <p className="text-sm text-muted">Campus Air Quality Notice · for students, staff and parents</p>
+          <h1 className="text-2xl font-bold text-foreground">
             {alert?.areaName ?? "Air-quality advisory"}
           </h1>
         </div>
       )}
 
       {latestQuery.isPending && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-6 animate-pulse" aria-hidden="true">
-          <div className="h-6 bg-gray-200 rounded w-1/4 mb-4" />
-          <div className="h-4 bg-gray-200 rounded w-full mb-2" />
-          <div className="h-4 bg-gray-200 rounded w-2/3" />
+        <div className="rounded-2xl border border-border bg-surface p-6 animate-pulse" aria-hidden="true">
+          <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-4" />
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-full mb-2" />
+          <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3" />
         </div>
       )}
 
       {latestQuery.isError && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800">
+        <div className="rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 p-6 text-red-800 dark:text-red-200">
           <p className="font-medium">Couldn&apos;t load the latest notice</p>
           <button onClick={() => latestQuery.refetch()} className="mt-2 text-sm font-medium underline">
             Retry
@@ -75,9 +75,9 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
       )}
 
       {latestQuery.data && !alert && (
-        <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center">
-          <p className="text-gray-800 font-medium">No air-quality advisories have been issued for this area.</p>
-          <p className="text-sm text-gray-600 mt-1">
+        <div className="rounded-2xl border border-border bg-surface p-8 text-center">
+          <p className="text-foreground font-medium">No air-quality advisories have been issued for this area.</p>
+          <p className="text-sm text-muted mt-1">
             Normal activities continue. Check the{" "}
             <Link href="/" className="underline">
               dashboard
@@ -88,9 +88,9 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
       )}
 
       {alert && (
-        <article className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm space-y-5">
+        <article className="rounded-2xl border border-border bg-surface p-6 shadow-sm space-y-5">
           {isOld && (
-            <p className="rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-700">
+            <p className="rounded-lg bg-surface-2 border border-border px-3 py-2 text-sm text-muted-strong">
               This is the most recent advisory, issued over 24 hours ago. See the{" "}
               <Link href="/" className="underline">
                 dashboard
@@ -103,10 +103,10 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
             <div className="flex items-center gap-3">
               <StatusBadge status={alert.recommendation?.status ?? "Unavailable"} large />
               <div className="text-sm">
-                <p className="font-medium text-gray-900">
+                <p className="font-medium text-foreground">
                   AQI {alert.aqiSnapshot?.aqi ?? "N/A"} at time of notice
                 </p>
-                <p className="text-gray-600">
+                <p className="text-muted">
                   {formatTime(alert.createdAt)} ({describeAge(alert.createdAt, now).label})
                 </p>
               </div>
@@ -115,22 +115,22 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
           </div>
 
           <section aria-label="Notice in English">
-            <p className="whitespace-pre-line text-gray-900 leading-relaxed">{alert.message}</p>
+            <p className="whitespace-pre-line text-foreground leading-relaxed">{alert.message}</p>
           </section>
 
           {alert.messageHi && (
-            <section aria-label="सूचना हिंदी में" lang="hi" className="border-t border-gray-100 pt-5">
-              <p className="whitespace-pre-line text-gray-900 leading-relaxed">{alert.messageHi}</p>
+            <section aria-label="सूचना हिंदी में" lang="hi" className="border-t border-border pt-5">
+              <p className="whitespace-pre-line text-foreground leading-relaxed">{alert.messageHi}</p>
             </section>
           )}
 
           {alert.decision && (
-            <p className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-sm text-blue-900">
+            <p className="rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 px-3 py-2 text-sm text-blue-900 dark:text-blue-200">
               <span className="font-medium">Action taken:</span> {alert.decision}
             </p>
           )}
 
-          <p className="text-xs text-gray-600">
+          <p className="text-xs text-muted">
             For: {AUDIENCE_LABELS[alert.audience] ?? alert.audience} &middot; Issued by{" "}
             {alert.adminName}
           </p>
@@ -145,7 +145,7 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
         </article>
       )}
 
-      <p className="text-xs text-gray-600">
+      <p className="text-xs text-muted">
         This notice is decision support from campus administration, not medical advice.
         Follow official{" "}
         <a href="https://cpcb.nic.in" target="_blank" rel="noopener noreferrer" className="underline">
