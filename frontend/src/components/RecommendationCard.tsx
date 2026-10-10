@@ -9,14 +9,19 @@ import StatusBadge from "./StatusBadge";
 import DataBadge from "./DataBadge";
 import Card from "./ui/Card";
 import Button, { buttonClasses } from "./ui/Button";
+import ExplainPanel from "./ExplainPanel";
 
 interface RecommendationCardProps {
   recommendation: Recommendation;
+  areaId: string;
+  scenario?: string;
   onIssueAlert: () => void;
 }
 
 export default function RecommendationCard({
   recommendation,
+  areaId,
+  scenario,
   onIssueAlert,
 }: RecommendationCardProps) {
   const [showEvidence, setShowEvidence] = useState(false);
@@ -62,19 +67,7 @@ export default function RecommendationCard({
         {recommendation.action}
       </p>
 
-      {recommendation.aiNarrative && (
-        <div className="mt-3 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 px-4 py-3">
-          <div className="flex items-center gap-1.5 mb-1">
-            <svg className="w-3.5 h-3.5 text-indigo-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
-            <span className="text-xs font-medium text-indigo-600">
-              AI Insight (Amazon Bedrock)
-            </span>
-          </div>
-          <p className="text-sm text-indigo-900 dark:text-indigo-200">{recommendation.aiNarrative}</p>
-        </div>
-      )}
+      <ExplainPanel areaId={areaId} scenario={scenario} />
 
       <button
         onClick={() => setShowEvidence(!showEvidence)}
@@ -105,6 +98,12 @@ export default function RecommendationCard({
             <p className="mt-0.5">{recommendation.rule.name}</p>
             <p className="text-xs text-muted">
               Source: {recommendation.rule.source}
+              {recommendation.rule.id && (
+                <>
+                  {" "}&middot; Ruleset {recommendation.rule.id}
+                  {recommendation.rule.config === "dynamodb" ? " (RulesConfig table)" : " (built-in)"}
+                </>
+              )}
             </p>
           </div>
           <div>
@@ -147,14 +146,14 @@ export default function RecommendationCard({
         {recommendation.statusLevel >= 3 &&
           (isAuthenticated ? (
             <Button variant="danger" onClick={onIssueAlert} className="shrink-0 ml-4">
-              Issue Alert
+              Share an alert
             </Button>
           ) : (
             <Link
               href="/login?redirect=/"
               className={buttonClasses({ variant: "secondary", className: "shrink-0 ml-4" })}
             >
-              Sign in to issue alert
+              Sign in to share an alert
             </Link>
           ))}
       </div>

@@ -11,7 +11,7 @@ import Button from "./ui/Button";
 const MAX_MESSAGE = 2000;
 
 interface AlertFormProps {
-  /** Area the alert is issued for. */
+  /** Area the alert is shared for. */
   area: AreaInfo;
   recommendation: Recommendation | null;
   /** Demo scenario on screen, so the stored snapshot matches what was shown. */
@@ -31,7 +31,7 @@ export default function AlertForm({
   onSuccess,
 }: AlertFormProps) {
   const { user } = useAuth();
-  const [audience, setAudience] = useState<Audience>("all");
+  const [audience, setAudience] = useState<Audience>("family");
   // null = untouched, so the field shows the (possibly refreshed) draft.
   const [editedEn, setEditedEn] = useState<string | null>(null);
   const [editedHi, setEditedHi] = useState<string | null>(null);
@@ -42,14 +42,13 @@ export default function AlertForm({
   const id = useId();
 
   const draftQuery = useQuery({
-    queryKey: ["noticeDraft", area.id, audience, scenario, readingTimestamp, user?.institution],
+    queryKey: ["noticeDraft", area.id, audience, scenario, readingTimestamp, user?.name],
     queryFn: () =>
       getNoticeDraft({
         campus: area.id,
         audience,
         scenario,
         readingTimestamp,
-        institution: user?.institution,
       }),
     staleTime: 5 * 60 * 1000,
     refetchInterval: false,
@@ -158,7 +157,7 @@ export default function AlertForm({
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 id={`${id}-title`} className="text-lg font-semibold text-foreground">
-              Issue Campus Alert
+              Share an air-quality alert
             </h2>
             <p className="text-xs text-muted">Area: {area.name}</p>
           </div>
@@ -183,7 +182,7 @@ export default function AlertForm({
         <div className="space-y-4">
           <div>
             <label htmlFor={`${id}-audience`} className="block text-sm font-medium text-muted-strong mb-1">
-              Audience
+              Who is this for?
             </label>
             <select
               id={`${id}-audience`}
@@ -261,20 +260,20 @@ export default function AlertForm({
           </div>
 
           <p className="text-xs text-muted">
-            Issued as <strong>{user?.name ?? "you"}</strong> — recorded from your sign-in.
+            Shared as <strong>{user?.name ?? "you"}</strong> — your name comes from your sign-in and is kept with the alert.
           </p>
         </div>
 
         {confirming && (
           <p role="alert" className="mt-4 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
-            This will notify <strong>all students, staff and parents</strong>. Press
-            &ldquo;Confirm &amp; send&rdquo; to continue.
+            This notice will be shown to <strong>everyone</strong> who opens the public notice page
+            for {area.name}. Press &ldquo;Confirm &amp; share&rdquo; to continue.
           </p>
         )}
 
         {mutation.isError && (
           <p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-300">
-            Failed to send alert: {(mutation.error as Error).message}
+            Failed to share the alert: {(mutation.error as Error).message}
           </p>
         )}
 
@@ -283,7 +282,7 @@ export default function AlertForm({
             Cancel
           </Button>
           <Button variant="danger" onClick={handleSend} disabled={!canSend}>
-            {mutation.isPending ? "Sending..." : confirming ? "Confirm & send" : "Send Alert"}
+            {mutation.isPending ? "Sharing..." : confirming ? "Confirm & share" : "Share alert"}
           </Button>
         </div>
       </div>

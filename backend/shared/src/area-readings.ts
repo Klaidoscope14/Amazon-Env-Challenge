@@ -11,7 +11,10 @@ import {
   stationReading,
 } from "./stations.js";
 import { getOpenMeteoReading, getOpenMeteoTrend } from "./open-meteo.js";
-import { getLatestReading } from "./readings.js";
+import { getLatestReading, getReadingBefore } from "./readings.js";
+import { getThresholdForAqi } from "./aqi-categories.js";
+import { getActiveRuleset } from "./rules.js";
+import { BreatheSafeEvent, eventBusFromEnv, publishEvents, ReadingEventDetail } from "./events.js";
 
 export interface DataContext {
   /** "live": CPCB stations. "demo": labelled fixtures for every request. */
@@ -84,7 +87,9 @@ export async function getAreaReading(
     reading = coords ? await getOpenMeteoReading(area.id, { ...coords, name: area.name }) : null;
   }
   if (reading) {
-    await persistReading(dynamodb, ctx.aqiTable, reading);
+    if (await persistReading(dynamodb, ctx.aqiTable, reading)) {
+      await announceReading(dynamodb, ctx, area, reading);
+    }
     return { area, reading };
   }
 
@@ -97,6 +102,56 @@ export async function getAreaReading(
 }
 
 const CACHED_FALLBACK_MS = 3 * 60 * 60 * 1000;
+
+/**
+ * Emits aqi.reading.received for a newly stored reading, plus
+ * aqi.threshold.crossed when its category differs from the area's previous
+ * stored reading. Never throws: events must not break the request.
+ */
+async function announceReading(
+  dynamodb: DynamoDBClient,
+  ctx: DataContext,
+  area: Area,
+  reading: AQIReading
+): Promise<void> {
+  const bus = eventBusFromEnv();
+  if (!bus) return;
+  try {
+    const { thresholds } = await getActiveRuleset(dynamodb);
+    const band = getThresholdForAqi(reading.aqi, thresholds);
+    if (!band) return;
+
+    const detail: ReadingEventDetail = {
+      area: area.id,
+      areaName: area.name,
+      aqi: reading.aqi,
+      status: band.status,
+      dominantPollutant: reading.dominantPollutant,
+      source: reading.source,
+      timestamp: reading.timestamp,
+    };
+    const events: BreatheSafeEvent[] = [{ source: "breathesafe.aqi", type: "aqi.reading.received", detail }];
+
+    const previous = await getReadingBefore(dynamodb, ctx.aqiTable, area.id, reading.timestamp);
+    const previousBand = previous ? getThresholdForAqi(previous.aqi, thresholds) : null;
+    if (previous && previousBand && previousBand.status !== band.status) {
+      events.push({
+        source: "breathesafe.aqi",
+        type: "aqi.threshold.crossed",
+        detail: {
+          ...detail,
+          previousStatus: previousBand.status,
+          previousAqi: previous.aqi,
+          previousTimestamp: previous.timestamp,
+          direction: band.statusLevel > previousBand.statusLevel ? "worse" : "better",
+        },
+      });
+    }
+    await publishEvents(events, bus);
+  } catch (err) {
+    console.error(JSON.stringify({ event: "reading_event_failed", error: (err as Error).name }));
+  }
+}
 
 /**
  * Live trend from Open-Meteo's hourly history when the area has no current

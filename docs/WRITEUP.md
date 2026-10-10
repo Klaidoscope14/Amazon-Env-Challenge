@@ -1,26 +1,27 @@
-# BreatheSafe Campus — Submission writeup
+# BreatheSafe — Submission writeup
 
-**Track:** Air · **Team:** _add names_ · **Repo:** _add public GitHub URL_ · **Demo video:** _add YouTube link_
+**Track:** Air · **Team:** Waterpark Enthusiasts — Chaitanya Saagar, Parul Garg, Nakshatra Kanchan, Divyansh Gupta
+**Repo:** _add public GitHub URL_ · **Demo video:** _add YouTube link_
 
 ## The problem
 
-Every autumn, AQI across north India climbs into the Poor–Severe range. School and college
-administrators can look up a number, but the number doesn't answer their real questions: *Should we
-cancel the outdoor assembly? How do we tell 2,000 parents quickly, in a language they read? If a parent
-asks later, can we show why we decided what we did?* The gap isn't data — it's the step from data to a
-recorded, communicated decision.
+Every autumn, AQI across north India climbs into the Poor–Severe range. Anyone can look up a number,
+but the number doesn't answer the questions people actually have: *Is it OK to go for the evening
+walk? Should the kids play outside? How do I tell my parents, who read Hindi, or my housing society's
+WhatsApp group? And what did we decide last time?* The gap isn't data — it's the step from data to a
+decision that is understood, shared and remembered.
 
 ## What we built
 
-BreatheSafe Campus is an air-quality **decision workflow** — **See → Act → Record**:
+BreatheSafe is an air-quality **decision workflow for anyone in India** — **See → Act → Record**:
 
-- **See** — the AQI for the administrator's own location anywhere in India (browser location rounded to
-  ~1 km, never stored), computed with CPCB's method, with a deterministic, explainable recommendation:
-  the rule, value, pollutant, source and time behind it.
-- **Act** — a bilingual (English + Hindi) alert drafted from reviewed templates, sent as an in-app
-  public notice, an email, a WhatsApp share and a spoken PA announcement.
-- **Record** — the administrator logs the decision taken; each alert stores a snapshot of the exact
-  reading it was based on, and decisions can't be overwritten.
+- **See** — the AQI where you are, anywhere in India (browser location rounded to ~1 km, never
+  stored), computed with CPCB's method, with a deterministic recommendation, the evidence behind it,
+  and an **"Explain in plain language"** button in English or Hindi.
+- **Act** — share a bilingual (English + Hindi) alert with your family, neighbourhood, team or
+  everyone: a public notice page, an email, a WhatsApp message and a spoken version.
+- **Record** — note what you decided; each alert stores a snapshot of the exact reading it was based
+  on, and decisions can't be overwritten.
 
 Data is labelled honestly throughout: live, cached (≤3 h), stale, unavailable, or demo — never a stale
 or sample value presented as current.
@@ -30,23 +31,41 @@ or sample value presented as current.
 The whole backend is serverless on AWS, defined as code with AWS SAM:
 
 - **API Gateway** — REST API with a **Cognito** authorizer on write routes and request throttling.
-- **Lambda** (7 functions, Node.js 22) — AQI and areas, recommendations, trends, alerts and decisions,
-  notices, sign-in, and a scheduled CPCB refresh.
-- **DynamoDB** — readings and the alert/decision audit trail (deletion protection, point-in-time recovery).
+- **Lambda** (8 functions, Node.js 22) — AQI and areas, recommendations and rules, explanations,
+  trends, alerts and decisions, notices, sign-in, and a scheduled CPCB refresh.
+- **DynamoDB** — readings, the alert/decision audit trail (deletion protection, point-in-time
+  recovery) and a **RulesConfig** table: the recommendation bands are data, validated on load, editable
+  without a redeploy, with built-in rules as a safe fallback.
+- **EventBridge** — a custom bus for domain events (reading received, category crossed, alert created,
+  decision recorded) with a 30-day replayable archive and an event log; plus the CPCB refresh schedule.
 - **SNS** — alert emails and operational alarm emails. **Polly** — English/Hindi audio notices.
-- **EventBridge** — scheduled CPCB station refresh. **SSM Parameter Store** — encrypted API keys.
-- **CloudWatch + X-Ray** — logs, six alarms and tracing.
+- **SSM Parameter Store** — encrypted API keys. **CloudWatch + X-Ray** — logs, seven alarms, tracing.
 
 Air-quality data comes from CPCB stations (data.gov.in) when a nearby station has reported recently,
 otherwise from Open-Meteo's air-quality data for the user's area.
 
+## Responsible AI
+
+AI is used in two places, and in both the deterministic output stays the source of truth:
+
+- **Alert drafts** — Gemini may rephrase a reviewed template; a faithfulness check rejects any draft
+  that changes a number, drops the location or isn't in Devanagari.
+- **Explanations** — the server builds the evidence itself (no user text reaches the model), and the
+  output must pass guardrails: every number must come from the evidence, the AQI and category must be
+  stated, no medical advice or safety promises, no links, correct language and length. Otherwise a
+  reviewed explanation is shown, and the UI says so. Calls are cached and rate-limited.
+
+## Engineering quality
+
+Zod validation on every API input and on third-party data; 130+ Vitest tests, including handler-level
+tests with mocked AWS clients; GitHub Actions CI (typecheck, tests, lint, build, SAM validate + build).
+
 ## AI tools used
 
 - **Claude Code (Anthropic)** — development assistant: codebase/infrastructure audits, implementation,
-  and unit tests.
-- **Google Gemini API** (free tier) — at runtime, optionally rephrases notice drafts. A faithfulness check
-  rejects any draft that changes a number or drops the location; the reviewed template is the fallback.
-- _Add any other AI tools the team used._
+  and tests.
+- **Google Gemini API** (free tier) — at runtime, optionally rephrases alert drafts and writes
+  plain-language explanations, both behind automatic checks with reviewed text as the fallback.
 
 ## Limitations
 

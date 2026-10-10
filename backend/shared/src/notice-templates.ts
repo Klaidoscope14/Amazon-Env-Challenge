@@ -1,4 +1,4 @@
-import { AQIStatus, Audience, Recommendation } from "./types.js";
+import { AQIStatus, Audience, LegacyAudience, Recommendation } from "./types.js";
 
 /*
  * Reviewed, deterministic notice wording for each CPCB band, in English and
@@ -7,7 +7,7 @@ import { AQIStatus, Audience, Recommendation } from "./types.js";
  * Wording is advisory and deliberately avoids medical instructions.
  */
 
-type Band = Exclude<AQIStatus, "Unavailable">;
+export type Band = Exclude<AQIStatus, "Unavailable">;
 
 const STATUS_HI: Record<Band, string> = {
   Good: "अच्छा",
@@ -20,40 +20,56 @@ const STATUS_HI: Record<Band, string> = {
 
 const ACTIONS: Record<Band, { en: string; hi: string }> = {
   Good: {
-    en: "Air quality is good. Outdoor activities can continue as planned.",
-    hi: "वायु गुणवत्ता अच्छी है। बाहरी गतिविधियाँ योजना के अनुसार जारी रह सकती हैं।",
+    en: "Air quality is good. It is a fine time for outdoor activities.",
+    hi: "वायु गुणवत्ता अच्छी है। बाहरी गतिविधियों के लिए यह अच्छा समय है।",
   },
   Satisfactory: {
-    en: "Air quality is satisfactory. Students and staff with asthma or other breathing conditions should avoid prolonged strenuous activity outdoors.",
-    hi: "वायु गुणवत्ता संतोषजनक है। अस्थमा या साँस की तकलीफ़ वाले विद्यार्थी और कर्मचारी बाहर लंबे समय तक ज़ोरदार गतिविधि से बचें।",
+    en: "Air quality is acceptable. People with asthma or other breathing conditions should avoid prolonged strenuous activity outdoors.",
+    hi: "वायु गुणवत्ता ठीक है। अस्थमा या साँस की तकलीफ़ वाले लोग बाहर लंबे समय तक ज़ोरदार गतिविधि से बचें।",
   },
   Moderate: {
-    en: "Outdoor activities are under review and prolonged outdoor events may be moved indoors. Anyone with breathing difficulties should limit time outdoors.",
-    hi: "बाहरी गतिविधियों की समीक्षा की जा रही है और लंबे बाहरी कार्यक्रम भवन के अंदर कराए जा सकते हैं। साँस की तकलीफ़ वाले लोग बाहर कम समय बिताएँ।",
+    en: "Children, older adults and anyone with breathing difficulties should limit prolonged time outdoors. Consider moving long outdoor plans indoors.",
+    hi: "बच्चे, बुज़ुर्ग और साँस की तकलीफ़ वाले लोग बाहर लंबे समय तक न रहें। लंबी बाहरी योजनाओं को घर के अंदर करने पर विचार करें।",
   },
   Poor: {
-    en: "Prolonged outdoor activities are suspended today. Please keep windows closed during peak pollution hours and limit time outdoors.",
-    hi: "आज लंबे समय तक चलने वाली बाहरी गतिविधियाँ स्थगित हैं। प्रदूषण के चरम समय में खिड़कियाँ बंद रखें और बाहर कम समय बिताएँ।",
+    en: "Please avoid prolonged outdoor activity today, keep windows closed during peak pollution hours and limit time outdoors.",
+    hi: "कृपया आज लंबे समय तक बाहरी गतिविधि से बचें, प्रदूषण के चरम समय में खिड़कियाँ बंद रखें और बाहर कम समय बिताएँ।",
   },
   "Very Poor": {
-    en: "All outdoor activities are cancelled today and classes will continue indoors. Students with asthma or breathing conditions should follow their doctor's advice.",
-    hi: "आज सभी बाहरी गतिविधियाँ रद्द हैं और कक्षाएँ भवन के अंदर जारी रहेंगी। अस्थमा या साँस की तकलीफ़ वाले विद्यार्थी अपने डॉक्टर की सलाह का पालन करें।",
+    en: "Please avoid outdoor activities today and stay indoors where possible. Anyone with asthma or breathing conditions should follow their doctor's advice.",
+    hi: "कृपया आज बाहरी गतिविधियों से बचें और जहाँ तक हो सके घर के अंदर रहें। अस्थमा या साँस की तकलीफ़ वाले लोग अपने डॉक्टर की सलाह का पालन करें।",
   },
   Severe: {
-    en: "The emergency air-quality protocol is in effect. All outdoor activities are cancelled and the campus may close early. Please watch for further instructions from the administration.",
-    hi: "आपातकालीन वायु-गुणवत्ता प्रोटोकॉल लागू है। सभी बाहरी गतिविधियाँ रद्द हैं और परिसर जल्दी बंद हो सकता है। कृपया प्रशासन के अगले निर्देशों पर ध्यान दें।",
+    en: "Air quality is severe. Please stay indoors as much as possible, avoid all outdoor exercise and follow official advisories from local authorities.",
+    hi: "वायु गुणवत्ता गंभीर है। कृपया जितना हो सके घर के अंदर रहें, बाहर हर तरह के व्यायाम से बचें और स्थानीय प्रशासन की आधिकारिक सलाह का पालन करें।",
   },
 };
 
+/** Hindi name of a CPCB category. */
+export function statusHi(status: Band): string {
+  return STATUS_HI[status];
+}
+
+/** The reviewed Hindi advice for a CPCB category (as used in notices). */
+export function adviceHi(status: Band): string {
+  return ACTIONS[status].hi;
+}
+
 const GREETINGS: Record<Audience, { en: string; hi: string }> = {
-  all: { en: "Dear students, staff and parents,", hi: "प्रिय विद्यार्थियों, कर्मचारियों और अभिभावकों," },
-  students: { en: "Dear students,", hi: "प्रिय विद्यार्थियों," },
-  staff: { en: "Dear staff members,", hi: "प्रिय कर्मचारियों," },
-  parents: { en: "Dear parents,", hi: "प्रिय अभिभावकों," },
+  all: { en: "Dear all,", hi: "सभी को नमस्कार," },
+  family: { en: "Dear family,", hi: "प्रिय परिवारजनों," },
+  neighbours: { en: "Dear neighbours,", hi: "प्रिय पड़ोसियों," },
+  group: { en: "Dear friends,", hi: "प्रिय साथियों," },
 };
 
-export const AUDIENCE_LABELS: Record<Audience, string> = {
-  all: "All (students, staff & parents)",
+export const AUDIENCES = Object.keys(GREETINGS) as [Audience, ...Audience[]];
+
+export const AUDIENCE_LABELS: Record<Audience | LegacyAudience, string> = {
+  all: "Everyone",
+  family: "My family",
+  neighbours: "My neighbourhood / society",
+  group: "My team / group",
+  // Older alerts
   students: "Students",
   staff: "Staff",
   parents: "Parents",
@@ -96,8 +112,8 @@ export interface NoticePlace {
   areaKind?: "station" | "city" | "geo";
   /** Set when the reading is a CPCB station measurement. */
   measuredStation?: string;
-  /** Issuing institution for the sign-off; generic "Campus" when absent. */
-  institution?: string;
+  /** Name of the person sharing the notice, used as the sign-off. */
+  senderName?: string;
 }
 
 /** Where the reading applies, phrased for each language. */
@@ -132,9 +148,9 @@ export function buildTemplateNotice(
   const pollutant = pollutantName(dominantPollutant);
   const greeting = GREETINGS[audience];
   const action = ACTIONS[band];
-  const institution = place.institution?.trim();
-  const signOffEn = institution ? `${institution} Administration` : "Campus Administration";
-  const signOffHi = institution ? `${institution} प्रशासन` : "परिसर प्रशासन";
+  const sender = place.senderName?.trim();
+  const signOffEn = sender ? `${sender} (via BreatheSafe)` : "BreatheSafe";
+  const signOffHi = sender ? `${sender} (BreatheSafe द्वारा)` : "BreatheSafe";
 
   const where = describePlace(place);
 

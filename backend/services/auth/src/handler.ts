@@ -7,6 +7,15 @@ import {
   AdminUpdateUserAttributesCommand,
 } from "@aws-sdk/client-cognito-identity-provider";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import {
+  ConfirmBodySchema,
+  parse,
+  RefreshBodySchema,
+  SignInBodySchema,
+  SignUpBodySchema,
+  ValidationError,
+} from "../../../shared/src/schemas.js";
+import { parseJsonBody, respond } from "../../../shared/src/http.js";
 
 const cognito = new CognitoIdentityProviderClient({});
 const CLIENT_ID = process.env.USER_POOL_CLIENT_ID!;
@@ -51,8 +60,8 @@ export async function handler(
     if (method === "GET" && path.endsWith("/profile")) return await getProfile(event);
     return respond(404, { error: "Not found" });
   } catch (err: unknown) {
-    if (err instanceof SyntaxError) {
-      return respond(400, { error: "Request body must be valid JSON" });
+    if (err instanceof ValidationError) {
+      return respond(400, { error: err.message, code: "INVALID_INPUT" });
     }
     const name = err instanceof Error ? err.name : "UnknownError";
     const mapped = COGNITO_ERRORS[name];
@@ -83,25 +92,18 @@ const COGNITO_ERRORS: Record<string, { status: number; code: string; message: st
 };
 
 async function signUp(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  // Role is not accepted at sign-up: users can't self-assign one.
-  const { email, password, name, institution } = JSON.parse(event.body || "{}");
-
-  if (!email || !password || !name) {
-    return respond(400, { error: "email, password, and name are required" });
-  }
-
-  const userAttributes = [
-    { Name: "email", Value: email },
-    { Name: "name", Value: name },
-  ];
-  if (institution) userAttributes.push({ Name: "custom:institution", Value: String(institution).slice(0, 100) });
+  // Only email, password and name are accepted: users can't self-assign a role.
+  const { email, password, name } = parse(SignUpBodySchema, parseJsonBody(event));
 
   await cognito.send(
     new SignUpCommand({
       ClientId: CLIENT_ID,
       Username: email,
       Password: password,
-      UserAttributes: userAttributes,
+      UserAttributes: [
+        { Name: "email", Value: email },
+        { Name: "name", Value: name },
+      ],
     })
   );
 
@@ -115,11 +117,7 @@ async function signUp(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResul
 }
 
 async function confirmSignUp(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  const { email, code } = JSON.parse(event.body || "{}");
-
-  if (!email || !code) {
-    return respond(400, { error: "email and code are required" });
-  }
+  const { email, code } = parse(ConfirmBodySchema, parseJsonBody(event));
 
   await cognito.send(
     new ConfirmSignUpCommand({
@@ -133,11 +131,7 @@ async function confirmSignUp(event: APIGatewayProxyEvent): Promise<APIGatewayPro
 }
 
 async function signIn(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  const { email, password } = JSON.parse(event.body || "{}");
-
-  if (!email || !password) {
-    return respond(400, { error: "email and password are required" });
-  }
+  const { email, password } = parse(SignInBodySchema, parseJsonBody(event));
 
   // Ensure the role claim is present before the ID token is minted below. This
   // also back-fills accounts created before role enforcement existed.
@@ -166,11 +160,7 @@ async function signIn(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResul
 }
 
 async function refreshToken(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  const { refreshToken } = JSON.parse(event.body || "{}");
-
-  if (!refreshToken) {
-    return respond(400, { error: "refreshToken is required" });
-  }
+  const { refreshToken } = parse(RefreshBodySchema, parseJsonBody(event));
 
   const result = await cognito.send(
     new InitiateAuthCommand({
@@ -212,19 +202,6 @@ async function getProfile(event: APIGatewayProxyEvent): Promise<APIGatewayProxyR
   return respond(200, {
     email: attributes.email,
     name: attributes.name,
-    institution: attributes["custom:institution"],
     role: attributes["custom:role"],
   });
-}
-
-function respond(statusCode: number, body: unknown): APIGatewayProxyResult {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization",
-    },
-    body: JSON.stringify(body),
-  };
 }

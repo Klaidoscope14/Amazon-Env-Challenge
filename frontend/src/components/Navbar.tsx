@@ -9,7 +9,7 @@ import ThemeToggle from "./ThemeToggle";
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard" },
   { href: "/alerts", label: "Alerts & Decisions" },
-  { href: "/notice", label: "Campus Notice" },
+  { href: "/notice", label: "Public Notice" },
   { href: "/about", label: "About" },
 ];
 
@@ -21,12 +21,9 @@ export default function Navbar() {
     <header className="bg-surface border-b border-border sticky top-0 z-40">
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
-          <Link href="/" className="flex items-center gap-2" aria-label="BreatheSafe Campus — home">
+          <Link href="/" className="flex items-center gap-2" aria-label="BreatheSafe — home">
             <span className="text-xl" aria-hidden="true">&#127788;&#65039;</span>
-            <div>
-              <span className="font-bold text-foreground">BreatheSafe</span>
-              <span className="text-muted font-light ml-1">Campus</span>
-            </div>
+            <span className="font-bold text-foreground">BreatheSafe</span>
           </Link>
 
           <nav className="hidden sm:flex items-center gap-1">
@@ -52,12 +49,7 @@ export default function Navbar() {
               <div className="h-8 w-20 bg-surface-2 rounded-lg animate-pulse" />
             ) : user ? (
               <div className="flex items-center gap-2">
-                <div className="hidden sm:block text-right">
-                  <p className="text-sm font-medium text-foreground">{user.name}</p>
-                  {user.institution && (
-                    <p className="text-xs text-muted">{user.institution}</p>
-                  )}
-                </div>
+                <p className="hidden sm:block text-sm font-medium text-foreground">{user.name}</p>
                 <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium">
                   {user.name.charAt(0).toUpperCase()}
                 </div>

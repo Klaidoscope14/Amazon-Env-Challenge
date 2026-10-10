@@ -1,23 +1,25 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { AQIReading, AQIReadingResponse } from "../../../shared/src/types.js";
+import { AQIReading, AQIReadingResponse, Ruleset } from "../../../shared/src/types.js";
 import { getThresholdForAqi } from "../../../shared/src/aqi-categories.js";
-import { isDemoScenario } from "../../../shared/src/demo.js";
 import { Area, findNearestArea, listAreas } from "../../../shared/src/stations.js";
+import { getActiveRuleset } from "../../../shared/src/rules.js";
+import {
+  AreaQuerySchema,
+  NearestQuerySchema,
+  parse,
+  ValidationError,
+} from "../../../shared/src/schemas.js";
+import { respond } from "../../../shared/src/http.js";
 import {
   dataContextFromEnv,
   getAreaReading,
-  isAreaId,
   loadSnapshotFor,
   usesDemo,
 } from "../../../shared/src/area-readings.js";
 
 const dynamodb = new DynamoDBClient({});
 const ctx = dataContextFromEnv();
-
-// Rough bounding box for India; requests outside it get the area picker.
-const LAT_RANGE = [5, 38];
-const LON_RANGE = [67, 99];
 
 export async function handler(
   event: APIGatewayProxyEvent
@@ -27,24 +29,19 @@ export async function handler(
     if (event.path.endsWith("/areas")) return await handleListAreas();
     return await handleCurrent(event);
   } catch (err) {
+    if (err instanceof ValidationError) return respond(400, { error: err.message });
     console.error("AQI handler error:", err);
     return respond(500, { error: "Internal server error" });
   }
 }
 
 async function handleCurrent(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  const qs = event.queryStringParameters ?? {};
-  const areaId = qs.campus;
-  const scenario = qs.scenario || undefined;
+  const { campus: areaId, scenario } = parse(AreaQuerySchema, event.queryStringParameters ?? {});
 
-  if (!isAreaId(areaId)) {
-    return respond(400, { error: "campus (area id) is required" });
-  }
-  if (scenario && !isDemoScenario(scenario)) {
-    return respond(400, { error: `Unknown demo scenario: ${scenario}` });
-  }
-
-  const { area, reading } = await getAreaReading(dynamodb, ctx, areaId, scenario);
+  const [{ area, reading }, ruleset] = await Promise.all([
+    getAreaReading(dynamodb, ctx, areaId, scenario),
+    getActiveRuleset(dynamodb),
+  ]);
   if (!reading) {
     return area || usesDemo(ctx, scenario)
       ? respond(503, {
@@ -54,7 +51,7 @@ async function handleCurrent(event: APIGatewayProxyEvent): Promise<APIGatewayPro
         })
       : respond(404, { error: `Unknown area: ${areaId}` });
   }
-  return respond(200, withStatus(reading, area));
+  return respond(200, withStatus(reading, area, ruleset));
 }
 
 async function handleListAreas(): Promise<APIGatewayProxyResult> {
@@ -66,14 +63,7 @@ async function handleListAreas(): Promise<APIGatewayProxyResult> {
 }
 
 async function handleNearest(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  const lat = Number(event.queryStringParameters?.lat);
-  const lon = Number(event.queryStringParameters?.lon);
-  if (
-    !Number.isFinite(lat) || !Number.isFinite(lon) ||
-    lat < LAT_RANGE[0] || lat > LAT_RANGE[1] || lon < LON_RANGE[0] || lon > LON_RANGE[1]
-  ) {
-    return respond(400, { error: "lat/lon must be a location in India" });
-  }
+  const { lat, lon } = parse(NearestQuerySchema, event.queryStringParameters ?? {});
 
   // Coordinates are used only for this lookup; they are never logged or stored.
   const snapshot = await loadSnapshotFor(dynamodb, ctx);
@@ -85,26 +75,12 @@ async function handleNearest(event: APIGatewayProxyEvent): Promise<APIGatewayPro
 
 // Status comes from the shared rules engine so the dashboard never derives
 // its own (possibly different) category from the raw number.
-function withStatus(reading: AQIReading, area: Area | null): AQIReadingResponse {
-  const threshold = getThresholdForAqi(reading.aqi);
+function withStatus(reading: AQIReading, area: Area | null, ruleset: Ruleset): AQIReadingResponse {
+  const threshold = getThresholdForAqi(reading.aqi, ruleset.thresholds);
   return {
     ...reading,
     status: threshold?.status ?? "Unavailable",
     statusLevel: threshold?.statusLevel ?? 0,
     ...(area ? { area } : {}),
-  };
-}
-
-// `timestamp` in a reading is the source's observation time; responses must
-// not overwrite it, or staleness can never be detected.
-function respond(statusCode: number, body: unknown): APIGatewayProxyResult {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization",
-    },
-    body: JSON.stringify(body),
   };
 }

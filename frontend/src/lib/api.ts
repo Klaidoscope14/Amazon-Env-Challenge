@@ -6,6 +6,8 @@ import {
   Audience,
   NoticeDraft,
   TrendResponse,
+  Explanation,
+  Ruleset,
 } from "./types";
 import { API_URL } from "./config";
 
@@ -144,7 +146,7 @@ export async function createAlert(data: {
   /** Live mode: source timestamp of the reading on screen. */
   readingTimestamp?: string;
 }): Promise<Alert> {
-  // The issuing admin comes from the sign-in token on the server.
+  // The sender's name comes from the sign-in token on the server.
   return fetchAuthed<Alert>("/api/v1/alerts", {
     method: "POST",
     body: JSON.stringify(data),
@@ -179,7 +181,6 @@ export async function getNoticeDraft(params: {
   audience: Audience;
   scenario?: string;
   readingTimestamp?: string;
-  institution?: string;
 }): Promise<NoticeDraft> {
   return fetchAuthed<NoticeDraft>(`/api/v1/notices/draft?${query(params)}`);
 }
@@ -200,6 +201,20 @@ export async function getNoticeAudio(
   return `data:${result.contentType};base64,${result.audioBase64}`;
 }
 
+/** Plain-language explanation of an area's current reading (AI with guardrails, or a fixed template). */
+export async function getExplanation(
+  campus: string,
+  lang: "en" | "hi",
+  scenario?: string
+): Promise<Explanation> {
+  return fetchApi<Explanation>(`/api/v1/explain?${query({ campus, lang, scenario })}`);
+}
+
+/** The ruleset the recommendation engine is currently applying. */
+export async function getRules(): Promise<Ruleset> {
+  return fetchApi<Ruleset>("/api/v1/rules");
+}
+
 export async function getTrends(
   campus: string,
   hours: number = 24,
@@ -214,7 +229,6 @@ export async function authSignUp(data: {
   email: string;
   password: string;
   name: string;
-  institution?: string;
 }): Promise<{ message: string; email: string }> {
   return fetchApi("/api/v1/auth/signup", {
     method: "POST",

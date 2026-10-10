@@ -5,36 +5,26 @@ import {
 import { unmarshall, marshall } from "@aws-sdk/util-dynamodb";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { AQIReading, TrendPoint, TrendResponse } from "../../../shared/src/types.js";
-import { buildDemoTrend, isDemoScenario } from "../../../shared/src/demo.js";
-import {
-  dataContextFromEnv,
-  getAreaTrend,
-  isAreaId,
-  usesDemo,
-} from "../../../shared/src/area-readings.js";
+import { buildDemoTrend } from "../../../shared/src/demo.js";
+import { dataContextFromEnv, getAreaTrend, usesDemo } from "../../../shared/src/area-readings.js";
+import { parse, TrendsQuerySchema, ValidationError } from "../../../shared/src/schemas.js";
+import { respond } from "../../../shared/src/http.js";
 
 const dynamodb = new DynamoDBClient({});
 const AQI_TABLE_NAME = process.env.AQI_TABLE_NAME!;
 const ctx = dataContextFromEnv();
-const MAX_HOURS = 168;
 
 export async function handler(
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> {
-  const campus = event.queryStringParameters?.campus;
-  const scenario = event.queryStringParameters?.scenario || undefined;
-  if (!isAreaId(campus)) {
-    return respond(400, { error: "campus (area id) is required" });
+  let query;
+  try {
+    query = parse(TrendsQuerySchema, event.queryStringParameters ?? {});
+  } catch (err) {
+    if (err instanceof ValidationError) return respond(400, { error: err.message });
+    throw err;
   }
-  const requested = Number.parseInt(event.queryStringParameters?.hours || "24", 10);
-  if (!Number.isFinite(requested) || requested < 1) {
-    return respond(400, { error: "hours must be a positive integer" });
-  }
-  const hours = Math.min(requested, MAX_HOURS);
-
-  if (scenario && !isDemoScenario(scenario)) {
-    return respond(400, { error: `Unknown demo scenario: ${scenario}` });
-  }
+  const { campus, scenario, hours } = query;
 
   if (usesDemo(ctx, scenario)) {
     const response: TrendResponse = {
@@ -91,16 +81,4 @@ export async function handler(
     console.error("Trends handler error:", err);
     return respond(500, { error: "Internal server error" });
   }
-}
-
-function respond(statusCode: number, body: unknown): APIGatewayProxyResult {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization",
-    },
-    body: JSON.stringify(body),
-  };
 }

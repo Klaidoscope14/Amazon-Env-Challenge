@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: BreatheSafe Campus - Air Quality Action Engine
+Description: BreatheSafe - air-quality decisions for anyone in India
 
 Globals:
   Function:
@@ -17,6 +17,8 @@ Globals:
         ALERTS_TABLE_NAME: !Ref AlertsDecisionsTable
         DATA_MODE: !Ref DataMode
         DEMO_SCENARIOS_ENABLED: !Ref DemoScenariosEnabled
+        RULES_TABLE_NAME: !Ref RulesConfigTable
+        EVENT_BUS_NAME: !Ref EventBus
 
 Parameters:
   DataMode:
@@ -51,7 +53,7 @@ Parameters:
   PublicSiteUrl:
     Type: String
     Default: ''
-    Description: Public URL of the campus notice page, included in alert emails (e.g. https://example.com/notice). Optional.
+    Description: Public URL of the notice page, included in alert emails (e.g. https://example.com/notice). Optional.
   NoticeAIEnabled:
     Type: String
     Default: 'true'
@@ -59,10 +61,17 @@ Parameters:
       - 'true'
       - 'false'
     Description: Polish notice drafts with the Gemini API (falls back to reviewed templates on any error)
+  ExplainAIEnabled:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Write plain-language explanations with the Gemini API (guardrail-checked; falls back to a deterministic explanation)
   GeminiModel:
     Type: String
     Default: gemini-flash-lite-latest
-    Description: Gemini model used for notice drafts
+    Description: Gemini model used for notice drafts and explanations
   GeminiApiKeyParam:
     Type: String
     Default: /breathesafe/gemini-api-key
@@ -143,7 +152,7 @@ Resources:
         AllowMethods: "'GET,POST,PATCH,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization'"
         AllowOrigin: "'*'"
-      Description: BreatheSafe Campus REST API
+      Description: BreatheSafe REST API
       # Caps abuse and cost on the public API.
       MethodSettings:
         - ResourcePath: '/*'
@@ -219,6 +228,89 @@ Resources:
         - AttributeName: SK
           KeyType: RANGE
 
+  # Recommendation bands as data (see backend/shared/src/rules.ts). Seed with
+  # `npm run seed:rules --prefix backend -- --stage <stage>`; until then, and
+  # whenever the stored set fails validation, the built-in rules are used.
+  RulesConfigTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub breathesafe-rules-config-${Stage}
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+
+  # ============================================
+  # Domain events (EventBridge)
+  # ============================================
+  # Services publish what happened (aqi.reading.received, aqi.threshold.crossed,
+  # alert.created, alert.decision.recorded); consumers subscribe with rules.
+  EventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Sub breathesafe-${Stage}
+
+  # Every event is kept for 30 days and can be replayed into the bus.
+  EventArchive:
+    Type: AWS::Events::Archive
+    Properties:
+      ArchiveName: !Sub breathesafe-${Stage}-events
+      Description: All BreatheSafe domain events
+      SourceArn: !GetAtt EventBus.Arn
+      RetentionDays: 30
+      EventPattern:
+        source:
+          - prefix: breathesafe.
+
+  EventLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/events/breathesafe-${Stage}
+      RetentionInDays: 14
+
+  # Lets EventBridge write to the event log group.
+  EventLogPolicy:
+    Type: AWS::Logs::ResourcePolicy
+    Properties:
+      PolicyName: !Sub breathesafe-${Stage}-events-to-logs
+      PolicyDocument: !Sub |
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": { "Service": ["events.amazonaws.com", "delivery.logs.amazonaws.com"] },
+              "Action": ["logs:CreateLogStream", "logs:PutLogEvents"],
+              "Resource": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${EventLogGroup}:*"
+            }
+          ]
+        }
+
+  EventLogRule:
+    Type: AWS::Events::Rule
+    DependsOn: EventLogPolicy
+    Properties:
+      Name: !Sub breathesafe-${Stage}-event-log
+      Description: Writes every BreatheSafe event to CloudWatch Logs
+      EventBusName: !Ref EventBus
+      EventPattern:
+        source:
+          - prefix: breathesafe.
+      Targets:
+        - Id: event-log
+          Arn: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${EventLogGroup}
+
   # ============================================
   # Alert delivery (email via SNS)
   # ============================================
@@ -226,7 +318,7 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: !Sub breathesafe-alerts-${Stage}
-      DisplayName: BreatheSafe Campus
+      DisplayName: BreatheSafe
 
   # AWS emails a confirmation link to this address; delivery starts once it
   # is confirmed. Until then alerts are recorded as "email not configured".
@@ -261,6 +353,12 @@ Resources:
                 - dynamodb:PutItem
                 - dynamodb:Query
               Resource: !GetAtt AQIReadingsTable.Arn
+            - Effect: Allow
+              Action: dynamodb:Query
+              Resource: !GetAtt RulesConfigTable.Arn
+            - Effect: Allow
+              Action: events:PutEvents
+              Resource: !GetAtt EventBus.Arn
       Events:
         GetAQI:
           Type: Api
@@ -344,7 +442,7 @@ Resources:
       CodeUri: ../backend/
       Handler: handler.handler
       Timeout: 25
-      Description: Evaluates an area's current AQI against CPCB rules
+      Description: Evaluates an area's current AQI against the active ruleset; serves the ruleset
       Environment:
         Variables:
           CPCB_API_KEY: !Ref CpcbApiKey
@@ -358,12 +456,24 @@ Resources:
                 - dynamodb:PutItem
                 - dynamodb:Query
               Resource: !GetAtt AQIReadingsTable.Arn
+            - Effect: Allow
+              Action: dynamodb:Query
+              Resource: !GetAtt RulesConfigTable.Arn
+            - Effect: Allow
+              Action: events:PutEvents
+              Resource: !GetAtt EventBus.Arn
       Events:
         GetRecommendation:
           Type: Api
           Properties:
             RestApiId: !Ref BreatheSafeApi
             Path: /api/v1/recommendations/current
+            Method: GET
+        GetRules:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/rules
             Method: GET
     Metadata:
       BuildMethod: esbuild
@@ -413,6 +523,12 @@ Resources:
                 - sns:Publish
                 - sns:ListSubscriptionsByTopic
               Resource: !Ref AlertsTopic
+            - Effect: Allow
+              Action: dynamodb:Query
+              Resource: !GetAtt RulesConfigTable.Arn
+            - Effect: Allow
+              Action: events:PutEvents
+              Resource: !GetAtt EventBus.Arn
       Events:
         CreateAlert:
           Type: Api
@@ -483,6 +599,12 @@ Resources:
             - Effect: Allow
               Action: polly:SynthesizeSpeech
               Resource: '*'
+            - Effect: Allow
+              Action: dynamodb:Query
+              Resource: !GetAtt RulesConfigTable.Arn
+            - Effect: Allow
+              Action: events:PutEvents
+              Resource: !GetAtt EventBus.Arn
       Events:
         GetDraft:
           Type: Api
@@ -509,6 +631,62 @@ Resources:
           - .js=.mjs
         EntryPoints:
           - services/notices/src/handler.ts
+        External:
+          - '@aws-sdk/*'
+
+  # Plain-language explanation of the current reading. Public, so output is
+  # guardrail-checked, cached per reading and rate-limited (see the handler).
+  ExplainFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub breathesafe-explain-${Stage}
+      CodeUri: ../backend/
+      Handler: handler.handler
+      Timeout: 25
+      Description: Plain-language AQI explanations (Gemini with output guardrails; deterministic fallback)
+      Environment:
+        Variables:
+          EXPLAIN_AI_ENABLED: !Ref ExplainAIEnabled
+          GEMINI_MODEL: !Ref GeminiModel
+          GEMINI_API_KEY_PARAM: !Ref GeminiApiKeyParam
+          CPCB_API_KEY: !Ref CpcbApiKey
+      LoggingConfig:
+        LogGroup: !Ref ExplainLogGroup
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:Query
+              Resource: !GetAtt AQIReadingsTable.Arn
+            - Effect: Allow
+              Action: ssm:GetParameter
+              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GeminiApiKeyParam}
+            - Effect: Allow
+              Action: dynamodb:Query
+              Resource: !GetAtt RulesConfigTable.Arn
+            - Effect: Allow
+              Action: events:PutEvents
+              Resource: !GetAtt EventBus.Arn
+      Events:
+        GetExplanation:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/explain
+            Method: GET
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        EntryPoints:
+          - services/explain/src/handler.ts
         External:
           - '@aws-sdk/*'
 
@@ -665,6 +843,12 @@ Resources:
       LogGroupName: !Sub /breathesafe/${Stage}/auth
       RetentionInDays: 14
 
+  ExplainLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /breathesafe/${Stage}/explain
+      RetentionInDays: 14
+
   # Operational alarms -> email (same address as alert emails; AWS sends a
   # separate confirmation link for this topic).
   OpsTopic:
@@ -788,6 +972,24 @@ Resources:
       TreatMissingData: notBreaching
       AlarmActions: [!Ref OpsTopic]
 
+  ExplainErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub breathesafe-${Stage}-explain-errors
+      AlarmDescription: Function errors (3 or more in 5 minutes)
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ExplainFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref OpsTopic]
+
 Outputs:
   ApiUrl:
     Description: API Gateway endpoint URL
@@ -807,6 +1009,15 @@ Outputs:
   NoticesEndpoint:
     Description: Notice draft endpoint
     Value: !Sub https://${BreatheSafeApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/api/v1/notices/draft
+  ExplainEndpoint:
+    Description: Plain-language explanation endpoint
+    Value: !Sub https://${BreatheSafeApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/api/v1/explain
+  RulesTableName:
+    Description: DynamoDB RulesConfig table (recommendation bands)
+    Value: !Ref RulesConfigTable
+  EventBusName:
+    Description: EventBridge bus for domain events
+    Value: !Ref EventBus
   AlertsTopicArn:
     Description: SNS topic for alert emails
     Value: !Ref AlertsTopic

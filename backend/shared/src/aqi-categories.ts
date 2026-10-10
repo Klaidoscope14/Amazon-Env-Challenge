@@ -1,4 +1,12 @@
-import { AQIThreshold } from "./types.js";
+import { AQIThreshold, Ruleset } from "./types.js";
+
+/*
+ * The built-in ruleset: CPCB's six AQI categories with the action we
+ * recommend for each. The same bands can be stored in the RulesConfig table
+ * (see rules.ts) to change the actions without a redeploy; these defaults
+ * are used whenever that table is empty, unreadable or fails validation.
+ */
+export const DEFAULT_RULESET_ID = "cpcb-india-v1";
 
 export const CPCB_THRESHOLDS: AQIThreshold[] = [
   {
@@ -6,7 +14,7 @@ export const CPCB_THRESHOLDS: AQIThreshold[] = [
     maxAqi: 50,
     status: "Good",
     statusLevel: 1,
-    action: "No action needed. Air quality is satisfactory.",
+    action: "No action needed. Enjoy outdoor activities as usual.",
     color: "#00B050",
   },
   {
@@ -15,7 +23,7 @@ export const CPCB_THRESHOLDS: AQIThreshold[] = [
     status: "Satisfactory",
     statusLevel: 2,
     action:
-      "Sensitive individuals: consider limiting prolonged outdoor exertion.",
+      "Air quality is acceptable. People who are unusually sensitive should consider limiting prolonged outdoor exertion.",
     color: "#92D050",
   },
   {
@@ -24,7 +32,7 @@ export const CPCB_THRESHOLDS: AQIThreshold[] = [
     status: "Moderate",
     statusLevel: 3,
     action:
-      "Review outdoor activities. Consider moving prolonged events indoors.",
+      "Children, older adults and people with breathing difficulties should limit prolonged outdoor exertion. Consider moving long outdoor plans indoors.",
     color: "#FFFF00",
   },
   {
@@ -33,7 +41,7 @@ export const CPCB_THRESHOLDS: AQIThreshold[] = [
     status: "Poor",
     statusLevel: 4,
     action:
-      "Avoid prolonged outdoor activities. Issue campus advisory to all stakeholders.",
+      "Avoid prolonged outdoor activity. Keep windows closed at peak hours and let your family and neighbours know.",
     color: "#FF9900",
   },
   {
@@ -42,7 +50,7 @@ export const CPCB_THRESHOLDS: AQIThreshold[] = [
     status: "Very Poor",
     statusLevel: 5,
     action:
-      "Cancel all outdoor activities. Notify all stakeholders immediately. Consider early dismissal for sensitive groups.",
+      "Avoid outdoor activities and stay indoors where possible. Warn your family, especially children, older adults and anyone with breathing conditions.",
     color: "#FF0000",
   },
   {
@@ -51,10 +59,16 @@ export const CPCB_THRESHOLDS: AQIThreshold[] = [
     status: "Severe",
     statusLevel: 6,
     action:
-      "Emergency protocol. Cancel all outdoor activities. Consider campus-wide early dismissal. Notify parents and guardians.",
+      "Stay indoors and avoid all outdoor exertion. Follow official advisories and check on vulnerable family members and neighbours.",
     color: "#800000",
   },
 ];
+
+export const BUILT_IN_RULESET: Ruleset = {
+  id: DEFAULT_RULESET_ID,
+  thresholds: CPCB_THRESHOLDS,
+  source: "built-in",
+};
 
 export const STALE_THRESHOLD_MINUTES = 120;
 export const CACHE_FRESH_MINUTES = 5;
@@ -71,13 +85,13 @@ const FUTURE_SKEW_MINUTES = 5;
  * by upper bound, so fractional readings never fall between bands; anything
  * above 500 is still Severe.
  */
-export function getThresholdForAqi(aqi: unknown): AQIThreshold | null {
+export function getThresholdForAqi(
+  aqi: unknown,
+  thresholds: AQIThreshold[] = CPCB_THRESHOLDS
+): AQIThreshold | null {
   if (typeof aqi !== "number" || !Number.isFinite(aqi) || aqi < 0) return null;
   const rounded = Math.round(aqi);
-  return (
-    CPCB_THRESHOLDS.find((t) => rounded <= t.maxAqi) ??
-    CPCB_THRESHOLDS[CPCB_THRESHOLDS.length - 1]
-  );
+  return thresholds.find((t) => rounded <= t.maxAqi) ?? thresholds[thresholds.length - 1];
 }
 
 export function getDataAge(timestamp: string): {

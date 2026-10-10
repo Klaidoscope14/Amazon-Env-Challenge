@@ -1,7 +1,7 @@
 {
-  "name": "BreatheSafe Campus",
+  "name": "BreatheSafe",
   "short_name": "BreatheSafe",
-  "description": "Air Quality Action Engine for Campus Administrators",
+  "description": "Air quality you can act on: the AQI where you are, what to do, and alerts for your family and neighbours",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f9fafb",

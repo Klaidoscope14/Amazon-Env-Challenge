@@ -57,9 +57,9 @@ export function buildAlertEmail(alert: Alert, noticeUrl: string): { subject: str
     ...(alert.messageHi ? [alert.messageHi, ""] : []),
     "----",
     `AQI ${snapshot?.aqi ?? "n/a"} (${status}) - ${snapshot?.stationName ?? "unknown station"}, source: ${snapshot?.source ?? "unknown"}${isDemo ? " (DEMO DATA - not a live reading)" : ""}`,
-    `Audience: ${AUDIENCE_LABELS[alert.audience] ?? alert.audience}`,
-    `Issued by ${alert.adminName} at ${formatIstTime(alert.createdAt)} IST`,
-    ...(noticeUrl ? [`Campus notice: ${noticeUrl}?area=${encodeURIComponent(alert.campus)}`] : []),
+    `Shared with: ${AUDIENCE_LABELS[alert.audience] ?? alert.audience}`,
+    `Shared by ${alert.adminName} at ${formatIstTime(alert.createdAt)} IST`,
+    ...(noticeUrl ? [`Air-quality notice: ${noticeUrl}?area=${encodeURIComponent(alert.campus)}`] : []),
     "",
     "Decision support, not medical advice. Follow official CPCB and health-authority guidance.",
   ];

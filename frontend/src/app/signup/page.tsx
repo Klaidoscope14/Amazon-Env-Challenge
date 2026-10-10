@@ -11,7 +11,6 @@ export default function SignUpPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [institution, setInstitution] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -26,7 +25,6 @@ export default function SignUpPage() {
         email,
         password,
         name,
-        institution: institution || undefined,
       });
       router.push(`/verify?email=${encodeURIComponent(email)}`);
     } catch (err) {
@@ -44,13 +42,13 @@ export default function SignUpPage() {
             Create Account
           </h1>
           <p className="text-sm text-muted text-center mb-6">
-            Join BreatheSafe Campus as an administrator
+            Sign up to share air-quality alerts with your family, neighbours or group
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="signup-name" className="block text-sm font-medium text-muted-strong mb-1">
-                Full Name *
+                Your name *
               </label>
               <input
                 id="signup-name"
@@ -76,7 +74,7 @@ export default function SignUpPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="you@campus.edu"
+                placeholder="you@example.com"
               />
             </div>
 
@@ -100,22 +98,6 @@ export default function SignUpPage() {
                 At least 8 characters, with one lowercase letter and one number.
               </p>
             </div>
-
-            <div>
-              <label htmlFor="signup-institution" className="block text-sm font-medium text-muted-strong mb-1">
-                Institution
-              </label>
-              <input
-                id="signup-institution"
-                autoComplete="organization"
-                type="text"
-                value={institution}
-                onChange={(e) => setInstitution(e.target.value)}
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Delhi Technological University"
-              />
-            </div>
-
 
             {error && (
               <p role="alert" className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 rounded-lg px-3 py-2">

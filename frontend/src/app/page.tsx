@@ -148,6 +148,8 @@ function Dashboard({ area }: { area: AreaInfo }) {
       {recQuery.data && (
         <RecommendationCard
           recommendation={recQuery.data}
+          areaId={area.id}
+          scenario={activeScenario}
           onIssueAlert={() => setShowAlertForm(true)}
         />
       )}

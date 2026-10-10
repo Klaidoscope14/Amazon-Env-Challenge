@@ -47,10 +47,10 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {area ? (
-        <AreaHeader area={area} title="Campus Air Quality Notice · for students, staff and parents" />
+        <AreaHeader area={area} title="Air-quality notice for this area" />
       ) : (
         <div>
-          <p className="text-sm text-muted">Campus Air Quality Notice · for students, staff and parents</p>
+          <p className="text-sm text-muted">Air-quality notice for this area</p>
           <h1 className="text-2xl font-bold text-foreground">
             {alert?.areaName ?? "Air-quality advisory"}
           </h1>
@@ -76,7 +76,7 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
 
       {latestQuery.data && !alert && (
         <div className="rounded-2xl border border-border bg-surface p-8 text-center">
-          <p className="text-foreground font-medium">No air-quality advisories have been issued for this area.</p>
+          <p className="text-foreground font-medium">No air-quality advisories have been shared for this area yet.</p>
           <p className="text-sm text-muted mt-1">
             Normal activities continue. Check the{" "}
             <Link href="/" className="underline">
@@ -91,7 +91,7 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
         <article className="rounded-2xl border border-border bg-surface p-6 shadow-sm space-y-5">
           {isOld && (
             <p className="rounded-lg bg-surface-2 border border-border px-3 py-2 text-sm text-muted-strong">
-              This is the most recent advisory, issued over 24 hours ago. See the{" "}
+              This is the most recent advisory, shared over 24 hours ago. See the{" "}
               <Link href="/" className="underline">
                 dashboard
               </Link>{" "}
@@ -131,7 +131,7 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
           )}
 
           <p className="text-xs text-muted">
-            For: {AUDIENCE_LABELS[alert.audience] ?? alert.audience} &middot; Issued by{" "}
+            For: {AUDIENCE_LABELS[alert.audience] ?? alert.audience} &middot; Shared by{" "}
             {alert.adminName}
           </p>
 
@@ -146,7 +146,7 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
       )}
 
       <p className="text-xs text-muted">
-        This notice is decision support from campus administration, not medical advice.
+        This notice was shared by a BreatheSafe user. It is decision support, not medical advice.
         Follow official{" "}
         <a href="https://cpcb.nic.in" target="_blank" rel="noopener noreferrer" className="underline">
           CPCB

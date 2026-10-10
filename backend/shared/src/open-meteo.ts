@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { AQIReading, TrendPoint } from "./types.js";
 
 /*
@@ -36,6 +37,22 @@ const WINDOWS: Record<Pollutant, { hours: number; minValues: number }> = {
   o3: { hours: 8, minValues: 6 },
   co: { hours: 8, minValues: 6 },
 };
+
+// Shape we rely on, checked before any value is used. Missing pollutant
+// series are allowed (they just don't count towards the AQI).
+const HourlyValues = z.array(z.number().nullable()).optional();
+export const OpenMeteoResponseSchema = z.object({
+  hourly: z.object({
+    time: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)).min(1),
+    pm10: HourlyValues,
+    pm2_5: HourlyValues,
+    nitrogen_dioxide: HourlyValues,
+    sulphur_dioxide: HourlyValues,
+    ammonia: HourlyValues,
+    ozone: HourlyValues,
+    carbon_monoxide: HourlyValues,
+  }),
+});
 
 const AQI_BOUNDS = [0, 50, 100, 200, 300, 400, 500];
 
@@ -89,12 +106,14 @@ async function fetchSeries(lat: number, lon: number, pastDays: number): Promise<
     }
   }
   if (!response?.ok) throw new Error(`Open-Meteo returned HTTP ${response?.status}`);
-  const data = (await response.json()) as { hourly?: Record<string, (number | null)[] | string[]> };
-  const hourly = data.hourly;
-  if (!hourly || !Array.isArray(hourly.time)) throw new Error("Open-Meteo response had no hourly data");
+  const parsed = OpenMeteoResponseSchema.safeParse(await response.json());
+  if (!parsed.success) {
+    throw new Error(`Open-Meteo response failed validation: ${parsed.error.issues[0]?.message}`);
+  }
+  const hourly = parsed.data.hourly;
 
   const values = {} as Record<Pollutant, (number | null)[]>;
-  for (const [pollutant, field] of Object.entries(API_FIELDS) as [Pollutant, string][]) {
+  for (const [pollutant, field] of Object.entries(API_FIELDS) as [Pollutant, keyof typeof hourly][]) {
     const series = (hourly[field] as (number | null)[] | undefined) ?? [];
     // CO arrives in µg/m³; CPCB breakpoints use mg/m³.
     values[pollutant] = series.map((v) =>
@@ -102,7 +121,7 @@ async function fetchSeries(lat: number, lon: number, pastDays: number): Promise<
     );
   }
   // Times come as "2026-10-10T19:00" in GMT.
-  return { times: (hourly.time as string[]).map((t) => `${t}Z`), values };
+  return { times: hourly.time.map((t) => `${t}Z`), values };
 }
 
 /** AQI from the averaging windows ending at hour `index`, or null if too little data. */

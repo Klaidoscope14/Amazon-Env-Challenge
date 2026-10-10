@@ -1,4 +1,4 @@
-# BreatheSafe Campus — frontend
+# BreatheSafe — frontend
 
 Next.js (App Router) + TypeScript + Tailwind CSS + TanStack Query.
 

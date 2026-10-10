@@ -7,6 +7,8 @@ import { marshall } from "@aws-sdk/util-dynamodb";
 import { randomUUID } from "crypto";
 import { Alert, AQIReading, CreateAlertInput } from "../../../../shared/src/types.js";
 import { evaluate } from "../../../../shared/src/evaluate.js";
+import { getActiveRuleset } from "../../../../shared/src/rules.js";
+import { publishEvents } from "../../../../shared/src/events.js";
 import { getReadingAt } from "../../../../shared/src/readings.js";
 import {
   DataContext,
@@ -37,7 +39,10 @@ export async function createAlert(
   const alertId = randomUUID();
   const now = new Date().toISOString();
 
-  const { reading: aqiSnapshot, areaName } = await resolveSnapshot(dynamodb, input, config);
+  const [{ reading: aqiSnapshot, areaName }, ruleset] = await Promise.all([
+    resolveSnapshot(dynamodb, input, config),
+    getActiveRuleset(dynamodb),
+  ]);
   if (!aqiSnapshot) {
     throw new NoReadingError();
   }
@@ -58,7 +63,7 @@ export async function createAlert(
     ...(input.messageHi ? { messageHi: input.messageHi } : {}),
     ...(input.noticeSource ? { noticeSource: input.noticeSource } : {}),
     aqiSnapshot,
-    recommendation: evaluate(aqiSnapshot),
+    recommendation: evaluate(aqiSnapshot, ruleset),
     status: "sent",
     delivery: { inApp: true, email: canEmail ? "pending" : "not_configured" },
     decision: null,
@@ -96,11 +101,29 @@ export async function createAlert(
     }
   }
 
+  await publishEvents([
+    {
+      source: "breathesafe.alerts",
+      type: "alert.created",
+      detail: {
+        alertId,
+        area: alert.campus,
+        areaName: alert.areaName,
+        audience: alert.audience,
+        aqi: aqiSnapshot.aqi,
+        status: alert.recommendation.status,
+        dataMode: aqiSnapshot.dataMode,
+        emailDelivery: alert.delivery?.email ?? "not_configured",
+        createdAt: now,
+      },
+    },
+  ]);
+
   return alert;
 }
 
 // Demo/presenter mode: the scenario on screen. Live mode: the exact reading
-// the admin saw (by source timestamp), falling back to the current reading.
+// the sender saw (by source timestamp), falling back to the current reading.
 async function resolveSnapshot(
   dynamodb: DynamoDBClient,
   input: CreateAlertInput,

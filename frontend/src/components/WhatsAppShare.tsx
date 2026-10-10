@@ -10,7 +10,7 @@ export default function WhatsAppShare({
 }) {
   function share() {
     const noticeUrl = `${window.location.origin}/notice?area=${encodeURIComponent(alert.campus)}`;
-    const text = [alert.message, alert.messageHi, `Campus notice: ${noticeUrl}`]
+    const text = [alert.message, alert.messageHi, `Air-quality notice: ${noticeUrl}`]
       .filter(Boolean)
       .join("\n\n");
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");

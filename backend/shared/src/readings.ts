@@ -50,3 +50,29 @@ export async function getReadingAt(
   );
   return result.Item ? toReading(unmarshall(result.Item)) : null;
 }
+
+/** The most recent stored reading for an area before the given source timestamp. */
+export async function getReadingBefore(
+  dynamodb: DynamoDBClient,
+  tableName: string,
+  campus: string,
+  timestamp: string
+): Promise<AQIReading | null> {
+  const result = await dynamodb.send(
+    new QueryCommand({
+      TableName: tableName,
+      KeyConditionExpression: "PK = :pk AND SK BETWEEN :from AND :to",
+      ExpressionAttributeValues: marshall({
+        ":pk": `CAMPUS#${campus}`,
+        ":from": "READING#",
+        ":to": `READING#${timestamp}`,
+      }),
+      ScanIndexForward: false,
+      Limit: 2,
+    })
+  );
+  const item = (result.Items ?? [])
+    .map((raw) => toReading(unmarshall(raw)))
+    .find((reading) => reading.timestamp !== timestamp);
+  return item ?? null;
+}

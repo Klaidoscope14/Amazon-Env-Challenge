@@ -14,8 +14,6 @@ import { API_URL } from "./config";
 interface User {
   email: string;
   name: string;
-  institution?: string;
-  role?: string;
 }
 
 interface AuthTokens {

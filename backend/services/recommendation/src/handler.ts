@@ -1,12 +1,10 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { evaluate, evaluateUnavailable } from "../../../shared/src/evaluate.js";
-import { isDemoScenario } from "../../../shared/src/demo.js";
-import {
-  dataContextFromEnv,
-  getAreaReading,
-  isAreaId,
-} from "../../../shared/src/area-readings.js";
+import { dataContextFromEnv, getAreaReading } from "../../../shared/src/area-readings.js";
+import { getActiveRuleset } from "../../../shared/src/rules.js";
+import { AreaQuerySchema, parse, ValidationError } from "../../../shared/src/schemas.js";
+import { respond } from "../../../shared/src/http.js";
 
 const dynamodb = new DynamoDBClient({});
 const ctx = dataContextFromEnv();
@@ -14,35 +12,26 @@ const ctx = dataContextFromEnv();
 export async function handler(
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> {
-  const areaId = event.queryStringParameters?.campus;
-  const scenario = event.queryStringParameters?.scenario || undefined;
-
-  if (!isAreaId(areaId)) {
-    return respond(400, { error: "campus (area id) is required" });
-  }
-  if (scenario && !isDemoScenario(scenario)) {
-    return respond(400, { error: `Unknown demo scenario: ${scenario}` });
-  }
-
   try {
+    // GET /rules: the ruleset in force, so clients can show exactly what the
+    // engine applies (including edits made in the RulesConfig table).
+    if (event.path.endsWith("/rules")) {
+      const ruleset = await getActiveRuleset(dynamodb);
+      return respond(200, ruleset);
+    }
+
+    const { campus: areaId, scenario } = parse(AreaQuerySchema, event.queryStringParameters ?? {});
+
     // Same resolution as GET /aqi/current, so the recommendation always
     // evaluates the reading the dashboard is showing.
-    const { reading } = await getAreaReading(dynamodb, ctx, areaId, scenario);
-    return respond(200, reading ? evaluate(reading) : evaluateUnavailable());
+    const [{ reading }, ruleset] = await Promise.all([
+      getAreaReading(dynamodb, ctx, areaId, scenario),
+      getActiveRuleset(dynamodb),
+    ]);
+    return respond(200, reading ? evaluate(reading, ruleset) : evaluateUnavailable());
   } catch (err) {
+    if (err instanceof ValidationError) return respond(400, { error: err.message });
     console.error("Recommendation handler error:", err);
     return respond(500, { error: "Internal server error" });
   }
-}
-
-function respond(statusCode: number, body: unknown): APIGatewayProxyResult {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization",
-    },
-    body: JSON.stringify(body),
-  };
 }

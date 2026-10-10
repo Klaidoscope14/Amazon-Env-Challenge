@@ -1,4 +1,4 @@
-import type { AlertDelivery, AQIStatus, Audience } from "./types";
+import type { AlertDelivery, AQIStatus, Audience, LegacyAudience } from "./types";
 
 export const STATUS_CONFIG: Record<
   AQIStatus,
@@ -70,15 +70,19 @@ export function statusForAqi(aqi: number): AQIStatus {
   return AQI_BANDS.find((b) => rounded <= b.max)?.status ?? "Severe";
 }
 
-export const AUDIENCE_OPTIONS = [
-  { value: "all", label: "All (Students, Staff & Parents)" },
-  { value: "students", label: "Students" },
-  { value: "staff", label: "Staff" },
-  { value: "parents", label: "Parents" },
-] as const;
+export const AUDIENCE_OPTIONS: { value: Audience; label: string }[] = [
+  { value: "family", label: "My family" },
+  { value: "neighbours", label: "My neighbourhood / society" },
+  { value: "group", label: "My team / group" },
+  { value: "all", label: "Everyone" },
+];
 
-export const AUDIENCE_LABELS: Record<Audience, string> = {
-  all: "All stakeholders",
+export const AUDIENCE_LABELS: Record<Audience | LegacyAudience, string> = {
+  family: "My family",
+  neighbours: "My neighbourhood / society",
+  group: "My team / group",
+  all: "Everyone",
+  // Older alerts
   students: "Students",
   staff: "Staff",
   parents: "Parents",
@@ -96,9 +100,9 @@ export const EMAIL_DELIVERY: Record<
 };
 
 export const DECISION_OPTIONS = [
-  "Moved activities indoors",
-  "Cancelled outdoor events",
-  "Sent advisory — monitoring",
+  "Moved plans indoors",
+  "Skipped outdoor exercise",
+  "Kept windows closed",
   "No action needed",
 ] as const;
 

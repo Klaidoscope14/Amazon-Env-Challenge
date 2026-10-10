@@ -42,7 +42,6 @@ export interface Recommendation {
   status: AQIStatus;
   statusLevel: number;
   action: string;
-  aiNarrative?: string;
   evidence: {
     aqi: number;
     dominantPollutant: string;
@@ -54,6 +53,10 @@ export interface Recommendation {
     dataAge: string;
   };
   rule: {
+    /** Ruleset id, e.g. "cpcb-india-v1". */
+    id?: string;
+    /** "dynamodb": the RulesConfig table; "built-in": bundled defaults. */
+    config?: "dynamodb" | "built-in";
     name: string;
     threshold: string;
     source: string;
@@ -77,7 +80,10 @@ export interface TrendResponse {
   dataMode: "live" | "demo";
 }
 
-export type Audience = "all" | "students" | "staff" | "parents";
+export type Audience = "all" | "family" | "neighbours" | "group";
+
+/** Audiences from before BreatheSafe opened to everyone; still on older alerts. */
+export type LegacyAudience = "students" | "staff" | "parents";
 
 /** Where an alert actually went. Absent on alerts created before delivery tracking. */
 export interface AlertDelivery {
@@ -90,7 +96,7 @@ export interface Alert {
   campus: string;
   /** Display name of the area (station) the alert was issued for. */
   areaName?: string;
-  audience: Audience;
+  audience: Audience | LegacyAudience;
   message: string;
   messageHi?: string;
   noticeSource?: NoticeDraft["source"];
@@ -102,6 +108,7 @@ export interface Alert {
   decision: string | null;
   decisionTimestamp: string | null;
   decisionBy?: string | null;
+  /** Name of the signed-in person who shared the alert. */
   adminName: string;
   createdAt: string;
 }
@@ -113,4 +120,33 @@ export interface NoticeDraft {
   source: "template" | "ai";
   status: AQIStatus;
   aqi: number;
+}
+
+export interface AQIThreshold {
+  minAqi: number;
+  maxAqi: number;
+  status: AQIStatus;
+  statusLevel: number;
+  action: string;
+  color: string;
+}
+
+/** GET /rules: the ruleset the engine is applying. */
+export interface Ruleset {
+  id: string;
+  thresholds: AQIThreshold[];
+  source: "dynamodb" | "built-in";
+}
+
+/** GET /explain: plain-language explanation of the current reading. */
+export interface Explanation {
+  explanation: string;
+  lang: "en" | "hi";
+  generatedBy: "ai" | "template";
+  fallbackReason?: string;
+  groundedIn: string[];
+  status: AQIStatus;
+  aqi: number;
+  dataQuality: Recommendation["dataQuality"];
+  disclaimer: string;
 }

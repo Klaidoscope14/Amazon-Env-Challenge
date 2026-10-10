@@ -7,13 +7,20 @@ import {
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { AQIReading, NoticeDraft } from "../../../shared/src/types.js";
 import { evaluate } from "../../../shared/src/evaluate.js";
-import { isDemoScenario } from "../../../shared/src/demo.js";
-import { buildTemplateNotice, describePlace, isAudience } from "../../../shared/src/notice-templates.js";
+import { buildTemplateNotice, describePlace } from "../../../shared/src/notice-templates.js";
 import { getReadingAt } from "../../../shared/src/readings.js";
+import { getActiveRuleset } from "../../../shared/src/rules.js";
+import { geminiConfigFromEnv } from "../../../shared/src/gemini.js";
+import {
+  NoticeAudioQuerySchema,
+  NoticeDraftQuerySchema,
+  parse,
+  ValidationError,
+} from "../../../shared/src/schemas.js";
+import { respond, signedInName, UnauthorizedError } from "../../../shared/src/http.js";
 import {
   dataContextFromEnv,
   getAreaReading,
-  isAreaId,
   usesDemo,
 } from "../../../shared/src/area-readings.js";
 import { polishNotice } from "./ai.js";
@@ -23,8 +30,7 @@ const polly = new PollyClient({});
 const ALERTS_TABLE = process.env.ALERTS_TABLE_NAME!;
 const ctx = dataContextFromEnv();
 const AI_ENABLED = process.env.NOTICE_AI_ENABLED === "true";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-flash-lite-latest";
-const GEMINI_KEY_PARAM = process.env.GEMINI_API_KEY_PARAM || "/breathesafe/gemini-api-key";
+const GEMINI = geminiConfigFromEnv();
 
 const AUDIO_CACHE_LIMIT = 20;
 const audioCache = new Map<string, string>();
@@ -41,42 +47,35 @@ export async function handler(
     }
     return respond(404, { error: "Not found" });
   } catch (err) {
+    if (err instanceof ValidationError) return respond(400, { error: err.message });
+    if (err instanceof UnauthorizedError) return respond(401, { error: err.message });
     console.error("Notices handler error:", err);
     return respond(500, { error: "Internal server error" });
   }
 }
 
 async function handleDraft(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  const qs = event.queryStringParameters ?? {};
-  const areaId = qs.campus;
-  const audience = qs.audience || "all";
-  const scenario = qs.scenario || undefined;
-  const institution = (qs.institution ?? "").trim().slice(0, 100) || undefined;
+  const senderName = signedInName(event);
+  const query = parse(NoticeDraftQuerySchema, event.queryStringParameters ?? {});
+  const { campus: areaId, audience, scenario } = query;
 
-  if (!isAreaId(areaId)) {
-    return respond(400, { error: "campus (area id) is required" });
-  }
-  if (!isAudience(audience)) {
-    return respond(400, { error: `Unknown audience: ${audience}` });
-  }
-  if (scenario && !isDemoScenario(scenario)) {
-    return respond(400, { error: `Unknown demo scenario: ${scenario}` });
-  }
-
-  // Prefer the exact reading on the admin's screen (live mode), else current.
-  const current = await getAreaReading(dynamodb, ctx, areaId, scenario);
+  // Prefer the exact reading on the sender's screen (live mode), else current.
+  const [current, ruleset] = await Promise.all([
+    getAreaReading(dynamodb, ctx, areaId, scenario),
+    getActiveRuleset(dynamodb),
+  ]);
   let reading: AQIReading | null = current.reading;
-  if (!usesDemo(ctx, scenario) && qs.readingTimestamp) {
-    reading = (await getReadingAt(dynamodb, ctx.aqiTable, areaId, qs.readingTimestamp)) ?? reading;
+  if (!usesDemo(ctx, scenario) && query.readingTimestamp) {
+    reading = (await getReadingAt(dynamodb, ctx.aqiTable, areaId, query.readingTimestamp)) ?? reading;
   }
 
-  const recommendation = reading ? evaluate(reading) : null;
+  const recommendation = reading ? evaluate(reading, ruleset) : null;
   const areaName = current.area?.name ?? reading?.stationName.replace(/ \(sample values\)$/, "") ?? "your area";
   const place = {
     areaName,
     areaKind: current.area?.kind,
     measuredStation: reading?.source === "CPCB" ? reading.stationName : undefined,
-    institution,
+    senderName,
   };
   const template = recommendation ? buildTemplateNotice(recommendation, place, audience) : null;
   if (!recommendation || !template) {
@@ -87,7 +86,7 @@ async function handleDraft(event: APIGatewayProxyEvent): Promise<APIGatewayProxy
     ? await polishNotice(
         template,
         { aqi: recommendation.evidence.aqi, audience, areaName: describePlace(place).keep },
-        { keyParameter: GEMINI_KEY_PARAM, model: GEMINI_MODEL }
+        GEMINI
       )
     : null;
 
@@ -103,16 +102,10 @@ async function handleDraft(event: APIGatewayProxyEvent): Promise<APIGatewayProxy
 // Audio is only generated for alerts that were actually issued (text read
 // from the table), so the endpoint can't be used as a general TTS service.
 async function handleAudio(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  const qs = event.queryStringParameters ?? {};
-  const { campus, alertId, createdAt } = qs;
-  const lang = qs.lang || "en";
-
-  if (lang !== "en" && lang !== "hi") {
-    return respond(400, { error: "lang must be en or hi" });
-  }
-  if (!isAreaId(campus) || !alertId || !createdAt || alertId.length > 64 || createdAt.length > 40) {
-    return respond(400, { error: "campus, alertId and createdAt are required" });
-  }
+  const { campus, alertId, createdAt, lang } = parse(
+    NoticeAudioQuerySchema,
+    event.queryStringParameters ?? {}
+  );
 
   const cacheKey = `${campus}|${alertId}|${lang}`;
   const cached = audioCache.get(cacheKey);
@@ -149,16 +142,4 @@ async function handleAudio(event: APIGatewayProxyEvent): Promise<APIGatewayProxy
   if (audioCache.size >= AUDIO_CACHE_LIMIT) audioCache.delete(audioCache.keys().next().value!);
   audioCache.set(cacheKey, audioBase64);
   return respond(200, { contentType: "audio/mpeg", audioBase64 });
-}
-
-function respond(statusCode: number, body: unknown): APIGatewayProxyResult {
-  return {
-    statusCode,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type,Authorization",
-    },
-    body: JSON.stringify(body),
-  };
 }

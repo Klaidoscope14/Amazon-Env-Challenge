@@ -16,11 +16,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "BreatheSafe Campus — Air Quality Action Engine",
-    template: "%s — BreatheSafe Campus",
+    default: "BreatheSafe — Air quality you can act on",
+    template: "%s — BreatheSafe",
   },
   description:
-    "From AQI reading to campus action. Explainable, auditable air-quality decision support for schools and colleges.",
+    "The AQI where you are, what to do about it, and an easy way to warn your family and neighbours — in English and Hindi.",
   manifest: "/manifest.json",
 };
 

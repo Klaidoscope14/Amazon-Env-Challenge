@@ -26,7 +26,6 @@ export interface Recommendation {
   status: AQIStatus;
   statusLevel: number;
   action: string;
-  aiNarrative?: string;
   evidence: {
     aqi: number;
     dominantPollutant: string;
@@ -38,6 +37,10 @@ export interface Recommendation {
     dataAge: string;
   };
   rule: {
+    /** Ruleset the band came from, e.g. "cpcb-india-v1". */
+    id?: string;
+    /** "dynamodb": the RulesConfig table; "built-in": the bundled defaults. */
+    config?: Ruleset["source"];
     name: string;
     threshold: string;
     source: string;
@@ -85,7 +88,17 @@ export interface AQIThreshold {
   color: string;
 }
 
-export type Audience = "all" | "students" | "staff" | "parents";
+/** A set of AQI bands and actions; stored in the RulesConfig table or built in. */
+export interface Ruleset {
+  id: string;
+  thresholds: AQIThreshold[];
+  source: "dynamodb" | "built-in";
+}
+
+export type Audience = "all" | "family" | "neighbours" | "group";
+
+/** Audiences from before BreatheSafe opened to everyone; still on older alerts. */
+export type LegacyAudience = "students" | "staff" | "parents";
 
 /** Where an alert actually went. Absent on alerts created before delivery tracking. */
 export interface AlertDelivery {
@@ -98,11 +111,11 @@ export interface Alert {
   campus: string;
   /** Display name of the area (station) the alert was issued for. */
   areaName?: string;
-  audience: Audience;
+  audience: Audience | LegacyAudience;
   message: string;
   /** Hindi version of the message (absent on older alerts). */
   messageHi?: string;
-  /** How the notice text was drafted before the admin reviewed it. */
+  /** How the notice text was drafted before the sender reviewed it. */
   noticeSource?: NoticeDraft["source"];
   aqiSnapshot: AQIReading;
   recommendation: Recommendation;
@@ -112,6 +125,7 @@ export interface Alert {
   decision: string | null;
   decisionTimestamp: string | null;
   decisionBy?: string | null;
+  /** Name of the signed-in person who issued the alert (field name kept for stored alerts). */
   adminName: string;
   createdAt: string;
 }
@@ -127,8 +141,6 @@ export interface CreateAlertInput {
   scenario?: string;
   /** Live mode: source timestamp of the reading on screen, so the snapshot matches it. */
   readingTimestamp?: string;
-  /** Admin's institution, used in the notice sign-off. */
-  institution?: string;
 }
 
 export interface RecordDecisionInput {
@@ -144,6 +156,21 @@ export interface NoticeDraft {
   source: "template" | "ai";
   status: AQIStatus;
   aqi: number;
+}
+
+/** Plain-language explanation of the current reading (GET /explain). */
+export interface Explanation {
+  explanation: string;
+  lang: "en" | "hi";
+  /** "ai": model-written and passed the guardrails; "template": deterministic text. */
+  generatedBy: "ai" | "template";
+  /** Why an AI explanation was not used (guardrail rejection, disabled, error). */
+  fallbackReason?: string;
+  groundedIn: string[];
+  status: AQIStatus;
+  aqi: number;
+  dataQuality: Recommendation["dataQuality"];
+  disclaimer: string;
 }
 
 export interface APIResponse<T> {

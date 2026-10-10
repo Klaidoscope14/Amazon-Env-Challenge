@@ -52,7 +52,7 @@ function LoginForm() {
             Sign In
           </h1>
           <p className="text-sm text-muted text-center mb-6">
-            Access your BreatheSafe Campus dashboard
+            Sign in to share alerts and record what you decided
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -68,7 +68,7 @@ function LoginForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="you@campus.edu"
+                placeholder="you@example.com"
               />
             </div>
 

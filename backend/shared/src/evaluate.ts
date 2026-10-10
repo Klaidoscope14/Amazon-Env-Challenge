@@ -1,8 +1,16 @@
-import { AQIReading, Recommendation } from "./types.js";
-import { getThresholdForAqi, getDataAge, DISCLAIMER } from "./aqi-categories.js";
+import { AQIReading, Recommendation, Ruleset } from "./types.js";
+import {
+  BUILT_IN_RULESET,
+  DISCLAIMER,
+  getDataAge,
+  getThresholdForAqi,
+} from "./aqi-categories.js";
 
-export function evaluate(reading: AQIReading): Recommendation {
-  const threshold = getThresholdForAqi(reading.aqi);
+export function evaluate(
+  reading: AQIReading,
+  ruleset: Ruleset = BUILT_IN_RULESET
+): Recommendation {
+  const threshold = getThresholdForAqi(reading.aqi, ruleset.thresholds);
   if (!threshold) {
     return evaluateUnavailable(
       "The latest reading has no valid AQI value. Check official CPCB sources directly."
@@ -38,6 +46,8 @@ export function evaluate(reading: AQIReading): Recommendation {
       dataAge: age.label,
     },
     rule: {
+      id: ruleset.id,
+      config: ruleset.source,
       name: `CPCB AQI Category — ${threshold.status} (${threshold.minAqi}–${threshold.maxAqi})`,
       threshold: `AQI ${threshold.minAqi}–${threshold.maxAqi}`,
       source: "Central Pollution Control Board, India",

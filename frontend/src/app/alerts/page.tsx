@@ -79,7 +79,7 @@ function EvidenceDetails({ alert }: { alert: Alert }) {
         )}
         {alert.noticeSource && (
           <p className="text-xs text-muted">
-            Notice text: {alert.noticeSource === "ai" ? "AI-assisted draft, reviewed by admin" : "approved template"}
+            Notice text: {alert.noticeSource === "ai" ? "AI-assisted draft, reviewed by the sender" : "approved template"}
           </p>
         )}
       </div>
@@ -134,7 +134,7 @@ function AlertsLog({ area }: { area: AreaInfo }) {
 
       {alertsQuery.data?.alerts.length === 0 && (
         <div className="rounded-2xl border border-border bg-surface p-8 text-center">
-          <p className="text-muted-strong">No alerts issued for this area yet.</p>
+          <p className="text-muted-strong">No alerts shared for this area yet.</p>
           <p className="text-sm text-muted mt-1">
             Go to the Dashboard to issue an alert when AQI is elevated.
           </p>

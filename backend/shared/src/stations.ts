@@ -485,11 +485,12 @@ export function stationReading(
  * Stores a reading for trends, keyed by its source observation time so the
  * same hourly CPCB value is only stored once however often it is requested.
  */
+/** Stores a reading once per source timestamp; true when this call stored it. */
 export async function persistReading(
   dynamodb: DynamoDBClient,
   table: string,
   reading: AQIReading
-): Promise<void> {
+): Promise<boolean> {
   try {
     await dynamodb.send(
       new PutItemCommand({
@@ -506,9 +507,11 @@ export async function persistReading(
         ConditionExpression: "attribute_not_exists(PK)",
       })
     );
+    return true;
   } catch (err) {
     if (!(err instanceof ConditionalCheckFailedException)) {
       console.error("Failed to store reading:", err);
     }
+    return false;
   }
 }
