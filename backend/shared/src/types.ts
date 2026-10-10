@@ -8,6 +8,18 @@ export interface AQIReading {
   timestamp: string;
   fetchedAt: string;
   dataMode: "live" | "cached" | "demo";
+  /** "subindex": pollutant values are CPCB sub-indices (live feed); otherwise concentrations. */
+  pollutantScale?: "subindex" | "concentration";
+}
+
+/** The place everything is scoped to: nearest CPCB station, or a city in demo mode. */
+export interface AreaInfo {
+  id: string;
+  kind: "station" | "city" | "geo";
+  name: string;
+  city: string;
+  state: string;
+  distanceKm?: number;
 }
 
 export interface Recommendation {
@@ -19,6 +31,7 @@ export interface Recommendation {
     aqi: number;
     dominantPollutant: string;
     pollutants: Record<string, number>;
+    pollutantScale?: "subindex" | "concentration";
     source: string;
     stationName: string;
     timestamp: string;
@@ -36,6 +49,7 @@ export interface Recommendation {
 export interface AQIReadingResponse extends AQIReading {
   status: AQIStatus;
   statusLevel: number;
+  area?: AreaInfo;
 }
 
 export interface TrendPoint {
@@ -82,6 +96,8 @@ export interface AlertDelivery {
 export interface Alert {
   alertId: string;
   campus: string;
+  /** Display name of the area (station) the alert was issued for. */
+  areaName?: string;
   audience: Audience;
   message: string;
   /** Hindi version of the message (absent on older alerts). */
@@ -109,8 +125,10 @@ export interface CreateAlertInput {
   adminName: string;
   /** Demo mode: the scenario on screen. */
   scenario?: string;
-  /** Live mode: fetchedAt of the reading on screen, so the snapshot matches it. */
-  readingFetchedAt?: string;
+  /** Live mode: source timestamp of the reading on screen, so the snapshot matches it. */
+  readingTimestamp?: string;
+  /** Admin's institution, used in the notice sign-off. */
+  institution?: string;
 }
 
 export interface RecordDecisionInput {

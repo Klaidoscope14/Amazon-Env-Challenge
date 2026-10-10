@@ -26,14 +26,20 @@ export function isDemoScenario(scenario: unknown): scenario is string {
   return typeof scenario === "string" && DEMO_FIXTURES.has(scenario);
 }
 
-export function fetchDemoReading(campus: string, scenario?: string): AQIReading {
+export function fetchDemoReading(
+  campus: string,
+  scenario?: string,
+  areaName?: string
+): AQIReading {
   const key = isDemoScenario(scenario) ? scenario : DEFAULT_DEMO_SCENARIO;
   const fixture = DEMO_FIXTURES.get(key)!;
   const now = new Date().toISOString();
 
   return {
     ...fixture,
+    ...(areaName ? { stationName: `${areaName} (sample values)` } : {}),
     pollutants: { ...fixture.pollutants },
+    pollutantScale: "concentration",
     campus,
     timestamp: now,
     fetchedAt: now,

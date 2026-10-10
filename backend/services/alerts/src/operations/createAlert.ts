@@ -7,8 +7,12 @@ import { marshall } from "@aws-sdk/util-dynamodb";
 import { randomUUID } from "crypto";
 import { Alert, AQIReading, CreateAlertInput } from "../../../../shared/src/types.js";
 import { evaluate } from "../../../../shared/src/evaluate.js";
-import { fetchDemoReading } from "../../../../shared/src/demo.js";
-import { getLatestReading, getReadingByFetchedAt } from "../../../../shared/src/readings.js";
+import { getReadingAt } from "../../../../shared/src/readings.js";
+import {
+  DataContext,
+  getAreaReading,
+  usesDemo,
+} from "../../../../shared/src/area-readings.js";
 import { hasConfirmedSubscriber, publishAlertEmail } from "./notify.js";
 
 export class NoReadingError extends Error {
@@ -20,8 +24,7 @@ export class NoReadingError extends Error {
 
 export interface CreateAlertConfig {
   alertsTable: string;
-  aqiTable: string;
-  dataMode: string;
+  data: DataContext;
   topicArn?: string;
   noticeUrl: string;
 }
@@ -34,7 +37,7 @@ export async function createAlert(
   const alertId = randomUUID();
   const now = new Date().toISOString();
 
-  const aqiSnapshot = await resolveSnapshot(dynamodb, input, config);
+  const { reading: aqiSnapshot, areaName } = await resolveSnapshot(dynamodb, input, config);
   if (!aqiSnapshot) {
     throw new NoReadingError();
   }
@@ -49,6 +52,7 @@ export async function createAlert(
   const alert: Alert = {
     alertId,
     campus: input.campus,
+    areaName,
     audience: input.audience,
     message: input.message,
     ...(input.messageHi ? { messageHi: input.messageHi } : {}),
@@ -95,24 +99,21 @@ export async function createAlert(
   return alert;
 }
 
-// Demo mode: the scenario on screen. Live mode: the exact reading the admin
-// saw (by fetchedAt), falling back to the latest stored reading.
+// Demo/presenter mode: the scenario on screen. Live mode: the exact reading
+// the admin saw (by source timestamp), falling back to the current reading.
 async function resolveSnapshot(
   dynamodb: DynamoDBClient,
   input: CreateAlertInput,
   config: CreateAlertConfig
-): Promise<AQIReading | null> {
-  if (config.dataMode === "demo") {
-    return fetchDemoReading(input.campus, input.scenario);
+): Promise<{ reading: AQIReading | null; areaName: string }> {
+  const current = await getAreaReading(dynamodb, config.data, input.campus, input.scenario);
+  let reading = current.reading;
+  if (!usesDemo(config.data, input.scenario) && input.readingTimestamp) {
+    reading =
+      (await getReadingAt(dynamodb, config.data.aqiTable, input.campus, input.readingTimestamp)) ??
+      reading;
   }
-  if (input.readingFetchedAt) {
-    const exact = await getReadingByFetchedAt(
-      dynamodb,
-      config.aqiTable,
-      input.campus,
-      input.readingFetchedAt
-    );
-    if (exact) return exact;
-  }
-  return getLatestReading(dynamodb, config.aqiTable, input.campus);
+  const areaName =
+    current.area?.name ?? reading?.stationName.replace(/ \(sample values\)$/, "") ?? input.campus;
+  return { reading, areaName };
 }

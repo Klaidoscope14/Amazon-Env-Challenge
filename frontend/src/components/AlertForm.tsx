@@ -3,26 +3,29 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createAlert, getNoticeDraft } from "@/lib/api";
-import { AUDIENCE_OPTIONS, DEFAULT_CAMPUS } from "@/lib/constants";
+import { AUDIENCE_OPTIONS } from "@/lib/constants";
 import { useAuth } from "@/lib/auth";
-import type { Alert, Audience, Recommendation } from "@/lib/types";
+import type { Alert, AreaInfo, Audience, Recommendation } from "@/lib/types";
 
 const MAX_MESSAGE = 2000;
 
 interface AlertFormProps {
+  /** Area the alert is issued for. */
+  area: AreaInfo;
   recommendation: Recommendation | null;
   /** Demo scenario on screen, so the stored snapshot matches what was shown. */
   scenario?: string;
-  /** Live mode: fetchedAt of the reading on screen. */
-  readingFetchedAt?: string;
+  /** Live mode: source timestamp of the reading on screen. */
+  readingTimestamp?: string;
   onClose: () => void;
   onSuccess: (alert: Alert) => void;
 }
 
 export default function AlertForm({
+  area,
   recommendation,
   scenario,
-  readingFetchedAt,
+  readingTimestamp,
   onClose,
   onSuccess,
 }: AlertFormProps) {
@@ -38,9 +41,15 @@ export default function AlertForm({
   const id = useId();
 
   const draftQuery = useQuery({
-    queryKey: ["noticeDraft", DEFAULT_CAMPUS, audience, scenario, readingFetchedAt],
+    queryKey: ["noticeDraft", area.id, audience, scenario, readingTimestamp, user?.institution],
     queryFn: () =>
-      getNoticeDraft({ campus: DEFAULT_CAMPUS, audience, scenario, readingFetchedAt }),
+      getNoticeDraft({
+        campus: area.id,
+        audience,
+        scenario,
+        readingTimestamp,
+        institution: user?.institution,
+      }),
     staleTime: 5 * 60 * 1000,
     refetchInterval: false,
     refetchOnWindowFocus: false,
@@ -57,14 +66,14 @@ export default function AlertForm({
   const mutation = useMutation({
     mutationFn: () =>
       createAlert({
-        campus: DEFAULT_CAMPUS,
+        campus: area.id,
         audience,
         message: messageEn.trim(),
         messageHi: messageHi.trim() || undefined,
         noticeSource: draftQuery.data?.source,
         adminName: adminName.trim() || "Campus Admin",
         scenario,
-        readingFetchedAt,
+        readingTimestamp,
       }),
     onSuccess: (alert) => {
       queryClient.invalidateQueries({ queryKey: ["alerts"] });
@@ -114,9 +123,12 @@ export default function AlertForm({
         className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-xl max-h-[calc(100vh-2rem)] overflow-y-auto"
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 id={`${id}-title`} className="text-lg font-semibold text-gray-900">
-            Issue Campus Alert
-          </h2>
+          <div>
+            <h2 id={`${id}-title`} className="text-lg font-semibold text-gray-900">
+              Issue Campus Alert
+            </h2>
+            <p className="text-xs text-gray-600">Area: {area.name}</p>
+          </div>
           <button
             onClick={onClose}
             aria-label="Close"

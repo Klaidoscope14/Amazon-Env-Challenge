@@ -1,131 +1,97 @@
-import {
-  DynamoDBClient,
-  PutItemCommand,
-  QueryCommand,
-} from "@aws-sdk/client-dynamodb";
-import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { AQIReading, AQIReadingResponse } from "../../../shared/src/types.js";
 import { getThresholdForAqi } from "../../../shared/src/aqi-categories.js";
-import { fetchDemoReading, isDemoScenario } from "../../../shared/src/demo.js";
-import { fetchFromCPCB } from "./providers/cpcb.js";
-import { fetchFromOpenAQ } from "./providers/openaq.js";
+import { isDemoScenario } from "../../../shared/src/demo.js";
+import { Area, findNearestArea, listAreas } from "../../../shared/src/stations.js";
+import {
+  dataContextFromEnv,
+  getAreaReading,
+  isAreaId,
+  loadSnapshotFor,
+  usesDemo,
+} from "../../../shared/src/area-readings.js";
 
 const dynamodb = new DynamoDBClient({});
-const TABLE_NAME = process.env.AQI_TABLE_NAME!;
-const DATA_MODE = process.env.DATA_MODE || "demo";
-const CPCB_API_KEY = process.env.CPCB_API_KEY || "";
-const OPENAQ_API_KEY = process.env.OPENAQ_API_KEY || "";
-const CACHE_FRESH_MS = 5 * 60 * 1000;
+const ctx = dataContextFromEnv();
+
+// Rough bounding box for India; requests outside it get the area picker.
+const LAT_RANGE = [5, 38];
+const LON_RANGE = [67, 99];
 
 export async function handler(
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> {
-  const campus = event.queryStringParameters?.campus || "dtu-delhi";
-  const city = event.queryStringParameters?.city || "Delhi";
-  const scenario = event.queryStringParameters?.scenario;
-
   try {
-    let reading: AQIReading | null = null;
-
-    if (DATA_MODE === "demo") {
-      if (scenario && !isDemoScenario(scenario)) {
-        return respond(400, { error: `Unknown demo scenario: ${scenario}` });
-      }
-      // Demo fixtures are generated per request and never persisted, so one
-      // viewer's scenario can't leak into another viewer's dashboard.
-      return respond(200, withStatus(fetchDemoReading(campus, scenario)));
-    } else {
-      reading = await getCachedReading(campus);
-
-      if (reading && !isCacheStale(reading.fetchedAt)) {
-        reading.dataMode = "cached";
-        return respond(200, withStatus(reading));
-      }
-
-      reading = await fetchFromCPCB(campus, CPCB_API_KEY, city);
-      if (!reading) {
-        reading = await fetchFromOpenAQ(campus, OPENAQ_API_KEY, city);
-      }
-
-      if (reading) {
-        await cacheReading(reading);
-      } else {
-        const cached = await getCachedReading(campus);
-        if (cached) {
-          cached.dataMode = "cached";
-          return respond(200, withStatus(cached));
-        }
-        return respond(503, {
-          error: "No AQI data available",
-          message:
-            "Unable to fetch air quality data. External sources may be temporarily unavailable.",
-          dataMode: "unavailable",
-        });
-      }
-    }
-
-    return respond(200, withStatus(reading));
+    if (event.path.endsWith("/areas/nearest")) return await handleNearest(event);
+    if (event.path.endsWith("/areas")) return await handleListAreas();
+    return await handleCurrent(event);
   } catch (err) {
     console.error("AQI handler error:", err);
     return respond(500, { error: "Internal server error" });
   }
 }
 
-async function cacheReading(reading: AQIReading): Promise<void> {
-  await dynamodb.send(
-    new PutItemCommand({
-      TableName: TABLE_NAME,
-      Item: marshall(
-        {
-          PK: `CAMPUS#${reading.campus}`,
-          SK: `READING#${reading.fetchedAt}`,
-          ...reading,
-          TTL: Math.floor(Date.now() / 1000) + 48 * 3600,
-        },
-        { removeUndefinedValues: true }
-      ),
-    })
-  );
+async function handleCurrent(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const qs = event.queryStringParameters ?? {};
+  const areaId = qs.campus;
+  const scenario = qs.scenario || undefined;
+
+  if (!isAreaId(areaId)) {
+    return respond(400, { error: "campus (area id) is required" });
+  }
+  if (scenario && !isDemoScenario(scenario)) {
+    return respond(400, { error: `Unknown demo scenario: ${scenario}` });
+  }
+
+  const { area, reading } = await getAreaReading(dynamodb, ctx, areaId, scenario);
+  if (!reading) {
+    return area || usesDemo(ctx, scenario)
+      ? respond(503, {
+          error: "No AQI data available",
+          message: "The monitoring station has no valid reading right now. Check official CPCB sources.",
+          dataMode: "unavailable",
+        })
+      : respond(404, { error: `Unknown area: ${areaId}` });
+  }
+  return respond(200, withStatus(reading, area));
 }
 
-async function getCachedReading(campus: string): Promise<AQIReading | null> {
-  const result = await dynamodb.send(
-    new QueryCommand({
-      TableName: TABLE_NAME,
-      KeyConditionExpression: "PK = :pk AND begins_with(SK, :prefix)",
-      ExpressionAttributeValues: marshall({
-        ":pk": `CAMPUS#${campus}`,
-        ":prefix": "READING#",
-      }),
-      ScanIndexForward: false,
-      Limit: 1,
-    })
-  );
-
-  if (!result.Items || result.Items.length === 0) return null;
-
-  const item = unmarshall(result.Items[0]) as AQIReading & {
-    PK: string;
-    SK: string;
-  };
-  const { PK, SK, ...reading } = item;
-  return reading;
+async function handleListAreas(): Promise<APIGatewayProxyResult> {
+  const snapshot = await loadSnapshotFor(dynamodb, ctx);
+  return respond(200, {
+    areas: listAreas(snapshot),
+    source: snapshot ? "cpcb" : "cities",
+  });
 }
 
-function isCacheStale(fetchedAt: string): boolean {
-  const age = Date.now() - new Date(fetchedAt).getTime();
-  return !Number.isFinite(age) || age > CACHE_FRESH_MS;
+async function handleNearest(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const lat = Number(event.queryStringParameters?.lat);
+  const lon = Number(event.queryStringParameters?.lon);
+  if (
+    !Number.isFinite(lat) || !Number.isFinite(lon) ||
+    lat < LAT_RANGE[0] || lat > LAT_RANGE[1] || lon < LON_RANGE[0] || lon > LON_RANGE[1]
+  ) {
+    return respond(400, { error: "lat/lon must be a location in India" });
+  }
+
+  // Coordinates are used only for this lookup; they are never logged or stored.
+  const snapshot = await loadSnapshotFor(dynamodb, ctx);
+  const area = findNearestArea(snapshot, lat, lon, ctx.dataMode === "live");
+  return area
+    ? respond(200, { area })
+    : respond(404, { error: "No monitoring station found near this location" });
 }
 
 // Status comes from the shared rules engine so the dashboard never derives
 // its own (possibly different) category from the raw number.
-function withStatus(reading: AQIReading): AQIReadingResponse {
+function withStatus(reading: AQIReading, area: Area | null): AQIReadingResponse {
   const threshold = getThresholdForAqi(reading.aqi);
   return {
     ...reading,
     status: threshold?.status ?? "Unavailable",
     statusLevel: threshold?.statusLevel ?? 0,
+    ...(area ? { area } : {}),
   };
 }
 
@@ -137,7 +103,7 @@ function respond(statusCode: number, body: unknown): APIGatewayProxyResult {
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Content-Type,Authorization",
     },
     body: JSON.stringify(body),
   };

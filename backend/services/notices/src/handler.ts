@@ -5,19 +5,23 @@ import {
   SynthesizeSpeechCommand,
 } from "@aws-sdk/client-polly";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { NoticeDraft } from "../../../shared/src/types.js";
+import { AQIReading, NoticeDraft } from "../../../shared/src/types.js";
 import { evaluate } from "../../../shared/src/evaluate.js";
-import { fetchDemoReading, isDemoScenario } from "../../../shared/src/demo.js";
-import { getCampus } from "../../../shared/src/campus.js";
-import { buildTemplateNotice, isAudience } from "../../../shared/src/notice-templates.js";
-import { getLatestReading, getReadingByFetchedAt } from "../../../shared/src/readings.js";
+import { isDemoScenario } from "../../../shared/src/demo.js";
+import { buildTemplateNotice, describePlace, isAudience } from "../../../shared/src/notice-templates.js";
+import { getReadingAt } from "../../../shared/src/readings.js";
+import {
+  dataContextFromEnv,
+  getAreaReading,
+  isAreaId,
+  usesDemo,
+} from "../../../shared/src/area-readings.js";
 import { polishNotice } from "./ai.js";
 
 const dynamodb = new DynamoDBClient({});
 const polly = new PollyClient({});
-const AQI_TABLE = process.env.AQI_TABLE_NAME!;
 const ALERTS_TABLE = process.env.ALERTS_TABLE_NAME!;
-const DATA_MODE = process.env.DATA_MODE || "demo";
+const ctx = dataContextFromEnv();
 const AI_ENABLED = process.env.NOTICE_AI_ENABLED === "true";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-flash-lite-latest";
 const GEMINI_KEY_PARAM = process.env.GEMINI_API_KEY_PARAM || "/breathesafe/gemini-api-key";
@@ -44,29 +48,37 @@ export async function handler(
 
 async function handleDraft(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const qs = event.queryStringParameters ?? {};
-  const campus = getCampus(qs.campus || "dtu-delhi");
+  const areaId = qs.campus;
   const audience = qs.audience || "all";
+  const scenario = qs.scenario || undefined;
+  const institution = (qs.institution ?? "").trim().slice(0, 100) || undefined;
+
+  if (!isAreaId(areaId)) {
+    return respond(400, { error: "campus (area id) is required" });
+  }
   if (!isAudience(audience)) {
     return respond(400, { error: `Unknown audience: ${audience}` });
   }
-  if (qs.scenario && !isDemoScenario(qs.scenario)) {
-    return respond(400, { error: `Unknown demo scenario: ${qs.scenario}` });
+  if (scenario && !isDemoScenario(scenario)) {
+    return respond(400, { error: `Unknown demo scenario: ${scenario}` });
   }
 
-  let reading;
-  if (DATA_MODE === "demo") {
-    reading = fetchDemoReading(campus.id, qs.scenario);
-  } else {
-    reading =
-      (qs.readingFetchedAt &&
-        (await getReadingByFetchedAt(dynamodb, AQI_TABLE, campus.id, qs.readingFetchedAt))) ||
-      (await getLatestReading(dynamodb, AQI_TABLE, campus.id));
+  // Prefer the exact reading on the admin's screen (live mode), else current.
+  const current = await getAreaReading(dynamodb, ctx, areaId, scenario);
+  let reading: AQIReading | null = current.reading;
+  if (!usesDemo(ctx, scenario) && qs.readingTimestamp) {
+    reading = (await getReadingAt(dynamodb, ctx.aqiTable, areaId, qs.readingTimestamp)) ?? reading;
   }
 
   const recommendation = reading ? evaluate(reading) : null;
-  const template = recommendation
-    ? buildTemplateNotice(recommendation, campus, audience)
-    : null;
+  const areaName = current.area?.name ?? reading?.stationName.replace(/ \(sample values\)$/, "") ?? "your area";
+  const place = {
+    areaName,
+    areaKind: current.area?.kind,
+    measuredStation: reading?.source === "CPCB" ? reading.stationName : undefined,
+    institution,
+  };
+  const template = recommendation ? buildTemplateNotice(recommendation, place, audience) : null;
   if (!recommendation || !template) {
     return respond(503, { error: "No valid AQI reading available to draft a notice" });
   }
@@ -74,7 +86,7 @@ async function handleDraft(event: APIGatewayProxyEvent): Promise<APIGatewayProxy
   const polished = AI_ENABLED
     ? await polishNotice(
         template,
-        { aqi: recommendation.evidence.aqi, audience },
+        { aqi: recommendation.evidence.aqi, audience, areaName: describePlace(place).keep },
         { keyParameter: GEMINI_KEY_PARAM, model: GEMINI_MODEL }
       )
     : null;
@@ -92,25 +104,24 @@ async function handleDraft(event: APIGatewayProxyEvent): Promise<APIGatewayProxy
 // from the table), so the endpoint can't be used as a general TTS service.
 async function handleAudio(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const qs = event.queryStringParameters ?? {};
-  const campus = getCampus(qs.campus || "dtu-delhi");
-  const { alertId, createdAt } = qs;
+  const { campus, alertId, createdAt } = qs;
   const lang = qs.lang || "en";
 
   if (lang !== "en" && lang !== "hi") {
     return respond(400, { error: "lang must be en or hi" });
   }
-  if (!alertId || !createdAt || alertId.length > 64 || createdAt.length > 40) {
-    return respond(400, { error: "alertId and createdAt are required" });
+  if (!isAreaId(campus) || !alertId || !createdAt || alertId.length > 64 || createdAt.length > 40) {
+    return respond(400, { error: "campus, alertId and createdAt are required" });
   }
 
-  const cacheKey = `${alertId}|${lang}`;
+  const cacheKey = `${campus}|${alertId}|${lang}`;
   const cached = audioCache.get(cacheKey);
   if (cached) return respond(200, { contentType: "audio/mpeg", audioBase64: cached });
 
   const result = await dynamodb.send(
     new GetItemCommand({
       TableName: ALERTS_TABLE,
-      Key: marshall({ PK: `CAMPUS#${campus.id}`, SK: `ALERT#${createdAt}#${alertId}` }),
+      Key: marshall({ PK: `CAMPUS#${campus}`, SK: `ALERT#${createdAt}#${alertId}` }),
       ProjectionExpression: "message, messageHi",
     })
   );

@@ -8,12 +8,25 @@ export interface AQIReading {
   timestamp: string;
   fetchedAt: string;
   dataMode: "live" | "cached" | "demo";
+  /** "subindex": pollutant values are CPCB sub-indices (live feed); otherwise concentrations. */
+  pollutantScale?: "subindex" | "concentration";
+}
+
+/** The place everything is scoped to: nearest CPCB station, or a city in demo mode. */
+export interface AreaInfo {
+  id: string;
+  kind: "station" | "city" | "geo";
+  name: string;
+  city: string;
+  state: string;
+  distanceKm?: number;
 }
 
 /** Shape returned by GET /aqi/current: the reading plus its CPCB band. */
 export interface AQIReadingResponse extends AQIReading {
   status: AQIStatus;
   statusLevel: number;
+  area?: AreaInfo;
 }
 
 export type AQIStatus =
@@ -34,6 +47,7 @@ export interface Recommendation {
     aqi: number;
     dominantPollutant: string;
     pollutants: Record<string, number>;
+    pollutantScale?: "subindex" | "concentration";
     source: string;
     stationName: string;
     timestamp: string;
@@ -74,6 +88,8 @@ export interface AlertDelivery {
 export interface Alert {
   alertId: string;
   campus: string;
+  /** Display name of the area (station) the alert was issued for. */
+  areaName?: string;
   audience: Audience;
   message: string;
   messageHi?: string;

@@ -2,18 +2,17 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ApiError, getAQI, getRecommendation, getTrends } from "@/lib/api";
 import {
-  CAMPUS_CITY,
-  CAMPUS_DISPLAY_NAME,
-  CAMPUS_LOCATION,
-  DEFAULT_CAMPUS,
   DEFAULT_DEMO_SCENARIO,
   DEMO_SCENARIO_OPTIONS,
   EMAIL_DELIVERY,
 } from "@/lib/constants";
-import type { Alert } from "@/lib/types";
+import { useSearchParam } from "@/lib/useSearchParam";
+import type { Alert, AreaInfo } from "@/lib/types";
+import AreaGate from "@/components/AreaGate";
+import AreaHeader from "@/components/AreaHeader";
 import AqiHeroCard from "@/components/AqiHeroCard";
 import RecommendationCard from "@/components/RecommendationCard";
 import TrendChart from "@/components/TrendChart";
@@ -24,67 +23,82 @@ import WhatsAppShare from "@/components/WhatsAppShare";
 const CPCB_URL = "https://cpcb.nic.in";
 
 export default function DashboardPage() {
+  // Remount per area so every piece of state belongs to one area.
+  return <AreaGate>{(area) => <Dashboard key={area.id} area={area} />}</AreaGate>;
+}
+
+function Dashboard({ area }: { area: AreaInfo }) {
   const [showAlertForm, setShowAlertForm] = useState(false);
   const [sentAlert, setSentAlert] = useState<Alert | null>(null);
   const [scenario, setScenario] = useState<string>(DEFAULT_DEMO_SCENARIO);
   const [trendHours, setTrendHours] = useState(24);
+  const presenterParam = useSearchParam("presenter") !== null;
+  const [presenterSeen, setPresenterSeen] = useState(false);
 
-  // All three requests are independent, so they load in parallel. In demo
-  // mode the backend evaluates the same scenario for each of them.
+  // Presenter control: shown when the backend serves demo data, or on demand
+  // with ?presenter=1 (live mode). Only then is a scenario sent.
+  const sendScenario = presenterParam || presenterSeen;
+  const activeScenario = sendScenario ? scenario : undefined;
+
+  // All three requests are independent, so they load in parallel; the backend
+  // resolves the same area (and scenario) for each of them.
   const aqiQuery = useQuery({
-    queryKey: ["aqi", DEFAULT_CAMPUS, scenario],
-    queryFn: () => getAQI(DEFAULT_CAMPUS, scenario, CAMPUS_CITY),
+    queryKey: ["aqi", area.id, activeScenario],
+    queryFn: () => getAQI(area.id, activeScenario),
+    placeholderData: keepPreviousData,
   });
 
   const recQuery = useQuery({
-    queryKey: ["recommendation", DEFAULT_CAMPUS, scenario],
-    queryFn: () => getRecommendation(DEFAULT_CAMPUS, scenario),
+    queryKey: ["recommendation", area.id, activeScenario],
+    queryFn: () => getRecommendation(area.id, activeScenario),
+    placeholderData: keepPreviousData,
   });
 
   const trendQuery = useQuery({
-    queryKey: ["trends", DEFAULT_CAMPUS, trendHours, scenario],
-    queryFn: () => getTrends(DEFAULT_CAMPUS, trendHours, scenario),
+    queryKey: ["trends", area.id, trendHours, activeScenario],
+    queryFn: () => getTrends(area.id, trendHours, activeScenario),
+    placeholderData: keepPreviousData,
   });
 
   const isDemo = aqiQuery.data?.dataMode === "demo";
+  // Latch: once the server has served demo data, keep the presenter control
+  // (and scenario) stable instead of toggling with each response.
+  if (isDemo && !presenterSeen) setPresenterSeen(true);
+  const showPresenter = presenterParam || presenterSeen;
+
   const aqiUnavailable =
     aqiQuery.error instanceof ApiError && aqiQuery.error.status === 503;
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {CAMPUS_DISPLAY_NAME}
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {CAMPUS_LOCATION} &middot; Campus Air Quality Dashboard
-          </p>
-        </div>
-
-        {isDemo && (
-          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 max-w-full">
-            <label
-              htmlFor="demo-scenario"
-              className="text-xs font-medium text-purple-800 whitespace-nowrap"
-            >
-              Presenter control &middot; demo scenario
-            </label>
-            <select
-              id="demo-scenario"
-              value={scenario}
-              onChange={(e) => setScenario(e.target.value)}
-              className="text-xs border border-purple-300 rounded px-2 py-1 bg-white text-gray-900"
-            >
-              {DEMO_SCENARIO_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-      </div>
+      <AreaHeader
+        area={area}
+        title="Air quality near you"
+        actions={
+          showPresenter && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-purple-200 bg-purple-50 px-3 py-1.5 max-w-full">
+              <label
+                htmlFor="demo-scenario"
+                className="text-xs font-medium text-purple-800 whitespace-nowrap"
+              >
+                Presenter control &middot; demo scenario
+              </label>
+              <select
+                id="demo-scenario"
+                value={scenario}
+                onChange={(e) => setScenario(e.target.value)}
+                className="text-xs border border-purple-300 rounded px-2 py-1 bg-white text-gray-900"
+              >
+                {DEMO_SCENARIO_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )
+        }
+      />
 
       {sentAlert && (
         <SentAlertPanel alert={sentAlert} onDismiss={() => setSentAlert(null)} />
@@ -98,8 +112,7 @@ export default function DashboardPage() {
             Air quality data unavailable
           </p>
           <p className="text-sm text-gray-600 mt-1">
-            We couldn&apos;t get a reading from CPCB or the fallback source,
-            and no earlier reading is stored. Check{" "}
+            The monitoring station for this area has no valid reading right now. Check{" "}
             <a
               href={CPCB_URL}
               target="_blank"
@@ -108,7 +121,7 @@ export default function DashboardPage() {
             >
               official CPCB sources
             </a>{" "}
-            for the latest information.
+            or choose a different area.
           </p>
           <RetryButton onClick={() => aqiQuery.refetch()} />
         </div>
@@ -156,9 +169,10 @@ export default function DashboardPage() {
 
       {showAlertForm && (
         <AlertForm
+          area={area}
           recommendation={recQuery.data || null}
-          scenario={isDemo ? scenario : undefined}
-          readingFetchedAt={isDemo ? undefined : aqiQuery.data?.fetchedAt}
+          scenario={activeScenario}
+          readingTimestamp={isDemo ? undefined : aqiQuery.data?.timestamp}
           onClose={() => setShowAlertForm(false)}
           onSuccess={(alert) => {
             setShowAlertForm(false);
@@ -202,7 +216,7 @@ function SentAlertPanel({ alert, onDismiss }: { alert: Alert; onDismiss: () => v
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Link
-          href="/notice"
+          href={`/notice?area=${encodeURIComponent(alert.campus)}`}
           className="rounded-lg border border-green-300 bg-white px-3 py-1.5 text-sm font-medium text-green-900 hover:bg-green-100"
         >
           View public notice

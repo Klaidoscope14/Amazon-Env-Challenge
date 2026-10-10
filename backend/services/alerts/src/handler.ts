@@ -3,6 +3,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { CreateAlertInput } from "../../../shared/src/types.js";
 import { isDemoScenario } from "../../../shared/src/demo.js";
 import { isAudience } from "../../../shared/src/notice-templates.js";
+import { dataContextFromEnv, isAreaId } from "../../../shared/src/area-readings.js";
 import { createAlert, NoReadingError } from "./operations/createAlert.js";
 import { getAlerts } from "./operations/getAlerts.js";
 import {
@@ -13,8 +14,7 @@ import {
 
 const dynamodb = new DynamoDBClient({});
 const ALERTS_TABLE = process.env.ALERTS_TABLE_NAME!;
-const AQI_TABLE = process.env.AQI_TABLE_NAME!;
-const DATA_MODE = process.env.DATA_MODE || "demo";
+const DATA = dataContextFromEnv();
 const TOPIC_ARN = process.env.ALERTS_TOPIC_ARN || undefined;
 const NOTICE_URL = process.env.NOTICE_URL || "";
 
@@ -104,7 +104,8 @@ async function handleCreateAlert(
 ): Promise<APIGatewayProxyResult> {
   const body = parseBody(event);
 
-  const campus = readString(body, "campus", 64, true)!;
+  const campus = readString(body, "campus", 90, true)!;
+  if (!isAreaId(campus)) throw new BadRequestError("campus must be an area id");
   const audience = readString(body, "audience", 20, true)!;
   if (!isAudience(audience)) {
     throw new BadRequestError(`Unknown audience: ${audience}`);
@@ -126,13 +127,12 @@ async function handleCreateAlert(
     noticeSource,
     adminName: readString(body, "adminName", MAX_NAME, true)!,
     scenario,
-    readingFetchedAt: readString(body, "readingFetchedAt", MAX_TIMESTAMP, false),
+    readingTimestamp: readString(body, "readingTimestamp", MAX_TIMESTAMP, false),
   };
 
   const alert = await createAlert(dynamodb, input, {
     alertsTable: ALERTS_TABLE,
-    aqiTable: AQI_TABLE,
-    dataMode: DATA_MODE,
+    data: DATA,
     topicArn: TOPIC_ARN,
     noticeUrl: NOTICE_URL,
   });
@@ -142,7 +142,10 @@ async function handleCreateAlert(
 async function handleGetAlerts(
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> {
-  const campus = event.queryStringParameters?.campus || "dtu-delhi";
+  const campus = event.queryStringParameters?.campus;
+  if (!isAreaId(campus)) {
+    return respond(400, { error: "campus (area id) is required" });
+  }
   const requested = Number.parseInt(event.queryStringParameters?.limit || "25", 10);
   const limit = Number.isFinite(requested) ? Math.min(Math.max(requested, 1), 50) : 25;
 
@@ -166,7 +169,10 @@ async function handleRecordDecision(
   const createdAt = readString(body, "createdAt", MAX_TIMESTAMP, false);
   const decidedBy = readString(body, "decidedBy", MAX_NAME, false);
 
-  const campus = event.queryStringParameters?.campus || "dtu-delhi";
+  const campus = event.queryStringParameters?.campus;
+  if (!isAreaId(campus)) {
+    return respond(400, { error: "campus (area id) is required" });
+  }
   const result = await recordDecision(
     dynamodb,
     ALERTS_TABLE,

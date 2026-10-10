@@ -1,4 +1,5 @@
 import {
+  AreaInfo,
   AQIReadingResponse,
   Recommendation,
   Alert,
@@ -49,12 +50,20 @@ function query(params: Record<string, string | number | undefined>): string {
 
 export async function getAQI(
   campus: string,
-  scenario?: string,
-  city?: string
+  scenario?: string
 ): Promise<AQIReadingResponse> {
   return fetchApi<AQIReadingResponse>(
-    `/api/v1/aqi/current?${query({ campus, scenario, city })}`
+    `/api/v1/aqi/current?${query({ campus, scenario })}`
   );
+}
+
+export async function getAreas(): Promise<{ areas: AreaInfo[]; source: "cpcb" | "cities" }> {
+  return fetchApi(`/api/v1/areas`);
+}
+
+/** Nearest monitoring area. Coordinates should already be rounded (~1 km). */
+export async function getNearestArea(lat: number, lon: number): Promise<{ area: AreaInfo }> {
+  return fetchApi(`/api/v1/areas/nearest?${query({ lat, lon })}`);
 }
 
 export async function getRecommendation(
@@ -75,8 +84,8 @@ export async function createAlert(data: {
   adminName: string;
   /** Demo mode: scenario on screen. */
   scenario?: string;
-  /** Live mode: fetchedAt of the reading on screen. */
-  readingFetchedAt?: string;
+  /** Live mode: source timestamp of the reading on screen. */
+  readingTimestamp?: string;
 }): Promise<Alert> {
   return fetchApi<Alert>("/api/v1/alerts", {
     method: "POST",
@@ -112,7 +121,8 @@ export async function getNoticeDraft(params: {
   campus: string;
   audience: Audience;
   scenario?: string;
-  readingFetchedAt?: string;
+  readingTimestamp?: string;
+  institution?: string;
 }): Promise<NoticeDraft> {
   return fetchApi<NoticeDraft>(`/api/v1/notices/draft?${query(params)}`);
 }

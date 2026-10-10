@@ -15,6 +15,7 @@ Globals:
         AQI_TABLE_NAME: !Ref AQIReadingsTable
         ALERTS_TABLE_NAME: !Ref AlertsDecisionsTable
         DATA_MODE: !Ref DataMode
+        DEMO_SCENARIOS_ENABLED: !Ref DemoScenariosEnabled
 
 Parameters:
   DataMode:
@@ -23,22 +24,19 @@ Parameters:
     AllowedValues:
       - live
       - demo
-    Description: Set to 'live' for real CPCB/OpenAQ data, 'demo' for labelled fixtures
+    Description: "'live': nearest CPCB station for each area; 'demo': labelled fixtures for every request"
   CpcbApiKey:
     Type: String
     Default: 'none'
-    Description: API key for CPCB data.gov.in (set to actual key for live mode)
-  OpenAqApiKey:
+    NoEcho: true
+    Description: data.gov.in API key for the CPCB real-time AQI feed (required for live mode)
+  DemoScenariosEnabled:
     Type: String
-    Default: 'none'
-    Description: API key for OpenAQ (fallback data source)
-  BedrockEnabled:
-    Type: String
-    Default: 'false'
+    Default: 'true'
     AllowedValues:
       - 'true'
       - 'false'
-    Description: Enable Amazon Bedrock AI narratives in recommendations
+    Description: In live mode, allow presenter requests (?scenario=) to use labelled demo fixtures
   Stage:
     Type: String
     Default: prod
@@ -211,11 +209,10 @@ Resources:
       FunctionName: !Sub breathesafe-fetch-aqi-${Stage}
       CodeUri: ../backend/
       Handler: handler.handler
-      Description: Fetches and caches AQI data from CPCB/OpenAQ
+      Description: Current AQI for an area (nearest CPCB station), area list and nearest-area lookup
       Environment:
         Variables:
           CPCB_API_KEY: !Ref CpcbApiKey
-          OPENAQ_API_KEY: !Ref OpenAqApiKey
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref AQIReadingsTable
@@ -225,6 +222,18 @@ Resources:
           Properties:
             RestApiId: !Ref BreatheSafeApi
             Path: /api/v1/aqi/current
+            Method: GET
+        ListAreas:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/areas
+            Method: GET
+        NearestArea:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/areas/nearest
             Method: GET
     Metadata:
       BuildMethod: esbuild
@@ -239,8 +248,43 @@ Resources:
           - services/aqi-data/src/handler.ts
         External:
           - '@aws-sdk/*'
-        Loader:
-          - .json=json
+
+  # Pulls the full CPCB feed every 30 minutes into one compressed snapshot,
+  # so API requests read a single item instead of calling CPCB.
+  StationsRefreshFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub breathesafe-stations-refresh-${Stage}
+      CodeUri: ../backend/
+      Handler: refresh.handler
+      Timeout: 60
+      MemorySize: 512
+      Description: Refreshes the CPCB station snapshot (live mode)
+      Environment:
+        Variables:
+          CPCB_API_KEY: !Ref CpcbApiKey
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AQIReadingsTable
+      Events:
+        Every30Minutes:
+          Type: Schedule
+          Properties:
+            Schedule: rate(30 minutes)
+            Description: Refresh CPCB station snapshot
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Minify: true
+        Target: es2022
+        Sourcemap: true
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        EntryPoints:
+          - services/aqi-data/src/refresh.ts
+        External:
+          - '@aws-sdk/*'
 
   GetRecommendationFunction:
     Type: AWS::Serverless::Function
@@ -249,18 +293,13 @@ Resources:
       CodeUri: ../backend/
       Handler: handler.handler
       Timeout: 25
-      Description: Evaluates AQI data against CPCB rules and returns AI-enhanced recommendations
+      Description: Evaluates an area's current AQI against CPCB rules
       Environment:
         Variables:
-          BEDROCK_ENABLED: !Ref BedrockEnabled
+          CPCB_API_KEY: !Ref CpcbApiKey
       Policies:
-        - DynamoDBReadPolicy:
+        - DynamoDBCrudPolicy:
             TableName: !Ref AQIReadingsTable
-        - Statement:
-            - Effect: Allow
-              Action:
-                - bedrock:InvokeModel
-              Resource: !Sub arn:aws:bedrock:${AWS::Region}::foundation-model/anthropic.claude-3-haiku-20240307-v1:0
       Events:
         GetRecommendation:
           Type: Api
@@ -293,10 +332,11 @@ Resources:
         Variables:
           ALERTS_TOPIC_ARN: !Ref AlertsTopic
           NOTICE_URL: !Ref PublicSiteUrl
+          CPCB_API_KEY: !Ref CpcbApiKey
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref AlertsDecisionsTable
-        - DynamoDBReadPolicy:
+        - DynamoDBCrudPolicy:
             TableName: !Ref AQIReadingsTable
         - Statement:
             - Effect: Allow
@@ -343,15 +383,15 @@ Resources:
       FunctionName: !Sub breathesafe-notices-${Stage}
       CodeUri: ../backend/
       Handler: handler.handler
-      Timeout: 15
       Description: Bilingual notice drafts (reviewed templates + optional Gemini polish) and Polly audio
       Environment:
         Variables:
           NOTICE_AI_ENABLED: !Ref NoticeAIEnabled
           GEMINI_MODEL: !Ref GeminiModel
           GEMINI_API_KEY_PARAM: !Ref GeminiApiKeyParam
+          CPCB_API_KEY: !Ref CpcbApiKey
       Policies:
-        - DynamoDBReadPolicy:
+        - DynamoDBCrudPolicy:
             TableName: !Ref AQIReadingsTable
         - DynamoDBReadPolicy:
             TableName: !Ref AlertsDecisionsTable
@@ -422,33 +462,6 @@ Resources:
           - services/trends/src/handler.ts
         External:
           - '@aws-sdk/*'
-
-  ScheduledFetchRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: !Sub breathesafe-fetch-schedule-${Stage}
-      Description: Fetch AQI data every 15 minutes to keep cache warm
-      ScheduleExpression: rate(15 minutes)
-      State: ENABLED
-      Targets:
-        - Arn: !GetAtt FetchAQIFunction.Arn
-          Id: ScheduledAQIFetch
-          Input: |
-            {
-              "httpMethod": "GET",
-              "path": "/api/v1/aqi/current",
-              "queryStringParameters": { "campus": "dtu-delhi", "city": "Delhi" },
-              "headers": {},
-              "body": null
-            }
-
-  ScheduledFetchPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref FetchAQIFunction
-      Action: lambda:InvokeFunction
-      Principal: events.amazonaws.com
-      SourceArn: !GetAtt ScheduledFetchRule.Arn
 
   AuthFunction:
     Type: AWS::Serverless::Function

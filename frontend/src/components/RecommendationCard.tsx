@@ -119,7 +119,10 @@ export default function RecommendationCard({
                   {Object.entries(recommendation.evidence.pollutants).map(
                     ([k, v]) => (
                       <span key={k} className="bg-white rounded px-2 py-0.5 text-xs border">
-                        {formatPollutant(k).label}: {v} {formatPollutant(k).unit}
+                        {formatPollutant(k).label}: {v}
+                        {recommendation.evidence.pollutantScale === "subindex"
+                          ? ""
+                          : ` ${formatPollutant(k).unit}`}
                       </span>
                     )
                   )}

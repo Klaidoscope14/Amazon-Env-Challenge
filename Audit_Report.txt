@@ -198,6 +198,32 @@ This is what separates the entry from "another AQI dashboard".
     decision timestamp/author, confirmation before broadcasting to "All".  (F7)
 
 
+STATUS (2026-10-10 late): Phase 2 IMPLEMENTED + locally verified, plus a scope
+change requested by the owner — LOCATION-BASED AREAS replace the hard-coded DTU
+campus:
+  - Area = nearest CPCB monitoring station to the user's GPS (rounded to ~1 km in
+    the browser, never stored/logged); city picker when location is denied or no
+    station is nearby; shared links carry ?area= so recipients need no location.
+  - Live CPCB data: StationsRefreshFunction (every 30 min) parses the data.gov.in
+    feed (one row per pollutant; pollutant_avg treated as sub-index; AQI = max
+    sub-index with >=3 pollutants incl. PM; IST dd-mm-yyyy parsed explicitly) into
+    one gzip snapshot item; requests read that single item. Dead OpenAQ v2 and the
+    per-city CPCB provider were removed. Readings stored once per source timestamp.
+  - Presenter mode: ?presenter=1 (live) or DATA_MODE=demo shows the labelled
+    demo-scenario control; demo readings are named "<area> (sample values)".
+  - Alerts/decisions/notices/trends are all keyed by area id; existing prod alerts
+    under the old "dtu-delhi" key will no longer appear in the UI.
+  - Bedrock code, IAM and parameter removed (Free plan blocks it); Gemini free tier
+    + reviewed EN/HI templates + Polly audio instead; SNS email with honest
+    delivery status; decisions append-only (409) with decidedBy.
+  Verified locally: backend strict tsc; 39 mocked handler checks (live + demo);
+  live-mode UI harness with simulated CPCB feed (picker, detection, area switch,
+  presenter mode, bilingual draft with institution sign-off, send, decision,
+  public notice via ?area= with no saved area, per-area isolation); real Polly
+  audio; frontend tsc + next build. Pending (needs deploy by owner): dev deploy in
+  live mode -> confirm the real CPCB field names/values from the cpcb_refresh log
+  -> confirm SNS subscription email -> Gemini check -> prod deploy.
+
 ======================================================================
 PHASE 3 — SECURITY & HARDENING (before the repo goes public, ~4–5 h)
 ======================================================================

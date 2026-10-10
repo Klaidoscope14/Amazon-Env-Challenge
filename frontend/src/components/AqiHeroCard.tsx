@@ -25,6 +25,7 @@ export default function AqiHeroCard({ reading }: AqiHeroCardProps) {
   const config = STATUS_CONFIG[reading.status] ?? STATUS_CONFIG.Unavailable;
   const age = describeAge(reading.timestamp, now);
   const isStale = reading.dataMode !== "demo" && age.isStale;
+  const isSubIndex = reading.pollutantScale === "subindex";
 
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -70,7 +71,7 @@ export default function AqiHeroCard({ reading }: AqiHeroCardProps) {
           </dd>
         </div>
         <div>
-          <dt className="text-gray-500">Station</dt>
+          <dt className="text-gray-500">{reading.source === "CPCB" ? "Station" : "Location"}</dt>
           <dd className="font-medium mt-0.5 text-gray-900">{reading.stationName}</dd>
         </div>
         <div>
@@ -90,7 +91,11 @@ export default function AqiHeroCard({ reading }: AqiHeroCardProps) {
 
       {reading.pollutants && Object.keys(reading.pollutants).length > 0 && (
         <div className="mt-4 pt-4 border-t border-gray-100">
-          <p className="text-xs text-gray-500 mb-2">Pollutant Levels</p>
+          <p className="text-xs text-gray-500 mb-2">
+            {isSubIndex
+              ? "Pollutant sub-indices (CPCB scale — the AQI is the highest)"
+              : "Pollutant Levels"}
+          </p>
           <div className="flex flex-wrap gap-2">
             {Object.entries(reading.pollutants).map(([key, value]) => {
               const p = formatPollutant(key);
@@ -101,7 +106,7 @@ export default function AqiHeroCard({ reading }: AqiHeroCardProps) {
                 >
                   <span className="text-gray-600 mr-1">{p.label}:</span>
                   <span className="font-medium">{value}</span>
-                  {p.unit && <span className="text-gray-500 ml-0.5">{p.unit}</span>}
+                  {p.unit && !isSubIndex && <span className="text-gray-500 ml-0.5">{p.unit}</span>}
                 </span>
               );
             })}

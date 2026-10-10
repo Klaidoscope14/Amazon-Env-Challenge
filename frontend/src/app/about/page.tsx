@@ -122,11 +122,22 @@ export default function AboutPage() {
 
       <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">
         <h2 className="text-lg font-semibold text-gray-900">Privacy</h2>
-        <p className="text-sm text-gray-700">
-          BreatheSafe Campus does not collect student health data, personal information, or location tracking.
-          The only data stored is: AQI readings (from public sources), alert records, and administrator decisions.
-          All data is campus-level, not individual-level.
-        </p>
+        <ul className="text-sm text-gray-700 space-y-2 list-disc list-inside">
+          <li>
+            <strong>Location:</strong> with your permission, your browser&apos;s location is rounded to
+            about 1&nbsp;km and used once to find the nearest CPCB monitoring station. Coordinates
+            are not stored or logged; only the chosen area is remembered in your browser. You can
+            pick an area manually instead.
+          </li>
+          <li>
+            <strong>Accounts:</strong> administrators sign in with an email and name (Amazon
+            Cognito). Alerts record the issuing administrator&apos;s name for accountability.
+          </li>
+          <li>
+            <strong>No health data:</strong> we do not collect student health information. Stored
+            data is AQI readings from public sources, alerts and administrator decisions.
+          </li>
+        </ul>
       </section>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-6 space-y-3">

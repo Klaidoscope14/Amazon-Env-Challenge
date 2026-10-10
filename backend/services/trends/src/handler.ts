@@ -6,27 +6,37 @@ import { unmarshall, marshall } from "@aws-sdk/util-dynamodb";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { AQIReading, TrendPoint, TrendResponse } from "../../../shared/src/types.js";
 import { buildDemoTrend, isDemoScenario } from "../../../shared/src/demo.js";
+import {
+  dataContextFromEnv,
+  getAreaTrend,
+  isAreaId,
+  usesDemo,
+} from "../../../shared/src/area-readings.js";
 
 const dynamodb = new DynamoDBClient({});
 const AQI_TABLE_NAME = process.env.AQI_TABLE_NAME!;
-const DATA_MODE = process.env.DATA_MODE || "demo";
+const ctx = dataContextFromEnv();
 const MAX_HOURS = 168;
 
 export async function handler(
   event: APIGatewayProxyEvent
 ): Promise<APIGatewayProxyResult> {
-  const campus = event.queryStringParameters?.campus || "dtu-delhi";
-  const scenario = event.queryStringParameters?.scenario;
+  const campus = event.queryStringParameters?.campus;
+  const scenario = event.queryStringParameters?.scenario || undefined;
+  if (!isAreaId(campus)) {
+    return respond(400, { error: "campus (area id) is required" });
+  }
   const requested = Number.parseInt(event.queryStringParameters?.hours || "24", 10);
   if (!Number.isFinite(requested) || requested < 1) {
     return respond(400, { error: "hours must be a positive integer" });
   }
   const hours = Math.min(requested, MAX_HOURS);
 
-  if (DATA_MODE === "demo") {
-    if (scenario && !isDemoScenario(scenario)) {
-      return respond(400, { error: `Unknown demo scenario: ${scenario}` });
-    }
+  if (scenario && !isDemoScenario(scenario)) {
+    return respond(400, { error: `Unknown demo scenario: ${scenario}` });
+  }
+
+  if (usesDemo(ctx, scenario)) {
     const response: TrendResponse = {
       campus,
       points: buildDemoTrend(scenario, hours),
@@ -37,6 +47,13 @@ export async function handler(
   }
 
   try {
+    // Areas without a current CPCB station get Open-Meteo's hourly history.
+    const modelled = await getAreaTrend(dynamodb, ctx, campus, hours);
+    if (modelled) {
+      const response: TrendResponse = { campus, points: modelled, period: `${hours}h`, dataMode: "live" };
+      return respond(200, response);
+    }
+
     const cutoff = new Date(Date.now() - hours * 3600 * 1000).toISOString();
 
     const result = await dynamodb.send(
@@ -82,7 +99,7 @@ function respond(statusCode: number, body: unknown): APIGatewayProxyResult {
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Content-Type,Authorization",
     },
     body: JSON.stringify(body),
   };

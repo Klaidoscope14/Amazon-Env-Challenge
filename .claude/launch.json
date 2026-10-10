@@ -6,18 +6,6 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
       "port": 3000
-    },
-    {
-      "name": "harness-api",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["/private/tmp/claude-501/-Users-chaitanyasaagar-Desktop-Amazon-Env/db919bd7-2cbe-4f46-9d47-9b8baecd0090/scratchpad/p2/mock-api.mjs"],
-      "port": 3005
-    },
-    {
-      "name": "frontend-harness",
-      "runtimeExecutable": "env",
-      "runtimeArgs": ["NEXT_PUBLIC_API_URL=http://localhost:3005", "npm", "run", "dev", "--prefix", "frontend", "--", "--port", "3004"],
-      "port": 3004
     }
   ]
 }

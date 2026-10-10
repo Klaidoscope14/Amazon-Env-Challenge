@@ -3,7 +3,8 @@
 # Dev:   cd infrastructure && sam build && sam deploy --config-env dev
 # Each environment is its own stack. Never deploy Stage=dev into the prod stack:
 # changing Stage renames the tables and CloudFormation would replace them.
-# Parameters not listed here (e.g. API keys) keep their previously deployed values.
+# Parameters not listed here (e.g. CpcbApiKey, AlertEmail) keep their previously
+# deployed values; pass them once with --parameter-overrides to set them.
 
 version = 0.1
 
@@ -14,7 +15,7 @@ s3_prefix = "breathesafe-campus"
 region = "ap-south-1"
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
-parameter_overrides = "DataMode=demo Stage=prod BedrockEnabled=false"
+parameter_overrides = "DataMode=demo Stage=prod"
 
 [dev.deploy.parameters]
 stack_name = "breathesafe-campus-dev"
@@ -23,4 +24,4 @@ s3_prefix = "breathesafe-campus-dev"
 region = "ap-south-1"
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = false
-parameter_overrides = "DataMode=demo Stage=dev BedrockEnabled=false"
+parameter_overrides = "DataMode=live Stage=dev"

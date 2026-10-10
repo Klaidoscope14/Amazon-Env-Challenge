@@ -3,8 +3,13 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { getAlerts } from "@/lib/api";
-import { AUDIENCE_LABELS, CAMPUS_DISPLAY_NAME, DEFAULT_CAMPUS } from "@/lib/constants";
+import { AUDIENCE_LABELS } from "@/lib/constants";
 import { describeAge, useNow } from "@/lib/useNow";
+import { useSearchParam } from "@/lib/useSearchParam";
+import { isValidAreaId } from "@/lib/areaId";
+import type { AreaInfo } from "@/lib/types";
+import AreaGate from "@/components/AreaGate";
+import AreaHeader from "@/components/AreaHeader";
 import StatusBadge from "@/components/StatusBadge";
 import DataBadge from "@/components/DataBadge";
 import NoticeAudioButton from "@/components/NoticeAudioButton";
@@ -19,10 +24,20 @@ function formatTime(ts: string): string {
 }
 
 export default function NoticePage() {
+  // Shared links carry ?area=, so recipients see that area's notice without
+  // granting location access; otherwise use the visitor's own area.
+  const linkedArea = useSearchParam("area");
+  if (linkedArea && isValidAreaId(linkedArea)) {
+    return <Notice key={linkedArea} areaId={linkedArea} />;
+  }
+  return <AreaGate>{(area) => <Notice key={area.id} areaId={area.id} area={area} />}</AreaGate>;
+}
+
+function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
   const now = useNow();
   const latestQuery = useQuery({
-    queryKey: ["alerts", DEFAULT_CAMPUS, "latest"],
-    queryFn: () => getAlerts(DEFAULT_CAMPUS, 1),
+    queryKey: ["alerts", areaId, "latest"],
+    queryFn: () => getAlerts(areaId, 1),
   });
 
   const alert = latestQuery.data?.alerts[0];
@@ -31,12 +46,16 @@ export default function NoticePage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Campus Air Quality Notice</h1>
-        <p className="text-sm text-gray-600 mt-1">
-          {CAMPUS_DISPLAY_NAME} &middot; for students, staff and parents
-        </p>
-      </div>
+      {area ? (
+        <AreaHeader area={area} title="Campus Air Quality Notice · for students, staff and parents" />
+      ) : (
+        <div>
+          <p className="text-sm text-gray-600">Campus Air Quality Notice · for students, staff and parents</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {alert?.areaName ?? "Air-quality advisory"}
+          </h1>
+        </div>
+      )}
 
       {latestQuery.isPending && (
         <div className="rounded-2xl border border-gray-200 bg-white p-6 animate-pulse" aria-hidden="true">
@@ -57,7 +76,7 @@ export default function NoticePage() {
 
       {latestQuery.data && !alert && (
         <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center">
-          <p className="text-gray-800 font-medium">No air-quality advisories have been issued.</p>
+          <p className="text-gray-800 font-medium">No air-quality advisories have been issued for this area.</p>
           <p className="text-sm text-gray-600 mt-1">
             Normal activities continue. Check the{" "}
             <Link href="/" className="underline">

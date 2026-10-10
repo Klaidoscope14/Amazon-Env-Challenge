@@ -31,6 +31,7 @@ export function evaluate(reading: AQIReading): Recommendation {
       aqi: reading.aqi,
       dominantPollutant: reading.dominantPollutant,
       pollutants: reading.pollutants,
+      ...(reading.pollutantScale ? { pollutantScale: reading.pollutantScale } : {}),
       source: reading.source,
       stationName: reading.stationName,
       timestamp: reading.timestamp,

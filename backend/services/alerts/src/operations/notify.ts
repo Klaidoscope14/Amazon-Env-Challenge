@@ -4,7 +4,6 @@ import {
   SNSClient,
 } from "@aws-sdk/client-sns";
 import { Alert } from "../../../../shared/src/types.js";
-import { getCampus } from "../../../../shared/src/campus.js";
 import { AUDIENCE_LABELS, formatIstTime } from "../../../../shared/src/notice-templates.js";
 
 const sns = new SNSClient({});
@@ -47,7 +46,7 @@ function toSubject(text: string): string {
 }
 
 export function buildAlertEmail(alert: Alert, noticeUrl: string): { subject: string; message: string } {
-  const campus = getCampus(alert.campus);
+  const place = alert.areaName ?? alert.aqiSnapshot?.stationName ?? "your area";
   const status = alert.recommendation?.status ?? "Air quality";
   const snapshot = alert.aqiSnapshot;
   const isDemo = snapshot?.dataMode === "demo";
@@ -60,14 +59,14 @@ export function buildAlertEmail(alert: Alert, noticeUrl: string): { subject: str
     `AQI ${snapshot?.aqi ?? "n/a"} (${status}) - ${snapshot?.stationName ?? "unknown station"}, source: ${snapshot?.source ?? "unknown"}${isDemo ? " (DEMO DATA - not a live reading)" : ""}`,
     `Audience: ${AUDIENCE_LABELS[alert.audience] ?? alert.audience}`,
     `Issued by ${alert.adminName} at ${formatIstTime(alert.createdAt)} IST`,
-    ...(noticeUrl ? [`Campus notice: ${noticeUrl}`] : []),
+    ...(noticeUrl ? [`Campus notice: ${noticeUrl}?area=${encodeURIComponent(alert.campus)}`] : []),
     "",
     "Decision support, not medical advice. Follow official CPCB and health-authority guidance.",
   ];
 
   return {
     subject: toSubject(
-      `${isDemo ? "[DEMO] " : ""}BreatheSafe: ${status} air quality - ${campus.nameEn}`
+      `${isDemo ? "[DEMO] " : ""}BreatheSafe: ${status} air quality - ${place}`
     ),
     message: lines.join("\n"),
   };

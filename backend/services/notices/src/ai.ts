@@ -48,6 +48,8 @@ Rewrite each so it reads clearly and warmly for the stated audience.
 Rules:
 - Keep every fact, number, time, name and instruction exactly as given. Do not add new facts, numbers, health or medical advice, or recommendations.
 - Do not remove any instruction.
+- Keep the monitoring station name exactly as written in the English version.
+- Keep the layout: greeting, body and sign-off on separate lines.
 - Hindi must be in Devanagari script, with digits written as 0-9.
 - Each version must stay under 90 words.
 Return JSON with keys "en" and "hi".`;
@@ -58,8 +60,11 @@ const NUMBER_PATTERN = /\d+(?:[.:]\d+)?/g;
 export function isFaithful(
   output: { en: string; hi: string },
   template: { en: string; hi: string },
-  aqi: number
+  aqi: number,
+  mustKeep: string[] = []
 ): boolean {
+  // Names that are evidence (the monitoring station) must survive verbatim in English.
+  if (mustKeep.some((name) => name && !output.en.includes(name))) return false;
   const allowed = new Set(`${template.en} ${template.hi}`.match(NUMBER_PATTERN) ?? []);
   for (const text of [output.en, output.hi]) {
     if (typeof text !== "string") return false;
@@ -74,7 +79,7 @@ export function isFaithful(
 
 export async function polishNotice(
   template: { en: string; hi: string },
-  context: { aqi: number; audience: string },
+  context: { aqi: number; audience: string; areaName: string },
   config: { keyParameter: string; model: string }
 ): Promise<{ en: string; hi: string } | null> {
   const cacheKey = `${config.model}|${context.audience}|${template.en}|${template.hi}`;
@@ -136,7 +141,7 @@ export async function polishNotice(
     const parsed = JSON.parse(text) as { en?: unknown; hi?: unknown };
     const output = { en: String(parsed.en ?? "").trim(), hi: String(parsed.hi ?? "").trim() };
 
-    if (!isFaithful(output, template, context.aqi)) {
+    if (!isFaithful(output, template, context.aqi, [context.areaName])) {
       console.warn("Gemini draft failed the faithfulness check; using template");
       return null;
     }

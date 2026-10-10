@@ -5,11 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { getAlerts } from "@/lib/api";
 import {
   AUDIENCE_LABELS,
-  DEFAULT_CAMPUS,
   EMAIL_DELIVERY,
   formatPollutant,
 } from "@/lib/constants";
-import type { Alert } from "@/lib/types";
+import type { Alert, AreaInfo } from "@/lib/types";
+import AreaGate from "@/components/AreaGate";
+import AreaHeader from "@/components/AreaHeader";
 import StatusBadge from "@/components/StatusBadge";
 import DataBadge from "@/components/DataBadge";
 import DecisionRecorder from "@/components/DecisionRecorder";
@@ -87,24 +88,29 @@ function EvidenceDetails({ alert }: { alert: Alert }) {
 }
 
 export default function AlertsPage() {
+  return <AreaGate>{(area) => <AlertsLog key={area.id} area={area} />}</AreaGate>;
+}
+
+function AlertsLog({ area }: { area: AreaInfo }) {
   const alertsQuery = useQuery({
-    queryKey: ["alerts", DEFAULT_CAMPUS],
-    queryFn: () => getAlerts(DEFAULT_CAMPUS),
+    queryKey: ["alerts", area.id],
+    queryFn: () => getAlerts(area.id),
   });
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Alerts & Decision Log</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Every alert with the AQI evidence behind it and the decision taken
-          </p>
-        </div>
-        <Link href="/notice" className="text-sm font-medium text-blue-700 underline">
-          View public notice
-        </Link>
-      </div>
+      <AreaHeader
+        area={area}
+        title="Alerts & Decision Log — every alert with its AQI evidence and the decision taken"
+        actions={
+          <Link
+            href={`/notice?area=${encodeURIComponent(area.id)}`}
+            className="text-sm font-medium text-blue-700 underline"
+          >
+            View public notice
+          </Link>
+        }
+      />
 
       {alertsQuery.isPending && (
         <div className="space-y-4" aria-hidden="true">
@@ -128,7 +134,7 @@ export default function AlertsPage() {
 
       {alertsQuery.data?.alerts.length === 0 && (
         <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center">
-          <p className="text-gray-700">No alerts issued yet.</p>
+          <p className="text-gray-700">No alerts issued for this area yet.</p>
           <p className="text-sm text-gray-600 mt-1">
             Go to the Dashboard to issue an alert when AQI is elevated.
           </p>

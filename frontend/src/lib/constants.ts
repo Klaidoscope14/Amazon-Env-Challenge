@@ -113,13 +113,6 @@ export const DEMO_SCENARIO_OPTIONS = [
 
 export const DEFAULT_DEMO_SCENARIO = "poor";
 
-// Single campus for the MVP. Every API call uses this key so the dashboard,
-// alerts, decisions and the scheduled fetch all read and write the same data.
-export const DEFAULT_CAMPUS = "dtu-delhi";
-export const CAMPUS_DISPLAY_NAME = "Delhi Technological University";
-export const CAMPUS_CITY = "Delhi";
-export const CAMPUS_LOCATION = "Rohini, New Delhi";
-
 const POLLUTANT_LABELS: Record<string, { label: string; unit: string }> = {
   pm25: { label: "PM2.5", unit: "µg/m³" },
   pm10: { label: "PM10", unit: "µg/m³" },

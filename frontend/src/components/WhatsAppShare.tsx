@@ -3,9 +3,13 @@
 import type { Alert } from "@/lib/types";
 
 /** Opens WhatsApp with the bilingual notice and a link to the public notice page. */
-export default function WhatsAppShare({ alert }: { alert: Pick<Alert, "message" | "messageHi"> }) {
+export default function WhatsAppShare({
+  alert,
+}: {
+  alert: Pick<Alert, "message" | "messageHi" | "campus">;
+}) {
   function share() {
-    const noticeUrl = `${window.location.origin}/notice`;
+    const noticeUrl = `${window.location.origin}/notice?area=${encodeURIComponent(alert.campus)}`;
     const text = [alert.message, alert.messageHi, `Campus notice: ${noticeUrl}`]
       .filter(Boolean)
       .join("\n\n");

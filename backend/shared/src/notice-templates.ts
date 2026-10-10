@@ -1,5 +1,4 @@
 import { AQIStatus, Audience, Recommendation } from "./types.js";
-import { CampusInfo } from "./campus.js";
 
 /*
  * Reviewed, deterministic notice wording for each CPCB band, in English and
@@ -91,13 +90,39 @@ export function formatIstTime(iso: string): string {
   });
 }
 
+export interface NoticePlace {
+  /** Area display name, e.g. "Delhi area", "Pune" or a station name. */
+  areaName: string;
+  areaKind?: "station" | "city" | "geo";
+  /** Set when the reading is a CPCB station measurement. */
+  measuredStation?: string;
+  /** Issuing institution for the sign-off; generic "Campus" when absent. */
+  institution?: string;
+}
+
+/** Where the reading applies, phrased for each language. */
+export function describePlace(place: NoticePlace): { en: string; hi: string; keep: string } {
+  if (place.measuredStation) {
+    return {
+      en: `at the nearest monitoring station (${place.measuredStation})`,
+      hi: `निकटतम निगरानी स्टेशन (${place.measuredStation}) पर`,
+      keep: place.measuredStation,
+    };
+  }
+  if (place.areaKind === "geo") {
+    const base = place.areaName.replace(/ area$/, "");
+    return { en: `for the ${place.areaName}`, hi: `${base} क्षेत्र में`, keep: place.areaName };
+  }
+  return { en: `for ${place.areaName}`, hi: `${place.areaName} में`, keep: place.areaName };
+}
+
 /**
  * Builds the reviewed English + Hindi notice for a recommendation. Returns
  * null when there is no usable reading (status "Unavailable").
  */
 export function buildTemplateNotice(
   recommendation: Recommendation,
-  campus: CampusInfo,
+  place: NoticePlace,
   audience: Audience
 ): { en: string; hi: string } | null {
   if (recommendation.status === "Unavailable") return null;
@@ -107,17 +132,22 @@ export function buildTemplateNotice(
   const pollutant = pollutantName(dominantPollutant);
   const greeting = GREETINGS[audience];
   const action = ACTIONS[band];
+  const institution = place.institution?.trim();
+  const signOffEn = institution ? `${institution} Administration` : "Campus Administration";
+  const signOffHi = institution ? `${institution} प्रशासन` : "परिसर प्रशासन";
+
+  const where = describePlace(place);
 
   // Letter layout: greeting, body and sign-off on separate lines.
   const en =
-    `${greeting.en}\n\nThe Air Quality Index (AQI) near ${campus.nameEn} is ${aqi} (${band})` +
-    `${time ? ` as of ${time} IST` : ""}, mainly due to ${pollutant}. ${action.en}` +
-    `\n\n— ${campus.nameEn} Administration`;
+    `${greeting.en}\n\nThe Air Quality Index (AQI) ${where.en}` +
+    ` is ${aqi} (${band})${time ? ` as of ${time} IST` : ""}, mainly due to ${pollutant}. ${action.en}` +
+    `\n\n— ${signOffEn}`;
 
   const hi =
-    `${greeting.hi}\n\n${time ? `${time} बजे ` : ""}${campus.nameHi} के पास वायु गुणवत्ता सूचकांक (AQI)` +
-    ` ${aqi} (${STATUS_HI[band]}) है, जिसका मुख्य कारण ${pollutant} है। ${action.hi}` +
-    `\n\n— ${campus.nameHi} प्रशासन`;
+    `${greeting.hi}\n\n${time ? `${time} बजे ` : ""}${where.hi} वायु गुणवत्ता` +
+    ` सूचकांक (AQI) ${aqi} (${STATUS_HI[band]}) है, जिसका मुख्य कारण ${pollutant} है। ${action.hi}` +
+    `\n\n— ${signOffHi}`;
 
   return { en, hi };
 }
