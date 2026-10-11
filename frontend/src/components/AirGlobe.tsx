@@ -636,6 +636,7 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
                     <span className="block text-xs text-muted">
                       {city.popK >= 1000 ? `${(city.popK / 1000).toFixed(1)} M` : `${city.popK} k`} people
                       {listDominant ? ` · mainly ${dominantLabel(listDominant)}` : ""}
+                      {est?.estimated ? " · estimate" : ""}
                     </span>
                   </span>
                   <span className="text-right">
@@ -746,7 +747,7 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
               </span>
               <span className="text-xs text-muted">
                 {activeInfo.sample ? "Sample data · " : ""}
-                India AQI
+                {activeInfo.est?.estimated ? "Estimated India AQI" : "India AQI"}
                 {activeInfo.dominant ? ` · mainly ${dominantLabel(activeInfo.dominant)}` : ""}
               </span>
             </p>
@@ -787,6 +788,9 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
           )}
           {active.kind === "city" && !activeIsIndia && (
             <p className="mt-3 text-xs text-muted">
+              {activeInfo.est?.estimated
+                ? "Estimated from PM2.5 and PM10 on India’s scale, so it can differ from this country’s own index. "
+                : ""}
               Advice, plans and alerts are available for places in India.
             </p>
           )}
