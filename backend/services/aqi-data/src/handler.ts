@@ -8,6 +8,8 @@ import {
   AreaQuerySchema,
   NearestQuerySchema,
   parse,
+  PlaceResolveQuerySchema,
+  PlaceSearchQuerySchema,
   ValidationError,
 } from "../../../shared/src/schemas.js";
 import { respond } from "../../../shared/src/http.js";
@@ -17,6 +19,7 @@ import {
   usesDemo,
 } from "../../../shared/src/area-readings.js";
 import { errorFields, log, metric } from "../../../shared/src/observability.js";
+import { nearbyHospitals, placeNameAt, resolvePlace, searchPlaces } from "../../../shared/src/google-places.js";
 
 const dynamodb = new DynamoDBClient({});
 const ctx = dataContextFromEnv();
@@ -26,6 +29,9 @@ export async function handler(
 ): Promise<APIGatewayProxyResult> {
   try {
     if (event.path.endsWith("/areas/nearest")) return await handleNearest(event);
+    if (event.path.endsWith("/places/search")) return await handlePlaceSearch(event);
+    if (event.path.endsWith("/places/resolve")) return await handlePlaceResolve(event);
+    if (event.path.endsWith("/places/hospitals")) return await handleHospitals(event);
     if (event.path.endsWith("/areas")) return await handleListAreas();
     return await handleCurrent(event);
   } catch (err) {
@@ -64,9 +70,48 @@ async function handleNearest(event: APIGatewayProxyEvent): Promise<APIGatewayPro
 
   // Coordinates are used only for this lookup; they are never logged or stored.
   const area = findNearestArea(lat, lon, ctx.dataMode === "live");
+  if (!area) return respond(404, { error: "No area found for this location" });
+  // Live mode: name the area after the neighbourhood (e.g. "Lajpat Nagar") when Google knows it.
+  const place = ctx.dataMode === "live" ? await placeNameAt(lat, lon) : null;
+  return respond(200, { area: place ? { ...area, name: place } : area });
+}
+
+// Google-backed lookups: a 503 tells the browser to fall back (city list, no hospitals).
+const GOOGLE_UNAVAILABLE = { error: "This lookup is unavailable right now" };
+
+async function handlePlaceSearch(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const { q, session } = parse(PlaceSearchQuerySchema, event.queryStringParameters ?? {});
+  try {
+    return respond(200, { places: await searchPlaces(q, session) });
+  } catch (err) {
+    log("error", "places_search_failed", errorFields(err));
+    return respond(503, GOOGLE_UNAVAILABLE);
+  }
+}
+
+async function handlePlaceResolve(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const { placeId, session } = parse(PlaceResolveQuerySchema, event.queryStringParameters ?? {});
+  let place;
+  try {
+    place = await resolvePlace(placeId, session);
+  } catch (err) {
+    log("error", "places_resolve_failed", errorFields(err));
+    return respond(503, GOOGLE_UNAVAILABLE);
+  }
+  const area = findNearestArea(place.lat, place.lon, ctx.dataMode === "live");
   return area
-    ? respond(200, { area })
-    : respond(404, { error: "No area found for this location" });
+    ? respond(200, { area: { ...area, name: place.name } })
+    : respond(404, { error: "Air quality is available for places in India" });
+}
+
+async function handleHospitals(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const { lat, lon } = parse(NearestQuerySchema, event.queryStringParameters ?? {});
+  try {
+    return respond(200, { hospitals: await nearbyHospitals(lat, lon) });
+  } catch (err) {
+    log("error", "places_hospitals_failed", errorFields(err));
+    return respond(503, GOOGLE_UNAVAILABLE);
+  }
 }
 
 // Status comes from the shared rules engine so the dashboard never derives

@@ -76,25 +76,31 @@ export function toAqiUnits(code: string, value: number, units: string): number |
 // ---- Key -------------------------------------------------------------------
 
 const ssm = new SSMClient({});
-// undefined = not loaded; null = not configured.
+// undefined = not loaded; null = not configured. Reloaded every 15 minutes,
+// so a rotated key in SSM is picked up without a redeploy.
 let apiKey: string | null | undefined;
+let apiKeyLoadedAt = 0;
+const KEY_RELOAD_MS = 15 * 60 * 1000;
 
 export function googleKeyParamFromEnv(): string {
   return process.env.GOOGLE_AQ_KEY_PARAM || "/breathesafe/google-air-quality-key";
 }
 
-async function getApiKey(parameter: string): Promise<string | null> {
-  if (apiKey !== undefined) return apiKey;
+/** The Google API key (Air Quality, Places, Geocoding) from SSM; null when not configured. */
+export async function getGoogleApiKey(parameter = googleKeyParamFromEnv()): Promise<string | null> {
+  if (apiKey !== undefined && Date.now() - apiKeyLoadedAt < KEY_RELOAD_MS) return apiKey;
   try {
     const result = await ssm.send(new GetParameterCommand({ Name: parameter, WithDecryption: true }));
     apiKey = result.Parameter?.Value?.trim() || null;
+    apiKeyLoadedAt = Date.now();
   } catch (err) {
     if (err instanceof ParameterNotFound) {
       log("error", "google_aq_key_missing", { parameter });
       apiKey = null;
+      apiKeyLoadedAt = Date.now();
     } else {
       log("error", "google_aq_key_unavailable", errorFields(err));
-      return null; // transient: retry next request
+      return apiKey ?? null; // transient: keep the last key, retry next request
     }
   }
   return apiKey;
@@ -110,7 +116,7 @@ export function resetGoogleAq(): void {
 // ---- HTTP ------------------------------------------------------------------
 
 async function post(path: string, body: unknown, keyParam: string): Promise<unknown> {
-  const key = await getApiKey(keyParam);
+  const key = await getGoogleApiKey(keyParam);
   if (!key) throw new Error("Google Air Quality API key is not configured");
   let response: Response | undefined;
   // One retry for transient server errors.

@@ -1,13 +1,15 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getAreas } from "@/lib/api";
+import { getAreas, resolvePlace, searchPlaces } from "@/lib/api";
 import { areaSubtitle, useArea } from "@/lib/area";
 import type { AreaInfo } from "@/lib/types";
 import Button from "./ui/Button";
 
 const MAX_RESULTS = 60;
+const MIN_SEARCH = 3;
+const DEBOUNCE_MS = 300;
 
 interface AreaPickerProps {
   /** Shown above the list, e.g. why automatic detection didn't work. */
@@ -19,7 +21,44 @@ interface AreaPickerProps {
 export default function AreaPicker({ intro, onDone }: AreaPickerProps) {
   const { chooseArea, detect, isDetecting } = useArea();
   const [search, setSearch] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [resolving, setResolving] = useState<string | null>(null);
+  const [resolveError, setResolveError] = useState("");
+  // One Google Places session per search, ended by choosing a result.
+  const session = useRef<string>("");
   const id = useId();
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(search.trim()), DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const placesQuery = useQuery({
+    queryKey: ["places", debounced],
+    queryFn: () => {
+      session.current ||= crypto.randomUUID();
+      return searchPlaces(debounced, session.current);
+    },
+    enabled: debounced.length >= MIN_SEARCH,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+  // Google search when it works; otherwise the built-in list of cities.
+  const usePlaces = debounced.length >= MIN_SEARCH && !placesQuery.isError;
+
+  async function choosePlace(placeId: string) {
+    setResolving(placeId);
+    setResolveError("");
+    try {
+      const { area } = await resolvePlace(placeId, session.current || crypto.randomUUID());
+      session.current = "";
+      choose(area);
+    } catch {
+      setResolveError("Couldn't open that place. Try another, or pick a city.");
+    } finally {
+      setResolving(null);
+    }
+  }
 
   const areasQuery = useQuery({
     queryKey: ["areas"],
@@ -71,21 +110,55 @@ export default function AreaPicker({ intro, onDone }: AreaPickerProps) {
 
       <div>
         <label htmlFor={`${id}-search`} className="block text-sm font-medium text-muted-strong mb-1">
-          Or search for a city
+          Or search for your area
         </label>
         <input
           id={`${id}-search`}
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="e.g. Delhi, Pune, Anand Vihar"
+          placeholder="e.g. Lajpat Nagar, Koramangala, Pune"
           autoComplete="off"
           className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
-      {areasQuery.isPending && <p className="text-sm text-muted">Loading areas…</p>}
-      {areasQuery.isError && (
+      {usePlaces && (
+        <div aria-live="polite">
+          {placesQuery.isPending && <p className="text-sm text-muted">Searching…</p>}
+          {placesQuery.data && (
+            <ul className="max-h-72 overflow-y-auto divide-y divide-border rounded-lg border border-border">
+              {placesQuery.data.length === 0 && (
+                <li className="px-3 py-3 text-sm text-muted">No places found. Try a nearby area or city.</li>
+              )}
+              {placesQuery.data.map((place) => (
+                <li key={place.placeId}>
+                  <button
+                    type="button"
+                    onClick={() => void choosePlace(place.placeId)}
+                    disabled={resolving !== null}
+                    aria-label={`${place.name}, ${place.detail}`}
+                    className="w-full text-left px-3 py-2 hover:bg-surface-2 focus:bg-surface-2 focus:outline-none disabled:opacity-60"
+                  >
+                    <span className="block text-sm font-medium text-foreground">
+                      {place.name}
+                      {resolving === place.placeId && <span className="font-normal text-muted"> · opening…</span>}
+                    </span>
+                    <span className="block text-xs text-muted">{place.detail}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {placesQuery.data && <p className="mt-1 text-right text-[11px] text-muted">Powered by Google</p>}
+          {resolveError && (
+            <p role="alert" className="mt-2 text-sm text-red-700 dark:text-red-300">{resolveError}</p>
+          )}
+        </div>
+      )}
+
+      {!usePlaces && areasQuery.isPending && <p className="text-sm text-muted">Loading areas…</p>}
+      {!usePlaces && areasQuery.isError && (
         <p className="text-sm text-red-700 dark:text-red-300" role="alert">
           Couldn&apos;t load the list of areas.{" "}
           <button onClick={() => areasQuery.refetch()} className="underline font-medium">
@@ -94,7 +167,7 @@ export default function AreaPicker({ intro, onDone }: AreaPickerProps) {
         </p>
       )}
 
-      {areasQuery.data && (
+      {!usePlaces && areasQuery.data && (
         <ul className="max-h-72 overflow-y-auto divide-y divide-border rounded-lg border border-border">
           {matches.length === 0 && (
             <li className="px-3 py-3 text-sm text-muted">No matching areas.</li>
@@ -113,11 +186,6 @@ export default function AreaPicker({ intro, onDone }: AreaPickerProps) {
             </li>
           ))}
         </ul>
-      )}
-      {areasQuery.data?.source === "cities" && (
-        <p className="text-xs text-muted">
-          Demo mode: areas are cities and readings are labelled sample values.
-        </p>
       )}
     </section>
   );

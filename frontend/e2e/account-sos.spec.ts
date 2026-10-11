@@ -12,6 +12,10 @@ test("SOS works signed out, and reaches saved emergency contacts once signed in"
   const sos = page.getByRole("dialog");
   await expect(sos.getByRole("link", { name: /Call 112/ })).toHaveAttribute("href", "tel:112");
   await expect(sos.getByText(/to save emergency contacts/)).toBeVisible();
+  // Nearest hospitals, from the live location, with call and directions.
+  await expect(sos.getByText("AIIMS Hospital")).toBeVisible();
+  await expect(sos.getByRole("link", { name: "Directions" }).first()).toHaveAttribute("href", "https://maps.google.com/?cid=1");
+  await expect(sos.getByRole("link", { name: "Call", exact: true })).toHaveAttribute("href", "tel:+911126707444");
   await page.keyboard.press("Escape");
   await expect(sos).toBeHidden();
 
@@ -40,6 +44,7 @@ test("SOS works signed out, and reaches saved emergency contacts once signed in"
   await page.getByRole("button", { name: "SOS" }).click();
   await expect(sos.getByText("Your current location is included.")).toBeVisible();
   const text = sos.getByRole("link", { name: "Text SOS to Papa" });
+  await expect(sos.getByRole("link", { name: "Call", exact: true })).toHaveCount(2); // a hospital and Papa
   await expect(text).toHaveAttribute("href", /^sms:\+919123456789\?body=/);
   const body = decodeURIComponent((await text.getAttribute("href"))!.split("body=")[1]);
   expect(body).toContain("SOS: Asha Verma needs help urgently.");

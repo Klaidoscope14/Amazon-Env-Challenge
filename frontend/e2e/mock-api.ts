@@ -182,6 +182,22 @@ export async function mockApi(page: Page, options: { mfa?: boolean } = {}): Prom
     }
     if (path.endsWith("/rules")) return json(200, RULESET);
     if (path.endsWith("/catalog")) return json(200, CATALOG);
+    if (path.endsWith("/places/search")) {
+      return json(200, {
+        places: [{ placeId: "ChIJ-lajpat-2", name: "Lajpat Nagar II", detail: "Lajpat Nagar, New Delhi, Delhi, India" }],
+      });
+    }
+    if (path.endsWith("/places/resolve")) {
+      return json(200, { area: { id: "geo-286-772", kind: "geo", name: "Lajpat Nagar II", city: "Delhi", state: "Delhi" } });
+    }
+    if (path.endsWith("/places/hospitals")) {
+      return json(200, {
+        hospitals: [
+          { name: "AIIMS Hospital", distanceKm: 3, address: "Ansari Nagar, New Delhi", mapsUrl: "https://maps.google.com/?cid=1" },
+          { name: "Safdarjung Hospital", distanceKm: 3.3, phone: "+911126707444", mapsUrl: "https://maps.google.com/?cid=2" },
+        ],
+      });
+    }
     if (path.endsWith("/explain")) return json(503, { error: "Not mocked" });
     return json(404, { error: `Not mocked: ${path}` });
   });

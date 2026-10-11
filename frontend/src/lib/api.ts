@@ -11,6 +11,8 @@ import {
   PlansEvaluation,
   Catalog,
   UserProfile,
+  PlaceSuggestion,
+  Hospital,
 } from "./types";
 import { API_URL } from "./config";
 
@@ -127,6 +129,21 @@ export async function getAreas(): Promise<{ areas: AreaInfo[]; source: "cities" 
 /** Nearest monitoring area. Coordinates should already be rounded (~1 km). */
 export async function getNearestArea(lat: number, lon: number): Promise<{ area: AreaInfo }> {
   return fetchApi(`/api/v1/areas/nearest?${query({ lat, lon })}`);
+}
+
+/** Localities in India matching the text (Google Places). `session` groups one search for billing. */
+export async function searchPlaces(q: string, session: string): Promise<PlaceSuggestion[]> {
+  return (await fetchApi<{ places: PlaceSuggestion[] }>(`/api/v1/places/search?${query({ q, session })}`)).places;
+}
+
+/** The area for a place chosen from the search, named after that place. */
+export async function resolvePlace(placeId: string, session: string): Promise<{ area: AreaInfo }> {
+  return fetchApi(`/api/v1/places/resolve?${query({ placeId, session })}`);
+}
+
+/** Nearest hospitals to a location (for SOS). */
+export async function getNearbyHospitals(lat: number, lon: number): Promise<Hospital[]> {
+  return (await fetchApi<{ hospitals: Hospital[] }>(`/api/v1/places/hospitals?${query({ lat, lon })}`)).hospitals;
 }
 
 export async function getRecommendation(

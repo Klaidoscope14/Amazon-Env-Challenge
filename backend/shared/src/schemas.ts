@@ -94,6 +94,22 @@ export const TrendsQuerySchema = AreaQuerySchema.extend({
 
 export const NearestQuerySchema = z.object({ lat: latitude, lon: longitude });
 
+/** Google Places session token: groups a search and the chosen result for billing. */
+const placesSession = z.preprocess(
+  blankToUndefined,
+  z.string().regex(/^[A-Za-z0-9-]{8,64}$/, "Invalid session").optional()
+);
+
+export const PlaceSearchQuerySchema = z.object({
+  q: requiredText("q", 100).pipe(z.string().min(2, "Type at least 2 letters")),
+  session: placesSession,
+});
+
+export const PlaceResolveQuerySchema = z.object({
+  placeId: requiredText("placeId", 300).pipe(z.string().regex(/^[A-Za-z0-9_-]+$/, "Invalid placeId")),
+  session: placesSession,
+});
+
 export const AlertsQuerySchema = z.object({
   campus: areaId,
   limit: z

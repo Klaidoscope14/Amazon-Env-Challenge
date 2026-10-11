@@ -439,6 +439,25 @@ Resources:
             RestApiId: !Ref BreatheSafeApi
             Path: /api/v1/areas/nearest
             Method: GET
+        # Google Places / Geocoding, called server-side with the key in SSM.
+        PlaceSearch:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/places/search
+            Method: GET
+        PlaceResolve:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/places/resolve
+            Method: GET
+        NearbyHospitals:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/places/hospitals
+            Method: GET
     Metadata:
       BuildMethod: esbuild
       BuildProperties:

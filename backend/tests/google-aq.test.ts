@@ -87,6 +87,21 @@ describe("API calls", () => {
     expect(ssmSend).toHaveBeenCalledTimes(1);
   });
 
+  it("reloads the key from SSM after 15 minutes, so a rotated key is picked up", async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockImplementation(async () => new Response(JSON.stringify(current)));
+      await getGoogleReading("geo-a", { lat: 28, lon: 77, name: "x" });
+      vi.advanceTimersByTime(16 * 60 * 1000);
+      ssmSend.mockImplementation((async () => ({ Parameter: { Value: "rotated" } })) as never);
+      await getGoogleReading("geo-b", { lat: 28, lon: 77, name: "x" });
+      expect(ssmSend).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls.at(-1)![1].headers["X-Goog-Api-Key"]).toBe("rotated");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("returns null (never throws) on API errors and without a key", async () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: { status: "PERMISSION_DENIED" } }), { status: 403 }));
     expect(await getGoogleReading("geo-1", { lat: 28, lon: 77, name: "x" })).toBeNull();

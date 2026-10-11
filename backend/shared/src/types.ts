@@ -240,3 +240,21 @@ export interface UserProfile {
   avatar?: string;
   emergencyContacts: EmergencyContact[];
 }
+
+/** A locality suggestion from GET /places/search. */
+export interface PlaceSuggestion {
+  placeId: string;
+  /** e.g. "Lajpat Nagar II" */
+  name: string;
+  /** e.g. "Lajpat Nagar, New Delhi, Delhi, India" */
+  detail: string;
+}
+
+export interface Hospital {
+  name: string;
+  address?: string;
+  /** Dialable number, when Google has one. */
+  phone?: string;
+  distanceKm: number;
+  mapsUrl?: string;
+}

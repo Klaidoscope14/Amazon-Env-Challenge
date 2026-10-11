@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
+import { getNearbyHospitals } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useCatalog } from "@/lib/catalog";
 import type { EmergencyContact } from "@/lib/types";
@@ -82,6 +84,19 @@ export default function SosDialog({ onClose }: { onClose: () => void }) {
     .filter(Boolean)
     .join("\n");
 
+  // Rounded to ~1 km: enough to find the nearest hospitals.
+  const near =
+    location.status === "found"
+      ? { lat: Math.round(location.lat * 100) / 100, lon: Math.round(location.lon * 100) / 100 }
+      : null;
+  const hospitals = useQuery({
+    queryKey: ["hospitals", near?.lat, near?.lon],
+    queryFn: () => getNearbyHospitals(near!.lat, near!.lon),
+    enabled: !!near,
+    staleTime: 60 * 60 * 1000,
+    retry: 1,
+  });
+
   const canShare = typeof navigator !== "undefined" && "share" in navigator;
 
   return (
@@ -128,6 +143,48 @@ export default function SosDialog({ onClose }: { onClose: () => void }) {
             </a>
           ))}
         </section>
+
+        {(near || location.status === "finding") && !hospitals.isError && (
+          <section aria-label="Nearest hospitals" className="mt-6">
+            <h3 className="text-sm font-semibold text-foreground">Nearest hospitals</h3>
+            {(location.status === "finding" || hospitals.isPending) && (
+              <p className="mt-2 text-sm text-muted">Finding hospitals near you…</p>
+            )}
+            {hospitals.data?.length === 0 && <p className="mt-2 text-sm text-muted">No hospitals found nearby.</p>}
+            {hospitals.data && hospitals.data.length > 0 && (
+              <ul className="mt-2 divide-y divide-border rounded-xl border border-border">
+                {hospitals.data.map((h) => (
+                  <li key={`${h.name}-${h.distanceKm}`} className="flex flex-wrap items-center gap-2 px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-foreground">{h.name}</p>
+                      <p className="truncate text-xs text-muted">
+                        {h.distanceKm} km{h.address ? ` · ${h.address}` : ""}
+                      </p>
+                    </div>
+                    {h.phone && (
+                      <a href={`tel:${h.phone}`} className="inline-flex min-h-11 items-center rounded-lg border border-border-strong px-3 text-sm font-medium text-foreground hover:bg-surface-2">
+                        Call
+                      </a>
+                    )}
+                    {h.mapsUrl && (
+                      <a
+                        href={h.mapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-h-11 items-center rounded-lg bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700"
+                      >
+                        Directions
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {hospitals.data && hospitals.data.length > 0 && (
+              <p className="mt-1 text-right text-[11px] text-muted">Powered by Google</p>
+            )}
+          </section>
+        )}
 
         <section aria-label="Your emergency contacts" className="mt-6">
           <h3 className="text-sm font-semibold text-foreground">Your emergency contacts</h3>
