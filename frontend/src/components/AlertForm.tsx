@@ -8,8 +8,6 @@ import { useAuth } from "@/lib/auth";
 import type { Alert, AreaInfo, Audience, Recommendation } from "@/lib/types";
 import Button from "./ui/Button";
 
-const MAX_MESSAGE = 2000;
-
 interface AlertFormProps {
   /** Area the alert is shared for. */
   area: AreaInfo;
@@ -32,6 +30,8 @@ export default function AlertForm({
 }: AlertFormProps) {
   const { user } = useAuth();
   const catalog = useCatalog();
+  // The API's own limit; until the catalog loads, nothing counts as too long.
+  const MAX_MESSAGE = catalog.data?.limits.maxAlertMessage ?? Infinity;
   const [audience, setAudience] = useState<Audience>("family");
   // null = untouched, so the field shows the (possibly refreshed) draft.
   const [editedEn, setEditedEn] = useState<string | null>(null);
@@ -247,7 +247,8 @@ export default function AlertForm({
               className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent-text disabled:bg-surface-2"
             />
             <p className={`text-xs mt-0.5 ${messageEn.length > MAX_MESSAGE ? "text-red-700 dark:text-red-300" : "text-muted"}`}>
-              {messageEn.length}/{MAX_MESSAGE}
+              {messageEn.length}
+              {Number.isFinite(MAX_MESSAGE) && `/${MAX_MESSAGE}`}
             </p>
           </div>
 
@@ -265,7 +266,8 @@ export default function AlertForm({
               className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent-text disabled:bg-surface-2"
             />
             <p className={`text-xs mt-0.5 ${messageHi.length > MAX_MESSAGE ? "text-red-700 dark:text-red-300" : "text-muted"}`}>
-              {messageHi.length}/{MAX_MESSAGE}
+              {messageHi.length}
+              {Number.isFinite(MAX_MESSAGE) && `/${MAX_MESSAGE}`}
             </p>
           </div>
 

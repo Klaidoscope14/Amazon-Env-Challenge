@@ -7,8 +7,7 @@ import type { EmergencyContact, UserProfile } from "@/lib/types";
 import Card from "../ui/Card";
 import Button from "../ui/Button";
 import FormMessage from "./FormMessage";
-
-const MAX_CONTACTS = 5;
+import { useCatalog } from "@/lib/catalog";
 
 type Row = EmergencyContact & { key: string };
 
@@ -17,6 +16,7 @@ const toRows = (contacts: EmergencyContact[]): Row[] =>
 
 export default function EmergencyContactsForm({ user }: { user: UserProfile }) {
   const { profileSaved } = useAuth();
+  const maxContacts = useCatalog().data?.limits.maxEmergencyContacts;
   const id = useId();
   const [rows, setRows] = useState<Row[]>(() => toRows(user.emergencyContacts));
   const [busy, setBusy] = useState(false);
@@ -55,7 +55,7 @@ export default function EmergencyContactsForm({ user }: { user: UserProfile }) {
     <Card className="p-6" id="contacts">
       <h2 className="text-lg font-semibold text-foreground">Emergency contacts</h2>
       <p className="text-sm text-muted mt-1">
-        The people SOS can call or message in one tap. Add up to {MAX_CONTACTS}.
+        The people SOS can call or message in one tap.{maxContacts ? ` Add up to ${maxContacts}.` : ""}
       </p>
 
       <form onSubmit={save} className="mt-4 space-y-4">
@@ -120,7 +120,7 @@ export default function EmergencyContactsForm({ user }: { user: UserProfile }) {
 
         <FormMessage message={message} />
         <div className="flex flex-wrap gap-3">
-          {rows.length < MAX_CONTACTS && (
+          {(maxContacts === undefined || rows.length < maxContacts) && (
             <Button
               type="button"
               variant="secondary"

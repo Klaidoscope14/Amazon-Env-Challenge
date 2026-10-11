@@ -13,6 +13,27 @@ const PERIODS = [
   { value: 168, label: "7d" },
 ];
 
+/** Most bars drawn; longer periods are grouped so the chart always fits its card. */
+const MAX_BARS = 56;
+
+/**
+ * Groups readings into at most MAX_BARS bars. Each bar is the worst reading in
+ * its group (so a spike is never averaged away); the latest reading always
+ * keeps a bar of its own, so the chart ends at "now".
+ */
+function toBars<T extends { aqi: number }>(rows: T[]): T[] {
+  if (rows.length <= MAX_BARS) return rows;
+  const earlier = rows.slice(0, -1);
+  const size = Math.ceil(earlier.length / (MAX_BARS - 1));
+  const bars: T[] = [];
+  // Group from the end, so the oldest group is the partial one.
+  for (let end = earlier.length; end > 0; end -= size) {
+    const group = earlier.slice(Math.max(0, end - size), end);
+    bars.unshift(group.reduce((worst, r) => (r.aqi > worst.aqi ? r : worst)));
+  }
+  return [...bars, rows[rows.length - 1]];
+}
+
 interface TrendHistogramProps {
   trends: TrendResponse;
   selectedHours: number;
@@ -27,7 +48,7 @@ function formatTime(ts: string, hours: number): string {
     : d.toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
 }
 
-/** The AQI over time as a histogram: one bar per reading, coloured by its CPCB band. */
+/** The AQI over time as a histogram: one bar per reading (grouped for long periods), coloured by band. */
 export default function TrendHistogram({ trends, selectedHours, onHoursChange }: TrendHistogramProps) {
   const bands = useBands();
   const [hover, setHover] = useState<number | null>(null);
@@ -38,15 +59,18 @@ export default function TrendHistogram({ trends, selectedHours, onHoursChange }:
     band: (p.status ?? statusIn(bands, p.aqi) ?? "Unavailable") as AQIStatus,
   }));
 
+  const bars = toBars(rows);
+  const grouped = bars.length < rows.length;
+
   const peak = rows.length ? Math.max(...rows.map((r) => r.aqi)) : 0;
   const yMax = Math.max(100, Math.ceil((peak * 1.08) / 25) * 25);
   const gridlines = [0, ...bands.map((b) => b.to).filter((v) => v < yMax)];
 
-  const active = hover !== null && rows[hover] ? hover : rows.length - 1;
-  const shown = rows[active];
-  const tickCount = Math.min(5, rows.length);
+  const active = hover !== null && bars[hover] ? hover : bars.length - 1;
+  const shown = bars[active];
+  const tickCount = Math.min(5, bars.length);
   const ticks = Array.from({ length: tickCount }, (_, k) =>
-    tickCount === 1 ? 0 : Math.round((k / (tickCount - 1)) * (rows.length - 1))
+    tickCount === 1 ? 0 : Math.round((k / (tickCount - 1)) * (bars.length - 1))
   );
 
   return (
@@ -60,7 +84,7 @@ export default function TrendHistogram({ trends, selectedHours, onHoursChange }:
                 {shown.aqi}
               </span>{" "}
               · {shown.band} · {formatTime(shown.timestamp, selectedHours)}
-              {active === rows.length - 1 ? " (latest)" : ""}
+              {active === bars.length - 1 ? " (latest)" : grouped ? " (worst hour)" : ""}
             </p>
           ) : (
             <p className="mt-1 text-sm text-muted">No readings stored for this period yet.</p>
@@ -113,15 +137,15 @@ export default function TrendHistogram({ trends, selectedHours, onHoursChange }:
               </div>
             ))}
 
-            <div className="absolute inset-0 flex items-end gap-[3px]">
-              {rows.map((r, i) => {
-                const isNow = i === rows.length - 1;
+            <div className={`absolute inset-0 flex items-end ${bars.length > 30 ? "gap-px" : "gap-[3px]"}`}>
+              {bars.map((r, i) => {
+                const isNow = i === bars.length - 1;
                 const h = Math.max(2, (r.aqi / yMax) * 100);
                 const dim = hover !== null && hover !== i;
                 return (
                   <div
                     key={r.timestamp}
-                    className="relative flex h-full min-w-[3px] flex-1 items-end"
+                    className="relative flex h-full min-w-0 flex-1 items-end"
                     onMouseEnter={() => setHover(i)}
                   >
                     <div
@@ -151,13 +175,14 @@ export default function TrendHistogram({ trends, selectedHours, onHoursChange }:
             {ticks.map((i, k) => (
               <span
                 key={i}
-                className="absolute whitespace-nowrap"
+                // Phones show the first, middle and last labels only, so they don't overlap.
+                className={`absolute whitespace-nowrap ${ticks.length === 5 && k % 2 === 1 ? "hidden sm:inline" : ""}`}
                 style={{
-                  left: `${(i / Math.max(1, rows.length - 1)) * 100}%`,
+                  left: `${(i / Math.max(1, bars.length - 1)) * 100}%`,
                   transform: k === 0 ? "none" : k === ticks.length - 1 ? "translateX(-100%)" : "translateX(-50%)",
                 }}
               >
-                {k === ticks.length - 1 ? "Now" : formatTime(rows[i].timestamp, selectedHours)}
+                {k === ticks.length - 1 ? "Now" : formatTime(bars[i].timestamp, selectedHours)}
               </span>
             ))}
           </div>
@@ -166,7 +191,9 @@ export default function TrendHistogram({ trends, selectedHours, onHoursChange }:
 
       {rows.length > 0 && (
         <p className="mt-4 flex flex-wrap justify-between gap-2 text-xs text-muted">
-          <span>{rows.length} readings</span>
+          <span>
+            {rows.length} readings{grouped ? " · each bar shows the worst hour in its group" : ""}
+          </span>
           <span>
             Range {Math.min(...rows.map((r) => r.aqi))} – {peak} AQI
           </span>

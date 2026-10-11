@@ -236,14 +236,15 @@ describe("live readings and events", () => {
     }
   });
 
-  it("serves many places at once for the globe, with the US AQI worked out alongside", async () => {
+  it("serves many places at once for the globe", async () => {
     const res = await aqi(
       request("GET", "/api/v1/aqi/sites", { query: { points: "26.92,75.79;26.93,75.80;51.51,-0.13" } })
     );
     expect(res.statusCode).toBe(200);
     const { points } = json(res);
-    // PM2.5 100 µg/m³ -> US AQI 182; both Jaipur points share one area (one lookup).
-    expect(points["26.92,75.79"]).toMatchObject({ aqi: 233, dominant: "pm25", usAqi: 182, usDominant: "pm25", pm25: 100 });
+    // Both Jaipur points share one area (one lookup).
+    expect(points["26.92,75.79"]).toMatchObject({ aqi: 233, dominant: "pm25", pm25: 100 });
+    expect(points["26.92,75.79"]).not.toHaveProperty("usAqi");
     expect(points["26.93,75.80"]).toEqual(points["26.92,75.79"]);
     expect(points["51.51,-0.13"]).toBeNull(); // outside India
   });
@@ -538,6 +539,18 @@ describe("catalog and trend statuses", () => {
     expect(catalog.activities).toContainEqual({ value: "kids_play", label: "Children playing outside" });
     expect(catalog.demoScenarios).toContainEqual({ value: "poor", label: "Poor (201–300)" });
     expect(catalog.defaultDemoScenario).toBe("poor");
+    // Reference data and limits the browser would otherwise copy.
+    expect(catalog.pollutantLimits.pm25).toEqual({ limit: 60, averaging: "24-hour" });
+    expect(catalog.decisionOptions).toContain("Moved plans indoors");
+    expect(catalog.limits).toEqual({ maxEmergencyContacts: 5, maxAlertMessage: 2000, maxPlans: 12 });
+    expect(catalog.indiaBounds).toMatchObject({ minLat: 5, maxLon: 99 });
+  });
+
+  it("gives every area its coordinates", async () => {
+    const { handler: areas } = await import("../services/aqi-data/src/handler.js");
+    const listed = json(await areas(request("GET", "/api/v1/areas"))).areas as { id: string; lat: number; lon: number }[];
+    expect(listed.find((a) => a.id === "city-delhi")).toMatchObject({ lat: expect.any(Number), lon: expect.any(Number) });
+    expect(listed.every((a) => Number.isFinite(a.lat) && Number.isFinite(a.lon))).toBe(true);
   });
 
   it("labels each trend point with its category", async () => {

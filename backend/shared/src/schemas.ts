@@ -95,6 +95,8 @@ export const TrendsQuerySchema = AreaQuerySchema.extend({
 export const NearestQuerySchema = z.object({ lat: latitude, lon: longitude });
 
 export const MAX_SITES = 30;
+export const MAX_ALERT_MESSAGE = 2000;
+export const MAX_PLANS = 12;
 const sitesMessage = `points must be up to ${MAX_SITES} "lat,lon" pairs separated by ";"`;
 
 /** GET /aqi/sites?points=28.61,77.21;19.08,72.88 — places anywhere (only those in India get a reading). */
@@ -162,8 +164,8 @@ export const ExplainQuerySchema = AreaQuerySchema.extend({ lang });
 export const CreateAlertBodySchema = z.object({
   campus: areaId,
   audience,
-  message: requiredText("message", 2000),
-  messageHi: optionalText("messageHi", 2000),
+  message: requiredText("message", MAX_ALERT_MESSAGE),
+  messageHi: optionalText("messageHi", MAX_ALERT_MESSAGE),
   noticeSource: z.preprocess(
     blankToUndefined,
     z.enum(["template", "ai"], { error: "noticeSource must be template or ai" }).optional()
@@ -282,5 +284,5 @@ export const EvaluatePlansBodySchema = z.object({
       { error: "plans must be a list" }
     )
     .min(1, "Add at least one plan")
-    .max(12, "At most 12 plans"),
+    .max(MAX_PLANS, `At most ${MAX_PLANS} plans`),
 });

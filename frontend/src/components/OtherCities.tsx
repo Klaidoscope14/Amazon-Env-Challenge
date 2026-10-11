@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getNearestArea } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { getAreas, getNearestArea } from "@/lib/api";
 import { coordsForArea, distanceKm } from "@/lib/geo";
 import { countryAt, loadWorld, type City, type World } from "@/lib/world";
 import { siteKey, useAirLayer } from "@/lib/useAirLayer";
 import { useBands } from "@/lib/catalog";
-import { US_SCALE, STANDARD_LABEL, bandFor, indiaScale } from "@/lib/aqiScale";
-import { useAqiStandard } from "@/lib/useAqiStandard";
+import { bandFor, indiaScale } from "@/lib/aqiScale";
 import type { AreaInfo } from "@/lib/types";
 
 interface OtherCitiesProps {
@@ -33,7 +33,9 @@ export default function OtherCities({ selected, onChooseArea }: OtherCitiesProps
     };
   }, []);
 
-  const home = useMemo(() => coordsForArea(selected.id), [selected.id]);
+  // Same cached list as the globe, for areas saved without coordinates.
+  const areasQuery = useQuery({ queryKey: ["areas"], queryFn: getAreas, staleTime: 30 * 60 * 1000, refetchInterval: false });
+  const home = useMemo(() => coordsForArea(selected, areasQuery.data?.areas), [selected, areasQuery.data]);
   const a3 = useMemo(() => (world && home ? countryAt(world, home[0], home[1])?.a3 ?? null : null), [world, home]);
 
   // Same site list (and so the same cached request) the globe uses for this country.
@@ -45,10 +47,9 @@ export default function OtherCities({ selected, onChooseArea }: OtherCitiesProps
   }, [countryCities, home]);
   const air = useAirLayer(sites, a3 ?? "none");
 
-  // Same scale as the globe: follows the shared "AQI Standard" switch.
-  const [standard] = useAqiStandard();
+  // India's AQI, same scale as the globe.
   const bands = useBands();
-  const scale = useMemo(() => (standard === "us" ? US_SCALE : indiaScale(bands)), [standard, bands]);
+  const scale = useMemo(() => indiaScale(bands), [bands]);
 
   const rows = useMemo(() => {
     if (!home) return [];
@@ -78,7 +79,7 @@ export default function OtherCities({ selected, onChooseArea }: OtherCitiesProps
     <section aria-label="Other cities" className="glass rounded-3xl p-5 sm:p-6">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="font-display text-lg font-semibold text-foreground">Cities near {selected.name}</h2>
-        <span className="text-[11px] text-muted">{STANDARD_LABEL[standard].name}</span>
+        <span className="text-[11px] text-muted">India AQI</span>
       </div>
 
       {loading ? (
@@ -95,7 +96,7 @@ export default function OtherCities({ selected, onChooseArea }: OtherCitiesProps
         <ul className="mt-3 space-y-2">
           {rows.map(({ city, km }) => {
             const a = air.data?.[siteKey(city.lat, city.lon)];
-            const value = standard === "us" ? a?.usAqi : a?.aqi;
+            const value = a?.aqi;
             const band = bandFor(scale, value);
             return (
               <li key={`${city.name}-${city.lat}`}>

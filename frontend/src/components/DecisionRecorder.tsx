@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ApiError, recordDecision } from "@/lib/api";
-import { DECISION_OPTIONS } from "@/lib/constants";
+import { useCatalog } from "@/lib/catalog";
 import { useAuth } from "@/lib/auth";
 import type { Alert } from "@/lib/types";
 import Button from "./ui/Button";
@@ -33,6 +33,7 @@ export default function DecisionRecorder({
   const [recorded, setRecorded] = useState<{ decision: string; at: string } | null>(null);
   const queryClient = useQueryClient();
   const { isAuthenticated, user } = useAuth();
+  const decisionOptions = useCatalog().data?.decisionOptions ?? [];
 
   const mutation = useMutation({
     mutationFn: (decision: string) => recordDecision(alert, decision),
@@ -98,7 +99,7 @@ export default function DecisionRecorder({
     <div className="mt-3 space-y-2">
       <p className="text-xs text-muted font-medium">Record what you decided:</p>
       <div className="flex flex-wrap gap-2">
-        {DECISION_OPTIONS.map((opt) => (
+        {decisionOptions.map((opt) => (
           <Button
             key={opt}
             variant="secondary"

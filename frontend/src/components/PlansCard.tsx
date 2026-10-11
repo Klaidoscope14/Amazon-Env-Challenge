@@ -9,7 +9,6 @@ import Card from "./ui/Card";
 import Button from "./ui/Button";
 
 const DURATIONS = [15, 30, 45, 60, 90, 120, 180];
-const MAX_PLANS = 12;
 
 type Verdict = PlansEvaluation["verdicts"][number]["verdict"];
 
@@ -48,7 +47,7 @@ function readPlans(): StoredPlan[] {
     cachedRaw = raw;
     try {
       const parsed = raw ? JSON.parse(raw) : [];
-      cachedPlans = Array.isArray(parsed) ? (parsed as StoredPlan[]).slice(0, MAX_PLANS) : [];
+      cachedPlans = Array.isArray(parsed) ? (parsed as StoredPlan[]) : [];
     } catch {
       cachedPlans = [];
     }
@@ -84,10 +83,14 @@ function usePlans(): StoredPlan[] {
 // ---------------------------------------------------------------------------
 
 export default function PlansCard({ areaId, scenario }: { areaId: string; scenario?: string }) {
-  const plans = usePlans();
+  const storedPlans = usePlans();
   const id = useId();
   // Activities (and their labels) come from the API, which validates them.
-  const activities = useCatalog().data?.activities ?? [];
+  const catalog = useCatalog();
+  const activities = catalog.data?.activities ?? [];
+  // The API's limit on plans per check; until the catalog loads, no cap.
+  const maxPlans = catalog.data?.limits.maxPlans ?? Infinity;
+  const plans = storedPlans.slice(0, maxPlans);
   const [activity, setActivity] = useState<string>("walk");
   const [time, setTime] = useState("");
   const [duration, setDuration] = useState(30);
@@ -109,7 +112,7 @@ export default function PlansCard({ areaId, scenario }: { areaId: string; scenar
 
   function addPlan(e: React.FormEvent) {
     e.preventDefault();
-    if (plans.length >= MAX_PLANS) return;
+    if (plans.length >= maxPlans) return;
     const plan: StoredPlan = {
       id: crypto.randomUUID().slice(0, 8),
       activity,
@@ -178,7 +181,7 @@ export default function PlansCard({ areaId, scenario }: { areaId: string; scenar
         </p>
       )}
 
-      {plans.length < MAX_PLANS ? (
+      {plans.length < maxPlans ? (
         <form onSubmit={addPlan} className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto_auto_auto] sm:items-end">
           <div>
             <label htmlFor={`${id}-activity`} className="block text-xs font-medium text-muted-strong mb-1">
@@ -240,7 +243,7 @@ export default function PlansCard({ areaId, scenario }: { areaId: string; scenar
           </label>
         </form>
       ) : (
-        <p className="mt-4 text-sm text-muted">You can track up to {MAX_PLANS} plans.</p>
+        <p className="mt-4 text-sm text-muted">You can track up to {maxPlans} plans.</p>
       )}
 
     </Card>

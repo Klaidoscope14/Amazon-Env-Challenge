@@ -66,13 +66,6 @@ export const EMAIL_DELIVERY: Record<
   not_configured: { label: "In-app only", className: "bg-surface-2 text-muted" },
 };
 
-export const DECISION_OPTIONS = [
-  "Moved plans indoors",
-  "Skipped outdoor exercise",
-  "Kept windows closed",
-  "No action needed",
-] as const;
-
 const POLLUTANT_LABELS: Record<string, { label: string; unit: string }> = {
   pm25: { label: "PM2.5", unit: "µg/m³" },
   pm10: { label: "PM10", unit: "µg/m³" },
@@ -85,26 +78,6 @@ const POLLUTANT_LABELS: Record<string, { label: string; unit: string }> = {
 
 export function formatPollutant(key: string): { label: string; unit: string } {
   return POLLUTANT_LABELS[key.toLowerCase()] ?? { label: key.toUpperCase(), unit: "" };
-}
-
-/**
- * CPCB National Ambient Air Quality Standards — the averaging-period limit used
- * to express a measured concentration as a share of what is considered safe.
- * (PM/NO₂/SO₂/NH₃: 24-hour; O₃/CO: 8-hour. CO is in mg/m³, the rest µg/m³.)
- */
-export const POLLUTANT_LIMITS: Record<string, { limit: number; averaging: string }> = {
-  pm25: { limit: 60, averaging: "24-hour" },
-  pm10: { limit: 100, averaging: "24-hour" },
-  no2: { limit: 80, averaging: "24-hour" },
-  so2: { limit: 80, averaging: "24-hour" },
-  nh3: { limit: 400, averaging: "24-hour" },
-  o3: { limit: 100, averaging: "8-hour" },
-  co: { limit: 2, averaging: "8-hour" },
-};
-
-/** The CPCB safe limit for a pollutant, or undefined if we don't have one. */
-export function pollutantLimit(key: string): { limit: number; averaging: string } | undefined {
-  return POLLUTANT_LIMITS[key.toLowerCase()];
 }
 
 /**

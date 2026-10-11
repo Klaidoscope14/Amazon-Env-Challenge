@@ -2,11 +2,16 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { evaluate, evaluateUnavailable } from "../../../shared/src/evaluate.js";
 import { EMERGENCY_SERVICES } from "../../../shared/src/emergency.js";
+import { DECISION_OPTIONS, POLLUTANT_LIMITS } from "../../../shared/src/reference.js";
+import { INDIA_BOUNDS } from "../../../shared/src/areas.js";
 import { dataContextFromEnv, getAreaReading } from "../../../shared/src/area-readings.js";
 import { getActiveRuleset } from "../../../shared/src/rules.js";
 import {
   AreaQuerySchema,
   EvaluatePlansBodySchema,
+  MAX_ALERT_MESSAGE,
+  MAX_EMERGENCY_CONTACTS,
+  MAX_PLANS,
   parse,
   ValidationError,
 } from "../../../shared/src/schemas.js";
@@ -86,5 +91,9 @@ function catalog(ruleset: Ruleset): Catalog {
     }),
     defaultDemoScenario: DEFAULT_DEMO_SCENARIO,
     emergencyServices: EMERGENCY_SERVICES,
+    pollutantLimits: POLLUTANT_LIMITS,
+    decisionOptions: DECISION_OPTIONS,
+    limits: { maxEmergencyContacts: MAX_EMERGENCY_CONTACTS, maxAlertMessage: MAX_ALERT_MESSAGE, maxPlans: MAX_PLANS },
+    indiaBounds: INDIA_BOUNDS,
   };
 }

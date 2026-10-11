@@ -15,11 +15,13 @@ export interface Area {
   city: string;
   state: string;
   distanceKm?: number;
+  lat: number;
+  lon: number;
 }
 
 const GEO_NAME_RADIUS_KM = 150;
 const CITY_RADIUS_KM = 75;
-const INDIA_BOUNDS = { minLat: 5, maxLat: 38, minLon: 67, maxLon: 99 };
+export const INDIA_BOUNDS = { minLat: 5, maxLat: 38, minLon: 67, maxLon: 99 };
 
 function cityArea(city: City, km?: number): Area {
   return {
@@ -28,6 +30,8 @@ function cityArea(city: City, km?: number): Area {
     name: city.name,
     city: city.name,
     state: city.state,
+    lat: city.lat,
+    lon: city.lon,
     ...(km !== undefined ? { distanceKm: Math.round(km * 10) / 10 } : {}),
   };
 }
@@ -54,6 +58,8 @@ function geoArea(id: string, lat: number, lon: number): Area {
     name: near ? `${near.city.name} area` : `Area near ${lat.toFixed(1)}°N, ${lon.toFixed(1)}°E`,
     city: near?.city.name ?? "",
     state: near?.city.state ?? "",
+    lat,
+    lon,
   };
 }
 
@@ -90,9 +96,7 @@ export function resolveArea(id: string): Area | null {
 
 /** Coordinates used to look up air quality for an area. */
 export function areaCoordinates(area: Area): { lat: number; lon: number } | null {
-  if (area.kind === "geo") return parseGeoId(area.id);
-  const city = CITIES.find((c) => `city-${c.id}` === area.id);
-  return city ? { lat: city.lat, lon: city.lon } : null;
+  return Number.isFinite(area.lat) && Number.isFinite(area.lon) ? { lat: area.lat, lon: area.lon } : null;
 }
 
 /** Name to show for where a reading applies (strips the demo suffix). */

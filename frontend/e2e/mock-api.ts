@@ -42,13 +42,21 @@ const CATALOG = {
   ],
   demoScenarios: [{ value: "poor", label: "Poor (201–300)" }],
   defaultDemoScenario: "poor",
+  pollutantLimits: {
+    pm25: { limit: 60, averaging: "24-hour" }, pm10: { limit: 100, averaging: "24-hour" }, no2: { limit: 80, averaging: "24-hour" },
+    so2: { limit: 80, averaging: "24-hour" }, nh3: { limit: 400, averaging: "24-hour" }, o3: { limit: 100, averaging: "8-hour" },
+    co: { limit: 2, averaging: "8-hour" },
+  },
+  decisionOptions: ["Moved plans indoors", "Skipped outdoor exercise", "Kept windows closed", "No action needed"],
+  limits: { maxEmergencyContacts: 5, maxAlertMessage: 2000, maxPlans: 12 },
+  indiaBounds: { minLat: 5, maxLat: 38, minLon: 67, maxLon: 99 },
   emergencyServices: [
     { label: "All emergencies", number: "112" },
     { label: "Ambulance", number: "108" },
   ],
 };
 
-export const AREA = { id: "city-delhi", kind: "city", name: "Delhi", city: "Delhi", state: "Delhi" };
+export const AREA = { id: "city-delhi", kind: "city", name: "Delhi", city: "Delhi", state: "Delhi", lat: 28.61, lon: 77.21 };
 
 const now = () => new Date().toISOString();
 
@@ -119,11 +127,14 @@ export async function mockApi(page: Page, options: { mfa?: boolean } = {}): Prom
     if (path.endsWith("/aqi/current")) return json(200, reading());
     if (path.endsWith("/recommendations/current")) return json(200, recommendation());
     if (path.endsWith("/trends")) {
-      const points = Array.from({ length: 24 }, (_, i) => ({
-        timestamp: new Date(Date.now() - (23 - i) * 3600e3).toISOString(),
-        aqi: 200 + i * 3, status: "Poor", dominantPollutant: "pm25", source: "Google Air Quality", dataMode: "live",
+      // One reading per hour for the requested period (like the real API).
+      const hours = Number(url.searchParams.get("hours") ?? 24);
+      const points = Array.from({ length: hours }, (_, i) => ({
+        timestamp: new Date(Date.now() - (hours - 1 - i) * 3600e3).toISOString(),
+        aqi: hours === 24 ? 200 + i * 3 : 150 + Math.round(60 * Math.sin(i / 12)),
+        status: "Poor", dominantPollutant: "pm25", source: "Google Air Quality", dataMode: "live",
       }));
-      return json(200, { campus: AREA.id, points, period: "24h", dataMode: "live" });
+      return json(200, { campus: AREA.id, points, period: `${hours}h`, dataMode: "live" });
     }
     if (path.endsWith("/plans/evaluate")) {
       const { plans } = request.postDataJSON() as { plans: { id: string; activity: string }[] };
@@ -189,7 +200,7 @@ export async function mockApi(page: Page, options: { mfa?: boolean } = {}): Prom
         const [lat, lon] = pair.split(",").map(Number);
         const inIndia = lat > 6 && lat < 37 && lon > 68 && lon < 98;
         points[pair] = inIndia
-          ? { aqi: 150 + Math.round((lat - 20) * 4), dominant: "pm25", usAqi: 160, usDominant: "pm25", pm25: 70, pm10: 120, o3: 40, no2: 20, time: now() }
+          ? { aqi: 150 + Math.round((lat - 20) * 4), dominant: "pm25", pm25: 70, pm10: 120, o3: 40, no2: 20, time: now() }
           : null;
       }
       return json(200, { points });
@@ -200,7 +211,7 @@ export async function mockApi(page: Page, options: { mfa?: boolean } = {}): Prom
       });
     }
     if (path.endsWith("/places/resolve")) {
-      return json(200, { area: { id: "geo-286-772", kind: "geo", name: "Lajpat Nagar II", city: "Delhi", state: "Delhi" } });
+      return json(200, { area: { id: "geo-286-772", kind: "geo", name: "Lajpat Nagar II", city: "Delhi", state: "Delhi", lat: 28.6, lon: 77.2 } });
     }
     if (path.endsWith("/places/hospitals")) {
       return json(200, {
