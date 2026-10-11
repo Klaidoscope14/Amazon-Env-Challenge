@@ -54,6 +54,9 @@ export async function handler(
     if (err instanceof ValidationError) {
       return respond(400, { error: err.message, code: "INVALID_INPUT" });
     }
+    if (err instanceof Error && err.name === "MissingToken") {
+      return respond(401, { error: err.message, code: "SIGN_IN_REQUIRED" });
+    }
     const name = err instanceof Error ? err.name : "UnknownError";
     const mapped = COGNITO_ERRORS[name];
     if (mapped) {
@@ -69,8 +72,10 @@ export async function handler(
 // Cognito exceptions users can hit, mapped to HTTP status + a stable code the
 // frontend can act on (e.g. send unconfirmed users to /verify).
 const COGNITO_ERRORS: Record<string, { status: number; code: string; message: string }> = {
-  NotAuthorizedException: { status: 401, code: "INVALID_CREDENTIALS", message: "Incorrect email or password." },
-  UserNotFoundException: { status: 401, code: "INVALID_CREDENTIALS", message: "Incorrect email or password." },
+  // Sign-in happens in the browser (SRP), so here "not authorized" means the
+  // caller's access token is missing, expired or revoked.
+  NotAuthorizedException: { status: 401, code: "SESSION_EXPIRED", message: "Your session has expired. Please sign in again." },
+  UserNotFoundException: { status: 401, code: "SESSION_EXPIRED", message: "Your session has expired. Please sign in again." },
   UserNotConfirmedException: { status: 403, code: "USER_NOT_CONFIRMED", message: "Please verify your email before signing in." },
   UsernameExistsException: { status: 409, code: "ACCOUNT_EXISTS", message: "An account with this email already exists. Sign in instead." },
   InvalidPasswordException: { status: 400, code: "INVALID_PASSWORD", message: "Password does not meet the requirements." },
@@ -228,7 +233,7 @@ async function signOut(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResu
 
 function requireAccessToken(event: APIGatewayProxyEvent): string {
   const token = accessToken(event);
-  if (!token) throw Object.assign(new Error("Authorization token required"), { name: "NotAuthorizedException" });
+  if (!token) throw Object.assign(new Error("Please sign in to continue."), { name: "MissingToken" });
   return token;
 }
 

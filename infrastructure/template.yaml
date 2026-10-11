@@ -65,6 +65,13 @@ Parameters:
       - 'true'
       - 'false'
     Description: Write plain-language explanations with the Gemini API (guardrail-checked; falls back to a deterministic explanation)
+  EnableWebsite:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Host the frontend in S3 + CloudFront (needs an AWS account verified for CloudFront)
   SesFromEmail:
     Type: String
     Default: ''
@@ -85,6 +92,7 @@ Parameters:
 Conditions:
   HasAlertEmail: !Not [!Equals [!Ref AlertEmail, '']]
   UseSesEmail: !Not [!Equals [!Ref SesFromEmail, '']]
+  HostWebsite: !Equals [!Ref EnableWebsite, 'true']
 
 Resources:
 
@@ -858,9 +866,12 @@ Resources:
 
   # ============================================
   # Website: static Next.js export in S3, served by CloudFront
+  # (only with EnableWebsite=true: new AWS accounts must be verified by AWS
+  # Support before they can create CloudFront distributions)
   # ============================================
   # Private bucket: only this stack's CloudFront distribution can read it.
   SiteBucket:
+    Condition: HostWebsite
     Type: AWS::S3::Bucket
     Properties:
       PublicAccessBlockConfiguration:
@@ -877,6 +888,7 @@ Resources:
               SSEAlgorithm: AES256
 
   SiteBucketPolicy:
+    Condition: HostWebsite
     Type: AWS::S3::BucketPolicy
     Properties:
       Bucket: !Ref SiteBucket
@@ -894,6 +906,7 @@ Resources:
                 AWS:SourceArn: !Sub arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${SiteDistribution}
 
   SiteOriginAccessControl:
+    Condition: HostWebsite
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
       OriginAccessControlConfig:
@@ -906,6 +919,7 @@ Resources:
   # get the 404 page (the bucket is private, so it can't 404 by itself).
   # Keep ROUTES in sync with frontend/src/app (one entry per page).
   SiteRouteFunction:
+    Condition: HostWebsite
     Type: AWS::CloudFront::Function
     Properties:
       Name: !Sub breathesafe-${Stage}-routes
@@ -927,6 +941,7 @@ Resources:
         }
 
   SiteSecurityHeaders:
+    Condition: HostWebsite
     Type: AWS::CloudFront::ResponseHeadersPolicy
     Properties:
       ResponseHeadersPolicyConfig:
@@ -956,6 +971,7 @@ Resources:
               Value: geolocation=(self), camera=(), microphone=(), payment=()
 
   SiteDistribution:
+    Condition: HostWebsite
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
@@ -1193,12 +1209,15 @@ Resources:
 
 Outputs:
   SiteUrl:
+    Condition: HostWebsite
     Description: Website (CloudFront); the API is also served under /api on this address
     Value: !Sub https://${SiteDistribution.DomainName}
   SiteBucketName:
+    Condition: HostWebsite
     Description: S3 bucket holding the website build (upload with npm run deploy:web)
     Value: !Ref SiteBucket
   SiteDistributionId:
+    Condition: HostWebsite
     Description: CloudFront distribution id (for cache invalidations)
     Value: !Ref SiteDistribution
   ApiUrl:

@@ -452,5 +452,12 @@ describe("two-step verification setup", () => {
   it("requires a signed-in user for setup", async () => {
     const res = await auth(request("POST", "/api/v1/auth/mfa/setup", { body: {} }));
     expect(res.statusCode).toBe(401);
+    expect(json(res)).toEqual({ error: "Please sign in to continue.", code: "SIGN_IN_REQUIRED" });
+  });
+
+  it("tells an expired session to sign in again", async () => {
+    cognitoSend.mockRejectedValue(Object.assign(new Error("Access Token has expired"), { name: "NotAuthorizedException" }));
+    const res = await auth(bearer(request("POST", "/api/v1/auth/mfa/setup", { body: {} })));
+    expect(json(res)).toEqual({ error: "Your session has expired. Please sign in again.", code: "SESSION_EXPIRED" });
   });
 });

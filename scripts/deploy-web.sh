@@ -5,7 +5,8 @@
 #   npm run deploy:web        # prod stack
 #   npm run deploy:web:dev    # dev stack
 #
-# Deploy the stack first (it creates the bucket and distribution).
+# Deploy the stack first with EnableWebsite=true (it creates the bucket and
+# distribution; CloudFront needs an AWS account verified by AWS Support).
 set -euo pipefail
 
 STAGE="${1:-prod}"
@@ -27,7 +28,8 @@ SITE_URL="$(output SiteUrl)"
 POOL_ID="$(output UserPoolId)"
 CLIENT_ID="$(output UserPoolClientId)"
 if [ -z "$BUCKET" ] || [ "$BUCKET" = "None" ]; then
-  echo "Stack $STACK has no website bucket yet - deploy the stack first." >&2
+  echo "Stack $STACK has no website yet. Deploy it with EnableWebsite=true" >&2
+  echo "(the AWS account must be verified for CloudFront first)." >&2
   exit 1
 fi
 
