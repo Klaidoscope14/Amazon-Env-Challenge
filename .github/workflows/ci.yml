@@ -40,6 +40,10 @@ jobs:
         working-directory: frontend
     env:
       NEXT_TELEMETRY_DISABLED: 1
+      # Placeholder stack settings: the build only needs them to be present.
+      NEXT_PUBLIC_API_URL: https://api.example.test
+      NEXT_PUBLIC_COGNITO_USER_POOL_ID: ap-south-1_CiPlaceholder
+      NEXT_PUBLIC_COGNITO_CLIENT_ID: ciplaceholderclient
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -9,6 +9,7 @@ import {
   Explanation,
   Ruleset,
   PlansEvaluation,
+  Catalog,
 } from "./types";
 import { API_URL } from "./config";
 
@@ -236,6 +237,11 @@ export async function evaluatePlans(
     method: "POST",
     body: JSON.stringify({ campus, scenario, plans }),
   });
+}
+
+/** Choices the API accepts (audiences, activities, demo scenarios), with labels. */
+export async function getCatalog(): Promise<Catalog> {
+  return fetchApi<Catalog>("/api/v1/catalog");
 }
 
 /** The ruleset the recommendation engine is currently applying. */

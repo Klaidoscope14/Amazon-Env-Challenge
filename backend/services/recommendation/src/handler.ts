@@ -10,7 +10,11 @@ import {
   ValidationError,
 } from "../../../shared/src/schemas.js";
 import { parseJsonBody, respond } from "../../../shared/src/http.js";
-import { evaluatePlan } from "../../../shared/src/plans.js";
+import { ACTIVITIES, ACTIVITY_IDS, evaluatePlan } from "../../../shared/src/plans.js";
+import { AUDIENCE_LABELS, AUDIENCES } from "../../../shared/src/notice-templates.js";
+import { DEFAULT_DEMO_SCENARIO, DEMO_SCENARIOS, demoScenarioAqi } from "../../../shared/src/demo.js";
+import { getThresholdForAqi } from "../../../shared/src/aqi-categories.js";
+import { Catalog, Ruleset } from "../../../shared/src/types.js";
 import { errorFields, log } from "../../../shared/src/observability.js";
 
 const dynamodb = new DynamoDBClient({});
@@ -25,6 +29,12 @@ export async function handler(
     if (event.path.endsWith("/rules")) {
       const ruleset = await getActiveRuleset(dynamodb);
       return respond(200, ruleset);
+    }
+
+    // GET /catalog: choices the API accepts (audiences, plan activities, demo
+    // scenarios) with labels, so the frontend never keeps its own copies.
+    if (event.path.endsWith("/catalog")) {
+      return respond(200, catalog(await getActiveRuleset(dynamodb)));
     }
 
     // POST /plans/evaluate: Go / Modify / Avoid for each of today's plans.
@@ -62,4 +72,17 @@ export async function handler(
     log("error", "unhandled_error", { route: event.path, ...errorFields(err) });
     return respond(500, { error: "Internal server error" });
   }
+}
+
+function catalog(ruleset: Ruleset): Catalog {
+  return {
+    audiences: AUDIENCES.map((value) => ({ value, label: AUDIENCE_LABELS[value] })),
+    audienceLabels: AUDIENCE_LABELS,
+    activities: ACTIVITY_IDS.map((value) => ({ value, label: ACTIVITIES[value].label })),
+    demoScenarios: DEMO_SCENARIOS.map((value) => {
+      const band = getThresholdForAqi(demoScenarioAqi(value), ruleset.thresholds);
+      return { value, label: band ? `${band.status} (${band.minAqi}–${band.maxAqi})` : value };
+    }),
+    defaultDemoScenario: DEFAULT_DEMO_SCENARIO,
+  };
 }

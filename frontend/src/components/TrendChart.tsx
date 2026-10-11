@@ -2,7 +2,8 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import type { TrendResponse } from "@/lib/types";
-import { AQI_BANDS, STATUS_CONFIG, statusForAqi } from "@/lib/constants";
+import { STATUS_CONFIG } from "@/lib/constants";
+import { useBands, type Band } from "@/lib/catalog";
 import DataBadge from "./DataBadge";
 import Card from "./ui/Card";
 
@@ -20,8 +21,6 @@ const PERIOD_OPTIONS = [
   { value: 168, label: "7d" },
 ];
 
-const Y_STOPS = [100, 200, 300, 400, 500];
-
 export default function TrendChart({
   trends,
   selectedHours,
@@ -29,6 +28,7 @@ export default function TrendChart({
 }: TrendChartProps) {
   const points = trends.points;
   const isDemo = trends.dataMode === "demo";
+  const bands = useBands();
 
   return (
     <Card className="p-6">
@@ -66,7 +66,7 @@ export default function TrendChart({
       )}
 
       <ul className="flex flex-wrap gap-x-3 gap-y-1 mb-3 text-xs text-muted">
-        {AQI_BANDS.map((band) => (
+        {bands.map((band) => (
           <li key={band.status} className="flex items-center gap-1">
             <span
               className="w-2.5 h-2.5 rounded-sm inline-block"
@@ -89,7 +89,7 @@ export default function TrendChart({
         </div>
       ) : (
         <>
-          <ChartSVG points={points} hours={selectedHours} />
+          <ChartSVG points={points} hours={selectedHours} bands={bands} />
           <div className="mt-2 flex items-center justify-between text-xs text-muted">
             <span>{points.length} readings</span>
             <span>
@@ -131,9 +131,12 @@ function formatTick(ts: string, hours: number): string {
 function ChartSVG({
   points,
   hours,
+  bands,
 }: {
   points: TrendResponse["points"];
   hours: number;
+  /** Active ruleset's bands (empty until loaded: no background bands). */
+  bands: Band[];
 }) {
   const [containerRef, width] = useWidth<HTMLDivElement>(640);
   const gradientId = useId();
@@ -144,7 +147,10 @@ function ChartSVG({
   const plotH = height - pad.top - pad.bottom;
 
   const maxAqi = Math.max(...points.map((p) => p.aqi));
-  const yMax = Y_STOPS.find((stop) => stop >= maxAqi * 1.05) ?? Math.ceil(maxAqi / 100) * 100;
+  // Round the axis up to a category edge where possible, so bands line up.
+  const yMax =
+    bands.map((b) => b.to).find((edge) => edge >= 100 && edge >= maxAqi * 1.05) ??
+    Math.ceil((maxAqi * 1.05) / 100) * 100;
   const y = (aqi: number) => pad.top + plotH - (Math.min(aqi, yMax) / yMax) * plotH;
   const x = (i: number) =>
     pad.left + (points.length === 1 ? plotW / 2 : (i / (points.length - 1)) * plotW);
@@ -154,14 +160,14 @@ function ChartSVG({
   const areaPath =
     linePath +
     ` L ${coords[coords.length - 1].x} ${pad.top + plotH} L ${coords[0].x} ${pad.top + plotH} Z`;
-  const latestColor = STATUS_CONFIG[statusForAqi(points[points.length - 1].aqi)].hex;
+  // Each point's category comes from the API (the active ruleset).
+  const statusOf = (p: TrendResponse["points"][number]) => p.status ?? "Unavailable";
+  const latestColor = STATUS_CONFIG[statusOf(points[points.length - 1])].hex;
 
   // Faint CPCB band backgrounds, clipped to the visible range.
-  const bands = AQI_BANDS.map((band, i) => ({
-    status: band.status,
-    from: i === 0 ? 0 : AQI_BANDS[i - 1].max,
-    to: Math.min(band.max, yMax),
-  })).filter((b) => b.from < yMax);
+  const visibleBands = bands
+    .map((band) => ({ status: band.status, from: band.from, to: Math.min(band.to, yMax) }))
+    .filter((b) => b.from < yMax);
 
   const tickCount = Math.min(points.length, width < 420 ? 3 : 5);
   const tickIndices = Array.from({ length: tickCount }, (_, k) =>
@@ -182,7 +188,7 @@ function ChartSVG({
         aria-describedby={`${gradientId}-desc`}
       >
         <title id={`${gradientId}-title`}>
-          {`AQI from ${first.aqi} to ${last.aqi} over the selected period; latest ${last.aqi} (${statusForAqi(last.aqi)}).`}
+          {`AQI from ${first.aqi} to ${last.aqi} over the selected period; latest ${last.aqi} (${statusOf(last)}).`}
         </title>
         <desc id={`${gradientId}-desc`}>
           {`${points.length} readings. Lowest AQI ${Math.min(...points.map((p) => p.aqi))}, highest ${Math.max(
@@ -190,7 +196,7 @@ function ChartSVG({
           )}. Background bands show the CPCB categories.`}
         </desc>
 
-        {bands.map((b) => (
+        {visibleBands.map((b) => (
           <rect
             key={b.status}
             x={pad.left}
@@ -202,7 +208,7 @@ function ChartSVG({
           />
         ))}
 
-        {[0, ...Y_STOPS.filter((s) => s <= yMax)].map((v) => (
+        {Array.from({ length: Math.floor(yMax / 100) + 1 }, (_, i) => i * 100).map((v) => (
           <g key={v}>
             <line
               x1={pad.left}
@@ -248,7 +254,7 @@ function ChartSVG({
               cx={c.x}
               cy={c.y}
               r={3}
-              fill={STATUS_CONFIG[statusForAqi(c.p.aqi)].hex}
+              fill={STATUS_CONFIG[statusOf(c.p)].hex}
             >
               <title>{`AQI ${c.p.aqi} · ${formatTick(c.p.timestamp, 48)}`}</title>
             </circle>

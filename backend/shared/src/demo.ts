@@ -21,6 +21,11 @@ const DEMO_FIXTURES = new Map<string, DemoFixture>([
 export const DEFAULT_DEMO_SCENARIO = "poor";
 export const DEMO_SCENARIOS = [...DEMO_FIXTURES.keys()];
 
+/** The AQI a demo scenario shows (for labelling scenarios by category). */
+export function demoScenarioAqi(scenario: string): number | null {
+  return DEMO_FIXTURES.get(scenario)?.aqi ?? null;
+}
+
 /** True only for the known scenario names (never for inherited object keys). */
 export function isDemoScenario(scenario: unknown): scenario is string {
   return typeof scenario === "string" && DEMO_FIXTURES.has(scenario);

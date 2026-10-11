@@ -118,7 +118,7 @@ CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs the same checks p
 ### Run the frontend
 
 ```bash
-cp frontend/.env.example frontend/.env.local   # API URL + Cognito pool/client ids of your stack (unset = public demo)
+cp frontend/.env.example frontend/.env.local   # API URL + Cognito pool/client ids of your stack (required)
 npm run dev                                    # http://localhost:3000
 ```
 

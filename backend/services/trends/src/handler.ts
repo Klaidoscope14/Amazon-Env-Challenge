@@ -1,6 +1,8 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
-import { TrendPoint, TrendResponse } from "../../../shared/src/types.js";
+import { Ruleset, TrendPoint, TrendResponse } from "../../../shared/src/types.js";
+import { getThresholdForAqi } from "../../../shared/src/aqi-categories.js";
+import { getActiveRuleset } from "../../../shared/src/rules.js";
 import { buildDemoTrend } from "../../../shared/src/demo.js";
 import { dataContextFromEnv, getAreaTrend, usesDemo } from "../../../shared/src/area-readings.js";
 import { parse, TrendsQuerySchema, ValidationError } from "../../../shared/src/schemas.js";
@@ -23,11 +25,12 @@ export async function handler(
     throw err;
   }
   const { campus, scenario, hours } = query;
+  const ruleset = await getActiveRuleset(dynamodb);
 
   if (usesDemo(ctx, scenario)) {
     const response: TrendResponse = {
       campus,
-      points: buildDemoTrend(scenario, hours),
+      points: withStatus(buildDemoTrend(scenario, hours), ruleset),
       period: `${hours}h`,
       dataMode: "demo",
     };
@@ -38,7 +41,7 @@ export async function handler(
     // Hourly history from the Google Air Quality API; stored readings otherwise.
     const hourly = await getAreaTrend(ctx, campus, hours);
     if (hourly) {
-      const response: TrendResponse = { campus, points: hourly, period: `${hours}h`, dataMode: "live" };
+      const response: TrendResponse = { campus, points: withStatus(hourly, ruleset), period: `${hours}h`, dataMode: "live" };
       return respond(200, response);
     }
 
@@ -54,7 +57,7 @@ export async function handler(
 
     const response: TrendResponse = {
       campus,
-      points,
+      points: withStatus(points, ruleset),
       period: `${hours}h`,
       dataMode: "live",
     };
@@ -64,4 +67,12 @@ export async function handler(
     log("error", "unhandled_error", { route: event.path, ...errorFields(err) });
     return respond(500, { error: "Internal server error" });
   }
+}
+
+/** Each point's category under the active ruleset, so clients never re-derive it. */
+function withStatus(points: TrendPoint[], ruleset: Ruleset): TrendPoint[] {
+  return points.map((point) => ({
+    ...point,
+    status: getThresholdForAqi(point.aqi, ruleset.thresholds)?.status ?? "Unavailable",
+  }));
 }

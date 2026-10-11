@@ -58,6 +58,8 @@ export interface AQIReadingResponse extends AQIReading {
 export interface TrendPoint {
   timestamp: string;
   aqi: number;
+  /** Category under the active ruleset (set by the trends API). */
+  status?: AQIStatus;
   dominantPollutant: string;
   source: string;
   dataMode: AQIReading["dataMode"];
@@ -189,4 +191,20 @@ export interface PlansEvaluation {
   basedOn: string | null;
   verdicts: { id: string; verdict: "go" | "modify" | "avoid" | "unknown"; reason: string; suggestion: string }[];
   disclaimer: string;
+}
+
+export interface CatalogOption {
+  value: string;
+  label: string;
+}
+
+/** GET /catalog: the choices the backend accepts, with display labels. */
+export interface Catalog {
+  audiences: CatalogOption[];
+  /** Labels for every audience value, including those on older alerts. */
+  audienceLabels: Record<string, string>;
+  activities: CatalogOption[];
+  /** Presenter demo scenarios, labelled with the active ruleset's category and range. */
+  demoScenarios: CatalogOption[];
+  defaultDemoScenario: string;
 }

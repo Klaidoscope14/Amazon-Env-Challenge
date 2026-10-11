@@ -1,6 +1,7 @@
 "use client";
 
-import { AQI_BANDS, STATUS_CONFIG } from "@/lib/constants";
+import { STATUS_CONFIG } from "@/lib/constants";
+import { useBands, type Band } from "@/lib/catalog";
 import type { AQIStatus } from "@/lib/types";
 
 interface AqiGaugeProps {
@@ -8,7 +9,6 @@ interface AqiGaugeProps {
   status: AQIStatus;
 }
 
-const MAX = 500; // CPCB AQI scale tops out at 500.
 const CX = 120;
 const CY = 120;
 const R = 96;
@@ -32,21 +32,17 @@ function arcPath(f0: number, f1: number): string {
   return d.trim();
 }
 
-/** Cumulative band boundaries as fractions of the 0–500 scale. */
-function bandFractions(): { from: number; to: number; status: AQIStatus }[] {
-  let prev = 0;
-  return AQI_BANDS.map((b) => {
-    const top = b.max === Infinity ? MAX : b.max;
-    const seg = { from: prev / MAX, to: Math.min(top, MAX) / MAX, status: b.status };
-    prev = top;
-    return seg;
-  });
+/** Band boundaries as fractions of the scale (0 to the top band's maxAqi). */
+function bandFractions(bands: Band[], max: number): { from: number; to: number; status: AQIStatus }[] {
+  return bands.map((b) => ({ from: b.from / max, to: b.to / max, status: b.status }));
 }
 
 export default function AqiGauge({ aqi, status }: AqiGaugeProps) {
   const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.Unavailable;
-  const fraction = Math.max(0, Math.min(aqi / MAX, 1));
-  const needle = polar(fraction);
+  // Bands come from the active ruleset; until it loads, only the neutral track shows.
+  const bands = useBands();
+  const max = bands.at(-1)?.to;
+  const needle = max ? polar(Math.max(0, Math.min(aqi / max, 1))) : null;
 
   return (
     <div className="mx-auto w-full max-w-[280px]">
@@ -54,11 +50,11 @@ export default function AqiGauge({ aqi, status }: AqiGaugeProps) {
         viewBox="0 0 240 132"
         className="w-full"
         role="img"
-        aria-label={`Air Quality Index ${aqi}, ${status}, on the CPCB scale from 0 to 500.`}
+        aria-label={`Air Quality Index ${aqi}, ${status}${max ? `, on the CPCB scale from 0 to ${max}` : ""}.`}
       >
         {/* Neutral track under the coloured bands, so gaps read cleanly. */}
         <path d={arcPath(0, 1)} fill="none" stroke="var(--color-border)" strokeWidth={TRACK} strokeLinecap="round" />
-        {bandFractions().map((b) => (
+        {max && bandFractions(bands, max).map((b) => (
           <path
             key={b.status}
             d={arcPath(b.from, b.to)}
@@ -70,11 +66,17 @@ export default function AqiGauge({ aqi, status }: AqiGaugeProps) {
         ))}
 
         {/* Value marker riding on the arc. */}
-        <circle cx={needle.x} cy={needle.y} r={7} fill={config.hex} stroke="var(--color-surface)" strokeWidth={3} />
+        {needle && (
+          <circle cx={needle.x} cy={needle.y} r={7} fill={config.hex} stroke="var(--color-surface)" strokeWidth={3} />
+        )}
 
         {/* Scale ends. */}
-        <text x={CX - R} y={CY + 20} textAnchor="middle" fontSize={11} fill="var(--color-muted)">0</text>
-        <text x={CX + R} y={CY + 20} textAnchor="middle" fontSize={11} fill="var(--color-muted)">500</text>
+        {max && (
+          <>
+            <text x={CX - R} y={CY + 20} textAnchor="middle" fontSize={11} fill="var(--color-muted)">0</text>
+            <text x={CX + R} y={CY + 20} textAnchor="middle" fontSize={11} fill="var(--color-muted)">{max}</text>
+          </>
+        )}
       </svg>
 
       {/* Crisp HTML number/status pulled up into the dial opening. */}

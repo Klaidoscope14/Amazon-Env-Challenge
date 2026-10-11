@@ -17,6 +17,33 @@ export const TOKENS = {
   TokenType: "Bearer",
 };
 
+const band = (minAqi: number, maxAqi: number, status: string, statusLevel: number) => ({
+  minAqi, maxAqi, status, statusLevel, action: `Action for ${status}.`, color: "#000000",
+});
+const RULESET = {
+  id: "cpcb-india-v1",
+  source: "dynamodb",
+  thresholds: [
+    band(0, 50, "Good", 1), band(51, 100, "Satisfactory", 2), band(101, 200, "Moderate", 3),
+    band(201, 300, "Poor", 4), band(301, 400, "Very Poor", 5), band(401, 500, "Severe", 6),
+  ],
+};
+const CATALOG = {
+  audiences: [
+    { value: "all", label: "Everyone" },
+    { value: "family", label: "My family" },
+    { value: "neighbours", label: "My neighbourhood / society" },
+    { value: "group", label: "My team / group" },
+  ],
+  audienceLabels: { all: "Everyone", family: "My family", neighbours: "My neighbourhood / society", group: "My team / group" },
+  activities: [
+    { value: "walk", label: "Walk" },
+    { value: "run", label: "Run or workout" },
+  ],
+  demoScenarios: [{ value: "poor", label: "Poor (201–300)" }],
+  defaultDemoScenario: "poor",
+};
+
 export const AREA = { id: "city-delhi", kind: "city", name: "Delhi", city: "Delhi", state: "Delhi" };
 
 const now = () => new Date().toISOString();
@@ -82,7 +109,7 @@ export async function mockApi(page: Page, options: { mfa?: boolean } = {}): Prom
     if (path.endsWith("/trends")) {
       const points = Array.from({ length: 24 }, (_, i) => ({
         timestamp: new Date(Date.now() - (23 - i) * 3600e3).toISOString(),
-        aqi: 200 + i * 3, dominantPollutant: "pm25", source: "Google Air Quality", dataMode: "live",
+        aqi: 200 + i * 3, status: "Poor", dominantPollutant: "pm25", source: "Google Air Quality", dataMode: "live",
       }));
       return json(200, { campus: AREA.id, points, period: "24h", dataMode: "live" });
     }
@@ -126,7 +153,8 @@ export async function mockApi(page: Page, options: { mfa?: boolean } = {}): Prom
       log.decision = request.postDataJSON() as Record<string, unknown>;
       return json(200, { success: true, alertId: "alert-1", decisionTimestamp: now() });
     }
-    if (path.endsWith("/rules")) return json(404, { error: "Not mocked" });
+    if (path.endsWith("/rules")) return json(200, RULESET);
+    if (path.endsWith("/catalog")) return json(200, CATALOG);
     if (path.endsWith("/explain")) return json(503, { error: "Not mocked" });
     return json(404, { error: `Not mocked: ${path}` });
   });

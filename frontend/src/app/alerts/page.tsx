@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { getAlerts } from "@/lib/api";
+import { useAudienceLabel } from "@/lib/catalog";
 import {
-  AUDIENCE_LABELS,
   EMAIL_DELIVERY,
   formatPollutant,
 } from "@/lib/constants";
@@ -92,6 +92,7 @@ export default function AlertsPage() {
 }
 
 function AlertsLog({ area }: { area: AreaInfo }) {
+  const audienceLabel = useAudienceLabel();
   // Newest first, 10 at a time; "Show older alerts" fetches the next page.
   const alertsQuery = useInfiniteQuery({
     queryKey: ["alerts", area.id],
@@ -157,7 +158,7 @@ function AlertsLog({ area }: { area: AreaInfo }) {
                 <div>
                   <p className="text-sm font-medium text-foreground">
                     AQI {alert.aqiSnapshot?.aqi ?? "N/A"} &middot;{" "}
-                    {AUDIENCE_LABELS[alert.audience] ?? alert.audience}
+                    {audienceLabel(alert.audience)}
                   </p>
                   <p className="text-xs text-muted">
                     {formatTime(alert.createdAt)} &middot; by {alert.adminName}

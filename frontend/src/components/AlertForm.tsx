@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createAlert, getNoticeDraft } from "@/lib/api";
-import { AUDIENCE_OPTIONS } from "@/lib/constants";
+import { useCatalog } from "@/lib/catalog";
 import { useAuth } from "@/lib/auth";
 import type { Alert, AreaInfo, Audience, Recommendation } from "@/lib/types";
 import Button from "./ui/Button";
@@ -31,6 +31,7 @@ export default function AlertForm({
   onSuccess,
 }: AlertFormProps) {
   const { user } = useAuth();
+  const catalog = useCatalog();
   const [audience, setAudience] = useState<Audience>("family");
   // null = untouched, so the field shows the (possibly refreshed) draft.
   const [editedEn, setEditedEn] = useState<string | null>(null);
@@ -205,7 +206,7 @@ export default function AlertForm({
               }}
               className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              {AUDIENCE_OPTIONS.map((opt) => (
+              {(catalog.data?.audiences ?? []).map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>

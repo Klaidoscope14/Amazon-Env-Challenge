@@ -5,8 +5,6 @@ import Link from "next/link";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ApiError, getAQI, getRecommendation, getTrends } from "@/lib/api";
 import {
-  DEFAULT_DEMO_SCENARIO,
-  DEMO_SCENARIO_OPTIONS,
   EMAIL_DELIVERY,
 } from "@/lib/constants";
 import { useSearchParam } from "@/lib/useSearchParam";
@@ -18,6 +16,7 @@ import PollutantBreakdown from "@/components/PollutantBreakdown";
 import RecommendationCard from "@/components/RecommendationCard";
 import TrendChart from "@/components/TrendChart";
 import PlansCard from "@/components/PlansCard";
+import { useCatalog } from "@/lib/catalog";
 import Card from "@/components/ui/Card";
 import AlertForm from "@/components/AlertForm";
 import DecisionRecorder from "@/components/DecisionRecorder";
@@ -33,7 +32,10 @@ export default function DashboardPage() {
 function Dashboard({ area }: { area: AreaInfo }) {
   const [showAlertForm, setShowAlertForm] = useState(false);
   const [sentAlert, setSentAlert] = useState<Alert | null>(null);
-  const [scenario, setScenario] = useState<string>(DEFAULT_DEMO_SCENARIO);
+  // Demo scenarios (and the default one) come from the API's catalog.
+  const catalog = useCatalog();
+  const [chosenScenario, setScenario] = useState<string | null>(null);
+  const scenario = chosenScenario ?? catalog.data?.defaultDemoScenario;
   const [trendHours, setTrendHours] = useState(24);
   const presenterParam = useSearchParam("presenter") !== null;
   const [presenterSeen, setPresenterSeen] = useState(false);
@@ -42,24 +44,29 @@ function Dashboard({ area }: { area: AreaInfo }) {
   // with ?presenter=1 (live mode). Only then is a scenario sent.
   const sendScenario = presenterParam || presenterSeen;
   const activeScenario = sendScenario ? scenario : undefined;
+  // In presenter mode, wait for the scenario rather than briefly showing live data.
+  const ready = !sendScenario || !!scenario;
 
   // All three requests are independent, so they load in parallel; the backend
   // resolves the same area (and scenario) for each of them.
   const aqiQuery = useQuery({
     queryKey: ["aqi", area.id, activeScenario],
     queryFn: () => getAQI(area.id, activeScenario),
+    enabled: ready,
     placeholderData: keepPreviousData,
   });
 
   const recQuery = useQuery({
     queryKey: ["recommendation", area.id, activeScenario],
     queryFn: () => getRecommendation(area.id, activeScenario),
+    enabled: ready,
     placeholderData: keepPreviousData,
   });
 
   const trendQuery = useQuery({
     queryKey: ["trends", area.id, trendHours, activeScenario],
     queryFn: () => getTrends(area.id, trendHours, activeScenario),
+    enabled: ready,
     placeholderData: keepPreviousData,
   });
 
@@ -88,11 +95,11 @@ function Dashboard({ area }: { area: AreaInfo }) {
               </label>
               <select
                 id="demo-scenario"
-                value={scenario}
+                value={scenario ?? ""}
                 onChange={(e) => setScenario(e.target.value)}
                 className="text-xs border border-purple-300 dark:border-purple-800 rounded px-2 py-1 bg-surface text-foreground"
               >
-                {DEMO_SCENARIO_OPTIONS.map((opt) => (
+                {(catalog.data?.demoScenarios ?? []).map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>

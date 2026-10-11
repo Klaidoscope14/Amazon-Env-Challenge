@@ -3,20 +3,10 @@
 import { useId, useState, useSyncExternalStore } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { evaluatePlans } from "@/lib/api";
+import { useCatalog } from "@/lib/catalog";
 import type { PlansEvaluation } from "@/lib/types";
 import Card from "./ui/Card";
 import Button from "./ui/Button";
-
-// Mirrors ACTIVITIES in backend/shared/src/plans.ts (the backend validates ids).
-const ACTIVITY_OPTIONS = [
-  { value: "walk", label: "Walk" },
-  { value: "run", label: "Run or workout" },
-  { value: "cycle", label: "Cycling" },
-  { value: "sports", label: "Outdoor sports" },
-  { value: "kids_play", label: "Children playing outside" },
-  { value: "commute", label: "Commute / errands" },
-  { value: "outdoor_event", label: "Outdoor event or gathering" },
-] as const;
 
 const DURATIONS = [15, 30, 45, 60, 90, 120, 180];
 const MAX_PLANS = 12;
@@ -96,6 +86,8 @@ function usePlans(): StoredPlan[] {
 export default function PlansCard({ areaId, scenario }: { areaId: string; scenario?: string }) {
   const plans = usePlans();
   const id = useId();
+  // Activities (and their labels) come from the API, which validates them.
+  const activities = useCatalog().data?.activities ?? [];
   const [activity, setActivity] = useState<string>("walk");
   const [time, setTime] = useState("");
   const [duration, setDuration] = useState(30);
@@ -132,7 +124,7 @@ export default function PlansCard({ areaId, scenario }: { areaId: string; scenar
   }
 
   const activityLabel = (value: string) =>
-    ACTIVITY_OPTIONS.find((o) => o.value === value)?.label ?? value;
+    activities.find((o) => o.value === value)?.label ?? value;
 
   return (
     <Card className="p-6">
@@ -198,7 +190,7 @@ export default function PlansCard({ areaId, scenario }: { areaId: string; scenar
               onChange={(e) => setActivity(e.target.value)}
               className="w-full min-h-11 rounded-lg border border-border-strong bg-surface px-3 text-sm text-foreground"
             >
-              {ACTIVITY_OPTIONS.map((o) => (
+              {activities.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { getAlerts } from "@/lib/api";
-import { AUDIENCE_LABELS } from "@/lib/constants";
+import { useAudienceLabel } from "@/lib/catalog";
 import { describeAge, useNow } from "@/lib/useNow";
 import { useSearchParam } from "@/lib/useSearchParam";
 import { isValidAreaId } from "@/lib/areaId";
@@ -35,6 +35,7 @@ export default function NoticePage() {
 
 function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
   const now = useNow();
+  const audienceLabel = useAudienceLabel();
   const latestQuery = useQuery({
     queryKey: ["alerts", areaId, "latest"],
     queryFn: () => getAlerts(areaId, 1),
@@ -131,7 +132,7 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
           )}
 
           <p className="text-xs text-muted">
-            For: {AUDIENCE_LABELS[alert.audience] ?? alert.audience} &middot; Shared by{" "}
+            For: {audienceLabel(alert.audience)} &middot; Shared by{" "}
             {alert.adminName}
           </p>
 

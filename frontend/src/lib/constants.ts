@@ -1,4 +1,4 @@
-import type { AlertDelivery, AQIStatus, Audience, LegacyAudience } from "./types";
+import type { AlertDelivery, AQIStatus } from "./types";
 
 export const STATUS_CONFIG: Record<
   AQIStatus,
@@ -55,39 +55,6 @@ export const STATUS_CONFIG: Record<
   },
 };
 
-/** CPCB bands in order, by upper AQI bound (used by the trend chart). */
-export const AQI_BANDS: { max: number; status: AQIStatus }[] = [
-  { max: 50, status: "Good" },
-  { max: 100, status: "Satisfactory" },
-  { max: 200, status: "Moderate" },
-  { max: 300, status: "Poor" },
-  { max: 400, status: "Very Poor" },
-  { max: Infinity, status: "Severe" },
-];
-
-export function statusForAqi(aqi: number): AQIStatus {
-  const rounded = Math.round(aqi);
-  return AQI_BANDS.find((b) => rounded <= b.max)?.status ?? "Severe";
-}
-
-export const AUDIENCE_OPTIONS: { value: Audience; label: string }[] = [
-  { value: "family", label: "My family" },
-  { value: "neighbours", label: "My neighbourhood / society" },
-  { value: "group", label: "My team / group" },
-  { value: "all", label: "Everyone" },
-];
-
-export const AUDIENCE_LABELS: Record<Audience | LegacyAudience, string> = {
-  family: "My family",
-  neighbours: "My neighbourhood / society",
-  group: "My team / group",
-  all: "Everyone",
-  // Older alerts
-  students: "Students",
-  staff: "Staff",
-  parents: "Parents",
-};
-
 /** Label + style for the email part of an alert's delivery record. */
 export const EMAIL_DELIVERY: Record<
   AlertDelivery["email"],
@@ -105,17 +72,6 @@ export const DECISION_OPTIONS = [
   "Kept windows closed",
   "No action needed",
 ] as const;
-
-export const DEMO_SCENARIO_OPTIONS = [
-  { value: "good", label: "Good (0–50)" },
-  { value: "satisfactory", label: "Satisfactory (51–100)" },
-  { value: "moderate", label: "Moderate (101–200)" },
-  { value: "poor", label: "Poor (201–300)" },
-  { value: "veryPoor", label: "Very Poor (301–400)" },
-  { value: "severe", label: "Severe (401–500)" },
-] as const;
-
-export const DEFAULT_DEMO_SCENARIO = "poor";
 
 const POLLUTANT_LABELS: Record<string, { label: string; unit: string }> = {
   pm25: { label: "PM2.5", unit: "µg/m³" },

@@ -465,6 +465,12 @@ Resources:
             RestApiId: !Ref BreatheSafeApi
             Path: /api/v1/rules
             Method: GET
+        GetCatalog:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/catalog
+            Method: GET
         EvaluatePlans:
           Type: Api
           Properties:
@@ -712,6 +718,9 @@ Resources:
                 - dynamodb:GetItem
                 - dynamodb:Query
               Resource: !GetAtt AQIReadingsTable.Arn
+            - Effect: Allow
+              Action: dynamodb:Query
+              Resource: !GetAtt RulesConfigTable.Arn
             - Effect: Allow
               Action: ssm:GetParameter
               Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}

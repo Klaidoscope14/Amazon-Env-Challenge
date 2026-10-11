@@ -11,11 +11,26 @@ set -euo pipefail
 
 STAGE="${1:-prod}"
 case "$STAGE" in
-  prod) STACK="breathesafe-campus" ;;
-  dev) STACK="breathesafe-campus-dev" ;;
+  prod) SECTION="default" ;;
+  dev) SECTION="dev" ;;
   *) echo "Usage: $0 prod|dev" >&2; exit 1 ;;
 esac
-REGION="ap-south-1"
+
+# Stack name and region come from infrastructure/samconfig.toml (the same
+# file `sam deploy` uses), so the two can't drift apart.
+SAMCONFIG="$(dirname "$0")/../infrastructure/samconfig.toml"
+samconfig() {
+  awk -v section="[$SECTION.deploy.parameters]" -v key="$1" '
+    /^\[/ { in_section = ($0 == section) }
+    in_section && $1 == key { sub(/^[^=]*=[ \t]*/, ""); gsub(/"/, ""); print; exit }
+  ' "$SAMCONFIG"
+}
+STACK="$(samconfig stack_name)"
+REGION="$(samconfig region)"
+if [ -z "$STACK" ] || [ -z "$REGION" ]; then
+  echo "Couldn't read stack_name/region for '$SECTION' from $SAMCONFIG" >&2
+  exit 1
+fi
 
 output() {
   aws cloudformation describe-stacks --region "$REGION" --stack-name "$STACK" \

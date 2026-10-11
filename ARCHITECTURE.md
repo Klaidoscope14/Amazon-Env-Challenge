@@ -27,7 +27,7 @@ keep the original "campus" naming so existing resources are never replaced.)
 | Function | Routes | Auth |
 |---|---|---|
 | `fetch-aqi` | `GET /api/v1/aqi/current?campus=<area>`, `GET /api/v1/areas`, `GET /api/v1/areas/nearest?lat&lon` | public |
-| `recommendation` | `GET /api/v1/recommendations/current?campus=<area>` · `GET /api/v1/rules` · `POST /api/v1/plans/evaluate` | public |
+| `recommendation` | `GET /api/v1/recommendations/current?campus=<area>` · `GET /api/v1/rules` · `GET /api/v1/catalog` (audiences, plan activities, demo scenarios with labels) · `POST /api/v1/plans/evaluate` | public |
 | `explain` | `GET /api/v1/explain?campus=<area>&lang=en\|hi` | public (cached, rate-limited) |
 | `trends` | `GET /api/v1/trends?campus=<area>&hours=<1..168>` | public |
 | `alerts` | `GET /api/v1/alerts?campus=<area>&limit&cursor` · `POST /api/v1/alerts` (optional `Idempotency-Key`) · `PATCH /api/v1/alerts/{id}/decision` | GET public; POST/PATCH Cognito + `custom:role=admin` (granted to every verified account) |
@@ -92,7 +92,8 @@ everyone may carry `students`, `staff` or `parents`, which are still displayed.
 - `backend/shared/src/evaluate.ts` — recommendation with evidence, rule (incl. ruleset id and whether it
   came from the table), data quality and disclaimer.
 - Seeding: `npm run seed:rules` (prod) / `npm run seed:rules:dev` — conditional writes, `--force` to reset edits.
-- `GET /api/v1/rules` serves the active ruleset; the About page renders it live.
+- `GET /api/v1/rules` serves the active ruleset. The frontend keeps no copy: the gauge, scale strip,
+  trend chart (whose points carry their `status`) and About page all draw from it.
 
 ## 7. Domain events (EventBridge)
 

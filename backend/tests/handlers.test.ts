@@ -461,3 +461,24 @@ describe("two-step verification setup", () => {
     expect(json(res)).toEqual({ error: "Your session has expired. Please sign in again.", code: "SESSION_EXPIRED" });
   });
 });
+
+describe("catalog and trend statuses", () => {
+  it("serves the choices the API accepts, labelled from the active rules", async () => {
+    const res = await recommendation(request("GET", "/api/v1/catalog"));
+    const catalog = json(res);
+    expect(res.statusCode).toBe(200);
+    expect(catalog.audiences.map((a: { value: string }) => a.value)).toEqual(["all", "family", "neighbours", "group"]);
+    expect(catalog.audienceLabels).toMatchObject({ family: "My family", parents: "Parents" });
+    expect(catalog.activities).toContainEqual({ value: "kids_play", label: "Children playing outside" });
+    expect(catalog.demoScenarios).toContainEqual({ value: "poor", label: "Poor (201–300)" });
+    expect(catalog.defaultDemoScenario).toBe("poor");
+  });
+
+  it("labels each trend point with its category", async () => {
+    const { handler: trends } = await import("../services/trends/src/handler.js");
+    const res = await trends(request("GET", "/api/v1/trends", { query: { campus: "city-delhi", scenario: "severe", hours: "6" } }));
+    const points = json(res).points as { aqi: number; status: string }[];
+    expect(points.length).toBeGreaterThan(0);
+    for (const p of points) expect(p.status).toBe(p.aqi > 400 ? "Severe" : p.aqi > 300 ? "Very Poor" : p.aqi > 200 ? "Poor" : p.aqi > 100 ? "Moderate" : p.aqi > 50 ? "Satisfactory" : "Good");
+  });
+});
