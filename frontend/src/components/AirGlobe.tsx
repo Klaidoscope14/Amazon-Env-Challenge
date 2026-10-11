@@ -3,15 +3,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getAreas, getNearestArea } from "@/lib/api";
-import { CITY_COORDS, MAX_ZOOM, MIN_ZOOM, coordsForArea, distanceKm, projector, type View } from "@/lib/geo";
+import { MAX_ZOOM, MIN_ZOOM, coordsForArea, distanceKm, projector, type View } from "@/lib/geo";
+import { useCatalog } from "@/lib/catalog";
+import type { Catalog } from "@/lib/types";
 import { countryAt, loadWorld, nearestCountry, type City, type World } from "@/lib/world";
 import { siteKey, useAirLayer, type AirPoint } from "@/lib/useAirLayer";
 import { useBands } from "@/lib/catalog";
-import { US_SCALE, STANDARD_LABEL, bandFor, indiaScale, rangeLabel, type ScaleBand } from "@/lib/aqiScale";
-import { useAqiStandard } from "@/lib/useAqiStandard";
+import { bandFor, indiaScale, rangeLabel, type ScaleBand } from "@/lib/aqiScale";
 import { formatPollutant } from "@/lib/constants";
 import type { AreaInfo } from "@/lib/types";
-import AqiStandardSelect from "./AqiStandardSelect";
 
 interface AirGlobeProps {
   /** The area the dashboard is showing. */
@@ -27,17 +27,14 @@ interface AirGlobeProps {
 
 const MAX_SIZE = 660;
 const TAU = Math.PI * 2;
-const INDIA_BOUNDS = { minLat: 6, maxLat: 38, minLon: 68, maxLon: 98 };
-
 /** Whole-country view of India, used when the selected area is in India. */
 const INDIA_VIEW: View = { lat: 22.5, lon: 80, zoom: 2.2 };
 
-function isInIndia(c: [number, number] | null): boolean {
-  return (
-    !!c &&
-    c[0] >= INDIA_BOUNDS.minLat && c[0] <= INDIA_BOUNDS.maxLat &&
-    c[1] >= INDIA_BOUNDS.minLon && c[1] <= INDIA_BOUNDS.maxLon
-  );
+/** Inside India's bounds (from the API's catalog); assumed so until they load. */
+function isInIndia(c: [number, number] | null, bounds: Catalog["indiaBounds"] | undefined): boolean {
+  if (!c) return false;
+  if (!bounds) return true;
+  return c[0] >= bounds.minLat && c[0] <= bounds.maxLat && c[1] >= bounds.minLon && c[1] <= bounds.maxLon;
 }
 
 /**
@@ -240,10 +237,11 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
   const detailsRef = useRef<HTMLElement>(null);
   const [revealTick, setRevealTick] = useState(0);
 
-  const home = useMemo(() => coordsForArea(selected.id), [selected.id]);
+  const indiaBounds = useCatalog().data?.indiaBounds;
+  const home = useMemo(() => coordsForArea(selected, areasQuery.data?.areas), [selected, areasQuery.data]);
   const startView = useMemo<View>(
-    () => (isInIndia(home) || !home ? INDIA_VIEW : { lat: home[0], lon: home[1], zoom: 3 }),
-    [home]
+    () => (isInIndia(home, indiaBounds) || !home ? INDIA_VIEW : { lat: home[0], lon: home[1], zoom: 3 }),
+    [home, indiaBounds]
   );
   const [view, setView] = useState<View>(startView);
   const pending = useRef<View | null>(null);
@@ -319,20 +317,15 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
   const points = useMemo<Record<string, AirPoint>>(() => air.data ?? {}, [air.data]);
 
   // ── The AQI shown for a place ────────────────────────────────────────────
-  // The scale follows the "AQI Standard" switch. On the India scale the
-  // selected area uses the dashboard's own reading when there is one (so it
-  // matches Main Statistics); every other place uses its area's reading.
-  const [standard] = useAqiStandard();
-  const scale = useMemo<ScaleBand[]>(() => (standard === "us" ? US_SCALE : indiaScale(bands)), [standard, bands]);
-  const valueOf = useCallback(
-    (est: AirPoint | undefined): number | null => (standard === "us" ? est?.usAqi : est?.aqi) ?? null,
-    [standard]
-  );
+  // India's AQI. The selected area uses the dashboard's own reading when
+  // there is one (so the two always match); every other place uses its area's.
+  const scale = useMemo<ScaleBand[]>(() => indiaScale(bands), [bands]);
+  const valueOf = useCallback((est: AirPoint | undefined): number | null => est?.aqi ?? null, []);
   const infoFor = useCallback(
     (lat: number, lon: number, isHome: boolean) => {
       const est = points[siteKey(lat, lon)];
-      const dominant = standard === "us" ? est?.usDominant ?? null : est?.dominant ?? null;
-      if (isHome && reading && standard === "india") {
+      const dominant = est?.dominant ?? null;
+      if (isHome && reading) {
         return {
           aqi: reading.aqi as number | null,
           band: bandFor(scale, reading.aqi),
@@ -345,7 +338,7 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
       const aqi = valueOf(est);
       return { aqi, band: bandFor(scale, aqi), official: false, sample: false, est, dominant };
     },
-    [points, reading, standard, scale, valueOf]
+    [points, reading, scale, valueOf]
   );
   const fillOf = (b: ScaleBand | null) => (b ? b.fill : "var(--band-unavailable)");
   const inkOf = (b: ScaleBand | null) => (b ? b.ink : "var(--band-unavailable-ink)");
@@ -486,17 +479,13 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
 
   /** An area the API already knows that sits at (or right beside) a point. */
   const knownAreaNear = (lat: number, lon: number): AreaInfo | null => {
-    let best: { slug: string; km: number } | null = null;
-    for (const [slug, coords] of Object.entries(CITY_COORDS)) {
-      const km = distanceKm([lat, lon], coords);
-      if (km < 30 && (!best || km < best.km)) best = { slug, km };
+    let best: { area: AreaInfo; km: number } | null = null;
+    for (const area of areasQuery.data?.areas ?? []) {
+      if (typeof area.lat !== "number" || typeof area.lon !== "number") continue;
+      const km = distanceKm([lat, lon], [area.lat, area.lon]);
+      if (km < 30 && (!best || km < best.km)) best = { area, km };
     }
-    if (!best) return null;
-    const id = `city-${best.slug}`;
-    const listed = areasQuery.data?.areas.find((a) => a.id === id);
-    if (listed) return listed;
-    const name = best.slug.charAt(0).toUpperCase() + best.slug.slice(1);
-    return { id, kind: "city", name, city: name, state: "" };
+    return best?.area ?? null;
   };
 
   /**
@@ -548,12 +537,6 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
 
   return (
     <div className="relative">
-      <div className="mx-auto mb-3 flex items-end justify-between gap-3" style={{ maxWidth: MAX_SIZE }}>
-        <AqiStandardSelect />
-        <p className="max-w-[16rem] text-right text-[11px] leading-snug text-muted">
-          Switch between India&apos;s AQI and the US AQI.
-        </p>
-      </div>
       <div ref={stageRef} className="relative mx-auto w-full" style={{ maxWidth: MAX_SIZE }}>
         {mode === "globe" ? (
           <div
@@ -640,7 +623,7 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
             {ranked.map(({ city, est }) => {
               const listValue = valueOf(est);
               const listBand = bandFor(scale, listValue);
-              const listDominant = standard === "us" ? est?.usDominant : est?.dominant;
+              const listDominant = est?.dominant;
               return (
                 <li key={`${city.name}-${city.lat}`} className="flex items-center gap-3 px-4 py-3">
                   <span
@@ -763,7 +746,7 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
               </span>
               <span className="text-xs text-muted">
                 {activeInfo.sample ? "Sample data · " : ""}
-                {STANDARD_LABEL[standard].name}
+                India AQI
                 {activeInfo.dominant ? ` · mainly ${dominantLabel(activeInfo.dominant)}` : ""}
               </span>
             </p>

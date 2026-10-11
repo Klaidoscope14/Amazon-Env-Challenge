@@ -74,6 +74,7 @@ function parseArea(raw: string | null): AreaInfo | null {
         city: value.city ?? "",
         state: value.state ?? "",
         ...(typeof value.distanceKm === "number" ? { distanceKm: value.distanceKm } : {}),
+        ...(typeof value.lat === "number" && typeof value.lon === "number" ? { lat: value.lat, lon: value.lon } : {}),
       };
     }
   } catch {

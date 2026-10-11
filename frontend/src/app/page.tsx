@@ -12,7 +12,6 @@ import type { Alert, AreaInfo } from "@/lib/types";
 import AreaGate from "@/components/AreaGate";
 import AreaPicker from "@/components/AreaPicker";
 import AirGlobe from "@/components/AirGlobe";
-import AqiStatsCard from "@/components/AqiStatsCard";
 import ActionCard from "@/components/ActionCard";
 import PollutantTiles from "@/components/PollutantTiles";
 import TrendHistogram from "@/components/TrendHistogram";
@@ -22,17 +21,6 @@ import AlertForm from "@/components/AlertForm";
 import DecisionRecorder from "@/components/DecisionRecorder";
 import WhatsAppShare from "@/components/WhatsAppShare";
 
-
-/** Used only when GET /catalog is unreachable; the API's catalog is the source of truth. */
-const FALLBACK_DEFAULT_SCENARIO = "poor";
-const FALLBACK_SCENARIOS = [
-  { value: "good", label: "Good" },
-  { value: "satisfactory", label: "Satisfactory" },
-  { value: "moderate", label: "Moderate" },
-  { value: "poor", label: "Poor" },
-  { value: "veryPoor", label: "Very Poor" },
-  { value: "severe", label: "Severe" },
-];
 
 export default function DashboardPage() {
   // Remount per area so every piece of state belongs to one area.
@@ -47,11 +35,8 @@ function Dashboard({ area }: { area: AreaInfo }) {
   // Demo scenarios (and the default one) come from the API's catalog.
   const catalog = useCatalog();
   const [chosenScenario, setScenario] = useState<string | null>(null);
-  // If the catalog can't be reached (e.g. an older deployment), presenter mode
-  // still works with the backend's standard scenario names.
-  const scenarioOptions = catalog.data?.demoScenarios ?? (catalog.isError ? FALLBACK_SCENARIOS : []);
-  const scenario =
-    chosenScenario ?? catalog.data?.defaultDemoScenario ?? (catalog.isError ? FALLBACK_DEFAULT_SCENARIO : undefined);
+  const scenarioOptions = catalog.data?.demoScenarios ?? [];
+  const scenario = chosenScenario ?? catalog.data?.defaultDemoScenario;
   const [trendHours, setTrendHours] = useState(24);
   const presenterParam = useSearchParam("presenter") !== null;
   const [presenterSeen, setPresenterSeen] = useState(false);
@@ -60,8 +45,9 @@ function Dashboard({ area }: { area: AreaInfo }) {
   // with ?presenter=1 (live mode). Only then is a scenario sent.
   const sendScenario = presenterParam || presenterSeen;
   const activeScenario = sendScenario ? scenario : undefined;
-  // In presenter mode, wait for the scenario rather than briefly showing live data.
-  const ready = !sendScenario || !!scenario;
+  // In presenter mode, wait for the scenario rather than briefly showing live
+  // data; if the catalog can't load, carry on without one (the server's default).
+  const ready = !sendScenario || !!scenario || catalog.isError;
 
   // All requests are independent, so they load in parallel; the backend
   // resolves the same area (and scenario) for each of them.
@@ -129,7 +115,7 @@ function Dashboard({ area }: { area: AreaInfo }) {
               </button>
             </p>
 
-            {showPresenter && (
+            {showPresenter && scenarioOptions.length > 0 && (
               <section aria-label="Demo mode" className="glass mt-4 max-w-xl rounded-2xl p-4">
                 <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                   <label htmlFor="demo-scenario" className="text-sm font-semibold text-foreground">
@@ -177,7 +163,6 @@ function Dashboard({ area }: { area: AreaInfo }) {
 
           {sentAlert && <SentAlertPanel alert={sentAlert} onDismiss={() => setSentAlert(null)} />}
 
-          {aqiQuery.isPending && <PanelSkeleton tall />}
 
           {aqiUnavailable && (
             <section className="glass rounded-3xl p-5 sm:p-6">
@@ -191,15 +176,15 @@ function Dashboard({ area }: { area: AreaInfo }) {
             <ErrorPanel title="Failed to load air quality data" onRetry={() => aqiQuery.refetch()} />
           )}
 
-          {reading && <AqiStatsCard reading={reading} />}
-
-          {recQuery.isPending && <PanelSkeleton />}
+          {recQuery.isPending && <PanelSkeleton tall />}
           {recQuery.isError && (
             <ErrorPanel title="Failed to load the recommendation" onRetry={() => recQuery.refetch()} />
           )}
           {recQuery.data && !(aqiUnavailable && recQuery.data.dataQuality === "unavailable") && (
             <ActionCard
               recommendation={recQuery.data}
+              placeName={area.name}
+              dataMode={reading?.dataMode}
               areaId={area.id}
               scenario={activeScenario}
               onIssueAlert={() => setShowAlertForm(true)}

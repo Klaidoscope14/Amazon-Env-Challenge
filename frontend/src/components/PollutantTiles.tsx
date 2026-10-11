@@ -1,6 +1,7 @@
 "use client";
 
-import { bandForLimitRatio, formatPollutant, pollutantLimit } from "@/lib/constants";
+import { bandForLimitRatio, formatPollutant } from "@/lib/constants";
+import { useCatalog } from "@/lib/catalog";
 import { bandFill, bandText } from "@/lib/bands";
 
 interface PollutantTilesProps {
@@ -15,8 +16,9 @@ function round(v: number): number {
   return Math.round(v * 100) / 100;
 }
 
-/** One tile per pollutant: the value, and where it sits against its CPCB safe limit. */
+/** One tile per pollutant: the value, and where it sits against its safe limit (limits from the API). */
 export default function PollutantTiles({ pollutants, dominantPollutant }: PollutantTilesProps) {
+  const limits = useCatalog().data?.pollutantLimits ?? {};
   const keys = Object.keys(pollutants);
   const ordered = [...ORDER.filter((k) => keys.includes(k)), ...keys.filter((k) => !ORDER.includes(k))];
 
@@ -25,7 +27,7 @@ export default function PollutantTiles({ pollutants, dominantPollutant }: Pollut
       {ordered.map((key) => {
         const value = pollutants[key];
         const { label, unit } = formatPollutant(key);
-        const limit = pollutantLimit(key);
+        const limit = limits[key.toLowerCase()];
         const ratio = limit ? value / limit.limit : null;
         const status = ratio === null ? "Unavailable" : bandForLimitRatio(ratio);
         const isDominant = key.toLowerCase() === dominantPollutant.toLowerCase();

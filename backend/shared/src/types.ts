@@ -22,6 +22,9 @@ export interface AreaInfo {
   city: string;
   state: string;
   distanceKm?: number;
+  /** Where the area's air is looked up: the city centre, or the grid cell's centre. */
+  lat?: number;
+  lon?: number;
 }
 
 export interface Recommendation {
@@ -211,6 +214,19 @@ export interface Catalog {
   defaultDemoScenario: string;
   /** National emergency numbers offered on the SOS screen. */
   emergencyServices: EmergencyService[];
+  /** Safe limit per pollutant, for "x% of the safe limit". */
+  pollutantLimits: Record<string, PollutantLimit>;
+  /** One-tap answers to "What did you decide?". */
+  decisionOptions: string[];
+  /** The same limits the API enforces, so forms can say so up front. */
+  limits: { maxEmergencyContacts: number; maxAlertMessage: number; maxPlans: number };
+  /** Where air quality is available. */
+  indiaBounds: { minLat: number; maxLat: number; minLon: number; maxLon: number };
+}
+
+export interface PollutantLimit {
+  limit: number;
+  averaging: "24-hour" | "8-hour";
 }
 
 export interface EmergencyService {
