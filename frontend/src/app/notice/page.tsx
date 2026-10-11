@@ -152,13 +152,7 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
       )}
 
       <p className="text-xs text-muted">
-        <span lang="hi">यह सलाह है, चिकित्सा परामर्श नहीं।</span> Notices are shared by VayuSaathi
-        users and are decision support, not medical advice.
-        Follow official{" "}
-        <a href="https://cpcb.nic.in" target="_blank" rel="noopener noreferrer" className="underline">
-          CPCB
-        </a>{" "}
-        and health-authority guidance.
+        <span lang="hi">यह सलाह है, चिकित्सा परामर्श नहीं।</span> General advice, not medical advice.
       </p>
     </div>
   );

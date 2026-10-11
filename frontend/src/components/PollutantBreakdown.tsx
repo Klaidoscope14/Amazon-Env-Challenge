@@ -50,7 +50,7 @@ export default function PollutantBreakdown({
         hex: STATUS_CONFIG.Unavailable.hex,
         statusText: "Unavailable",
         valueText: `${value} ${unit}`,
-        subText: "no CPCB limit",
+        subText: "no set limit",
         isDominant,
       };
     }
@@ -64,7 +64,7 @@ export default function PollutantBreakdown({
       hex: STATUS_CONFIG[status].hex,
       statusText: status,
       valueText: `${value} ${unit}`,
-      subText: `${Math.round(ratio * 100)}% of ${limitInfo.averaging} limit`,
+      subText: `${Math.round(ratio * 100)}% of safe limit`,
       isDominant,
     };
   });
@@ -109,9 +109,8 @@ export default function PollutantBreakdown({
         ))}
       </ul>
       <p className="mt-4 text-xs text-muted">
-        Bars show this hour&apos;s level against the CPCB limit (dashed line), which applies to a
-        24-hour average (8-hour for O₃ and CO). One hour above the line is an early warning, not
-        the day&apos;s verdict: the AQI above is calculated from the proper averages.
+        The dashed line is the daily safe limit. Short spikes above it are common; the AQI looks at
+        the whole day.
       </p>
     </div>
   );

@@ -38,7 +38,7 @@ test("see the AQI, check a plan, share on WhatsApp, sign in, publish an alert an
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByLabel("Message (English)")).toHaveValue(/Dear family/);
   await dialog.getByRole("button", { name: "Publish alert" }).click();
-  await expect(page.getByText("In-app notice published")).toBeVisible();
+  await expect(page.getByText("Posted on your area's notice page")).toBeVisible();
 
   expect(api.createdAlert?.body).toMatchObject({ campus: "city-delhi", audience: "family" });
   expect(api.createdAlert?.idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);

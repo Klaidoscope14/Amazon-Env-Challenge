@@ -42,6 +42,10 @@ const CATALOG = {
   ],
   demoScenarios: [{ value: "poor", label: "Poor (201–300)" }],
   defaultDemoScenario: "poor",
+  emergencyServices: [
+    { label: "All emergencies", number: "112" },
+    { label: "Ambulance", number: "108" },
+  ],
 };
 
 export const AREA = { id: "city-delhi", kind: "city", name: "Delhi", city: "Delhi", state: "Delhi" };
@@ -84,11 +88,19 @@ export interface ApiLog {
   /** True if the password itself was ever sent to Cognito (it must not be, with SRP). */
   srpPasswordSent?: boolean;
   srpProofReceived?: boolean;
+  /** Last body sent to PUT /auth/profile. */
+  savedProfile?: Record<string, unknown>;
 }
 
 export async function mockApi(page: Page, options: { mfa?: boolean } = {}): Promise<ApiLog> {
   const log: ApiLog = {};
   let alert: Record<string, unknown> | null = null;
+  let profile: Record<string, unknown> = {
+    email: "asha@example.com",
+    name: "Asha Verma",
+    mfaEnabled: !!options.mfa,
+    emergencyContacts: [],
+  };
 
   await page.route("http://api.test/**", async (route) => {
     const request: Request = route.request();
@@ -97,7 +109,7 @@ export async function mockApi(page: Page, options: { mfa?: boolean } = {}): Prom
     const cors = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Headers": "Content-Type,Authorization,Idempotency-Key",
-      "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
+      "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,OPTIONS",
     };
     const json = (status: number, body: unknown) =>
       route.fulfill({ status, headers: { ...cors, "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -126,9 +138,17 @@ export async function mockApi(page: Page, options: { mfa?: boolean } = {}): Prom
       });
     }
     if (path.endsWith("/auth/profile")) {
-      return request.headers()["authorization"] === `Bearer ${TOKENS.AccessToken}`
-        ? json(200, { email: "asha@example.com", name: "Asha Verma", mfaEnabled: !!options.mfa })
-        : json(401, { error: "Unauthorized" });
+      if (request.headers()["authorization"] !== `Bearer ${TOKENS.AccessToken}`) return json(401, { error: "Unauthorized" });
+      if (request.method() === "PUT") {
+        const body = request.postDataJSON() as Record<string, unknown>;
+        log.savedProfile = body;
+        // Mirror the server: Indian mobile numbers come back in +91 form.
+        const e164 = (p: unknown) => (typeof p === "string" && /^\d{10}$/.test(p.replace(/\s/g, "")) ? `+91${p.replace(/\s/g, "")}` : p);
+        const contacts = (body.emergencyContacts as { name: string; phone: string }[]).map((c) => ({ ...c, phone: e164(c.phone) }));
+        profile = { ...profile, ...body, phone: e164(body.phone), emergencyContacts: contacts };
+        if (profile.avatar === null) delete profile.avatar;
+      }
+      return json(200, profile);
     }
     if (path.endsWith("/notices/template")) {
       return json(200, {

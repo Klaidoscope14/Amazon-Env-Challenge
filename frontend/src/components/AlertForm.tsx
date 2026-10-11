@@ -216,11 +216,9 @@ export default function AlertForm({
 
           <div className="flex items-center justify-between gap-2 text-xs">
             <span aria-live="polite" className="text-muted">
-              {draftQuery.isPending && "Drafting notice…"}
-              {draftQuery.data?.source === "ai" &&
-                "AI-assisted draft (Gemini) from the approved template — review before sending."}
-              {draftQuery.data?.source === "template" && "Pre-filled from the approved template."}
-              {draftQuery.isError && "Couldn't load the bilingual draft — English fallback filled in."}
+              {draftQuery.isPending && "Writing a draft…"}
+              {draftQuery.data && "Here’s a draft in English and Hindi. Edit it if you like."}
+              {draftQuery.isError && "Couldn't prepare the Hindi version. You can write one below."}
             </span>
             {edited && draftQuery.data && (
               <button
@@ -272,7 +270,7 @@ export default function AlertForm({
           </div>
 
           <p className="text-xs text-muted">
-            Shared as <strong>{user?.name ?? "you"}</strong> — your name comes from your sign-in and is kept with the alert.
+            Shared as <strong>{user?.name ?? "you"}</strong>.
           </p>
         </div>
 

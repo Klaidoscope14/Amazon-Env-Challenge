@@ -71,8 +71,20 @@ function googleCurrent() {
   };
 }
 const googleRequests: { path: string; key: string | null; body: Record<string, unknown> }[] = [];
+let googleDown = false;
 const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
   const href = String(url);
+  if (href.includes("airquality.googleapis.com") && googleDown) {
+    return new Response(JSON.stringify({ error: { status: "PERMISSION_DENIED" } }), { status: 403 });
+  }
+  if (href.includes("api.airvisual.com")) {
+    return new Response(
+      JSON.stringify({
+        status: "success",
+        data: { current: { pollution: { ts: new Date().toISOString(), aqius: 160, mainus: "p2", aqicn: 144, maincn: "p1" } } },
+      })
+    );
+  }
   if (href.includes("airquality.googleapis.com")) {
     googleRequests.push({
       path: new URL(href).pathname,
@@ -202,6 +214,25 @@ describe("live readings and events", () => {
       expect(googleRequests.length).toBe(before);
     } finally {
       previousReading = null;
+    }
+  });
+
+  it("falls back to an estimated Indian AQI from IQAir when Google is unavailable", async () => {
+    googleDown = true;
+    try {
+      const res = await aqi(request("GET", "/api/v1/aqi/current", { query: { campus: "city-lucknow" } }));
+      expect(res.statusCode).toBe(200);
+      expect(json(res)).toMatchObject({
+        aqi: 192,
+        status: "Moderate",
+        dominantPollutant: "pm10",
+        source: "IQAir (estimated Indian AQI)",
+        pollutants: {},
+        dataMode: "live",
+      });
+      expect(fetchMock.mock.calls.some(([u]) => String(u).includes("api.airvisual.com/v2/nearest_city"))).toBe(true);
+    } finally {
+      googleDown = false;
     }
   });
 

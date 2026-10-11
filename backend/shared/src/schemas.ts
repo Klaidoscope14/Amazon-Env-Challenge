@@ -174,6 +174,53 @@ export const MfaCodeBodySchema = z.object({ code: totpCode });
 
 export const RefreshBodySchema = z.object({ refreshToken: requiredText("refreshToken", 4096) });
 
+/**
+ * Phone numbers: spaces, dashes, dots and brackets are ignored; a 10-digit
+ * Indian mobile number gets +91; anything else must be in international
+ * form. Stored as E.164 ("+919876543210").
+ */
+function phoneNumber(field: string) {
+  const message = `${field}: enter a 10-digit mobile number, or a number starting with +country code`;
+  return z
+    .string({ error: message })
+    .transform((value) => value.replace(/[\s\-().]/g, ""))
+    .transform((value) => (/^0?[6-9]\d{9}$/.test(value) ? `+91${value.slice(-10)}` : value))
+    .refine((value) => /^\+[1-9]\d{7,14}$/.test(value), message);
+}
+
+/** Profile photo: a small JPEG, PNG or WebP data URL (the browser resizes it first). */
+const AVATAR_MAX_CHARS = 150_000;
+const avatar = z
+  .string()
+  .max(AVATAR_MAX_CHARS, "Profile photo is too large")
+  .regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/, "Profile photo must be a JPEG, PNG or WebP image")
+  .nullable()
+  .optional();
+
+export const MAX_EMERGENCY_CONTACTS = 5;
+
+export const ProfileBodySchema = z.object({
+  name: requiredText("name", 80).pipe(z.string().min(1, "Enter your name")),
+  phone: z.preprocess(blankToUndefined, phoneNumber("Phone").optional()),
+  addressLine1: optionalText("Address line 1", 120),
+  addressLine2: optionalText("Address line 2", 120),
+  avatar,
+  emergencyContacts: z
+    .array(
+      z.object({
+        name: requiredText("Contact name", 60).pipe(z.string().min(1, "Each contact needs a name")),
+        phone: z.preprocess(
+          (value) => blankToUndefined(value) ?? "",
+          phoneNumber("Contact phone")
+        ),
+        relation: optionalText("Relation", 30),
+      }),
+      { error: "emergencyContacts must be a list" }
+    )
+    .max(MAX_EMERGENCY_CONTACTS, `You can save up to ${MAX_EMERGENCY_CONTACTS} emergency contacts`)
+    .default([]),
+});
+
 export const EvaluatePlansBodySchema = z.object({
   campus: areaId,
   scenario,

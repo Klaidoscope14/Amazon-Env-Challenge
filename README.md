@@ -32,6 +32,8 @@ No account is needed to check the air; you sign in only to share alerts.
 - **Audit trail + domain events** — alerts snapshot the exact reading; decisions are append-only and record who decided. Readings, category changes, alerts and decisions are published as events on an **Amazon EventBridge** bus, archived for 30 days and replayable.
 - **Validated everywhere** — every API input and the Google Air Quality response are checked with **Zod** schemas.
 - **Safe to retry** — sharing an alert is idempotent (`Idempotency-Key`), so a double click or a network retry never sends the same alert twice; alert history is paginated.
+- **SOS** — a red button on every page: one tap to call 112 / ambulance / fire / women's helpline, or to call, SMS or WhatsApp your emergency contacts with your live location (or saved address) in the message. Messages open ready to send in the phone's own apps, so nothing is sent without you and there is no SMS cost.
+- **Account settings** — profile photo (resized in the browser), name, phone (stored as E.164), address lines 1–2, and up to five emergency contacts, in a DynamoDB profiles table keyed by the user's Cognito id and readable only by that user.
 - **Accounts** — **SRP sign-in** straight from the browser to Cognito (the password never leaves the device), sign-up with email verification (resend code), forgot/reset password, optional **two-step verification** with an authenticator app (TOTP), and sign-out that revokes the session; sign-in state stays in sync across tabs.
 - **Observability** — structured JSON logs and business metrics (alerts, decisions, AI vs fallback explanations, unavailable readings) in CloudWatch via Embedded Metric Format.
 - **Presenter mode** — `?presenter=1` reveals a labelled demo-scenario control for presentations.
@@ -84,6 +86,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the data model, rules, events, guardr
 ## Data sources and limitations
 
 - **Google Air Quality API** — real-time hourly air quality for any location in India, reported on India's National AQI (index `ind_cpcb`, the CPCB scale), with the dominant pollutant and concentrations; its hourly history drives the trend chart. Each area is looked up at most every 30 minutes (stored readings are reused), and if the API is briefly unavailable the last reading from the past 3 hours is shown, labelled *Cached*.
+- **IQAir** (fallback) — when Google has no reading, IQAir's free `nearest_city` data is used. It reports only the US and China AQI and each one's main pollutant, so VayuSaathi **estimates** the Indian AQI (inverting each index to the concentration of its main pollutant, PM2.5, PM10 or ozone, and applying CPCB breakpoints) and labels it *Estimated*, with no pollutant breakdown.
 - Readings are area-level, not street-level, and can differ from other apps. This is **decision support, not medical advice**, and does not replace official CPCB or health-authority advisories.
 - No health data is collected. See the in-app **About** page for the full privacy note.
 
@@ -139,7 +142,7 @@ aws ssm put-parameter --name /breathesafe/google-air-quality-key --type SecureSt
 aws ssm put-parameter --name /breathesafe/gemini-api-key --type SecureString --value "<key>"          # AI drafts + explanations (Gemini free tier)
 ```
 
-Key parameters: `DataMode` (`live` / `demo`), `AlertEmail` (SNS email; confirm the subscription email AWS sends), `GoogleAqKeyParam` (SSM name of the Google Air Quality key), `NoticeAIEnabled`, `ExplainAIEnabled`, `PublicSiteUrl`, `SesFromEmail` (optional verified SES sender for Cognito emails; needs SES production access). Use `--config-env dev` (and `npm run seed:rules:dev`) for the separate dev stack defined in `samconfig.toml`.
+Key parameters: `DataMode` (`live` / `demo`), `AlertEmail` (SNS email; confirm the subscription email AWS sends), `GoogleAqKeyParam` (SSM name of the Google Air Quality key), `IqAirKeyParam` (SSM name of the IQAir key, default `/breathesafe/iqair-api-key`), `NoticeAIEnabled`, `ExplainAIEnabled`, `PublicSiteUrl`, `SesFromEmail` (optional verified SES sender for Cognito emails; needs SES production access). Use `--config-env dev` (and `npm run seed:rules:dev`) for the separate dev stack defined in `samconfig.toml`.
 
 ## AI tools used
 

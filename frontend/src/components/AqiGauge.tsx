@@ -50,7 +50,7 @@ export default function AqiGauge({ aqi, status }: AqiGaugeProps) {
         viewBox="0 0 240 132"
         className="w-full"
         role="img"
-        aria-label={`Air Quality Index ${aqi}, ${status}${max ? `, on the CPCB scale from 0 to ${max}` : ""}.`}
+        aria-label={`Air Quality Index ${aqi}, ${status}${max ? `, on India's scale from 0 to ${max}` : ""}.`}
       >
         {/* Neutral track under the coloured bands, so gaps read cleanly. */}
         <path d={arcPath(0, 1)} fill="none" stroke="var(--color-border)" strokeWidth={TRACK} strokeLinecap="round" />

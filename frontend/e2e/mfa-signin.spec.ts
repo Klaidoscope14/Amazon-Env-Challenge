@@ -25,7 +25,8 @@ test("sign in with SRP and two-step verification", async ({ page }) => {
   await page.getByRole("button", { name: "Verify and sign in" }).click();
 
   await expect(page).toHaveURL(/\/account$/);
-  await expect(page.getByText("Asha Verma · asha@example.com")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Account settings" })).toBeVisible();
+  await expect(page.getByText("asha@example.com")).toBeVisible();
   await expect(page.getByText("On", { exact: true })).toBeVisible();
   expect(api.mfaCode).toBe("123456");
   expect(api.srpPasswordSent).toBe(false);

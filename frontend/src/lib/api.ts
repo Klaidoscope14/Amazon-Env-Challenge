@@ -10,6 +10,7 @@ import {
   Ruleset,
   PlansEvaluation,
   Catalog,
+  UserProfile,
 } from "./types";
 import { API_URL } from "./config";
 
@@ -293,14 +294,23 @@ export async function authConfirm(data: {
 }
 
 /** Calls an auth route as the signed-in user (Cognito access token). */
-async function withAccessToken<T>(path: string, body: unknown = {}): Promise<T> {
+async function withAccessToken<T>(path: string, body: unknown = {}, method = "POST"): Promise<T> {
   const tokens = readTokens();
   if (!tokens) throw new ApiError("Please sign in to continue.", 401);
   return fetchApi<T>(path, {
-    method: "POST",
+    method,
     headers: { Authorization: `Bearer ${tokens.accessToken}` },
     body: JSON.stringify(body),
   });
+}
+
+/** Fields a person can edit on their own profile. `avatar`: omitted keeps it, null removes it. */
+export type ProfileUpdate = Pick<UserProfile, "name" | "phone" | "addressLine1" | "addressLine2" | "emergencyContacts"> & {
+  avatar?: string | null;
+};
+
+export async function updateProfile(update: ProfileUpdate): Promise<UserProfile> {
+  return withAccessToken("/api/v1/auth/profile", update, "PUT");
 }
 
 export async function mfaSetup(): Promise<{ secret: string; otpauthUri: string }> {

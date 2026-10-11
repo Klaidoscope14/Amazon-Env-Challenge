@@ -1,21 +1,25 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { buttonClasses } from "./ui/Button";
 import ThemeToggle from "./ThemeToggle";
+import Avatar from "./Avatar";
+import SosDialog from "./SosDialog";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard" },
-  { href: "/alerts", label: "Alerts & Decisions" },
-  { href: "/notice", label: "Public Notice" },
+  { href: "/alerts", label: "Shared alerts" },
+  { href: "/notice", label: "Notice board" },
   { href: "/about", label: "About" },
 ];
 
 export default function Navbar() {
   const pathname = usePathname();
-  const { user, isLoading, signOut } = useAuth();
+  const { user, isLoading } = useAuth();
+  const [sosOpen, setSosOpen] = useState(false);
 
   return (
     <header className="bg-surface border-b border-border sticky top-0 z-40">
@@ -44,27 +48,27 @@ export default function Navbar() {
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3">
+            <button
+              type="button"
+              onClick={() => setSosOpen(true)}
+              aria-haspopup="dialog"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-red-600 px-3 text-sm font-bold tracking-wide text-white shadow-sm hover:bg-red-700"
+            >
+              <span aria-hidden="true" className="h-2 w-2 rounded-full bg-white animate-pulse" />
+              SOS
+            </button>
             <ThemeToggle />
             {isLoading ? (
               <div className="h-8 w-20 bg-surface-2 rounded-lg animate-pulse" />
             ) : user ? (
-              <div className="flex items-center gap-2">
-                <Link
-                  href="/account"
-                  className="hidden sm:block text-sm font-medium text-foreground hover:underline"
-                >
-                  {user.name}
-                </Link>
-                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium">
-                  {user.name.charAt(0).toUpperCase()}
-                </div>
-                <button
-                  onClick={signOut}
-                  className="ml-1 inline-flex min-h-11 items-center px-2 text-sm text-muted hover:text-muted-strong"
-                >
-                  Sign out
-                </button>
-              </div>
+              <Link
+                href="/account"
+                aria-label={`Account settings for ${user.name}`}
+                className="flex min-h-11 items-center gap-2 rounded-lg px-1 hover:bg-surface-2"
+              >
+                <span className="hidden sm:block max-w-[10rem] truncate text-sm font-medium text-foreground">{user.name}</span>
+                <Avatar name={user.name || user.email} src={user.avatar} size={32} />
+              </Link>
             ) : (
               <Link href="/login" className={buttonClasses()}>
                 Sign In
@@ -72,6 +76,8 @@ export default function Navbar() {
             )}
           </div>
         </div>
+
+        {sosOpen && <SosDialog onClose={() => setSosOpen(false)} />}
 
         {/* Mobile nav */}
         <nav className="sm:hidden flex flex-wrap gap-1 pb-3 -mt-1">

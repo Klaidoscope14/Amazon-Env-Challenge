@@ -21,6 +21,7 @@ Globals:
         EVENT_BUS_NAME: !Ref EventBus
         STAGE: !Ref Stage
         GOOGLE_AQ_KEY_PARAM: !Ref GoogleAqKeyParam
+        IQAIR_KEY_PARAM: !Ref IqAirKeyParam
 
 Parameters:
   DataMode:
@@ -80,6 +81,10 @@ Parameters:
     Type: String
     Default: /breathesafe/google-air-quality-key
     Description: SSM SecureString parameter holding the Google Air Quality API key
+  IqAirKeyParam:
+    Type: String
+    Default: /breathesafe/iqair-api-key
+    Description: SSM SecureString parameter holding the IQAir (AirVisual) API key, the fallback source
   GeminiModel:
     Type: String
     Default: gemini-flash-lite-latest
@@ -178,7 +183,7 @@ Resources:
       StageName: !Ref Stage
       TracingEnabled: true
       Cors:
-        AllowMethods: "'GET,POST,PATCH,OPTIONS'"
+        AllowMethods: "'GET,POST,PUT,PATCH,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization,Idempotency-Key'"
         AllowOrigin: "'*'"
       Description: VayuSaathi REST API
@@ -260,6 +265,27 @@ Resources:
           KeyType: HASH
         - AttributeName: SK
           KeyType: RANGE
+
+  # Each signed-in person's own details: phone, address, profile photo and
+  # emergency contacts (their name stays in Cognito). Read and written only
+  # by the auth function, for the caller's own Cognito sub.
+  ProfilesTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Sub breathesafe-profiles-${Stage}
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
 
   # Recommendation bands as data (see backend/shared/src/rules.ts). Seed with
   # `npm run seed:rules --prefix backend -- --stage <stage>`; until then, and
@@ -391,7 +417,9 @@ Resources:
               Resource: !GetAtt EventBus.Arn
             - Effect: Allow
               Action: ssm:GetParameter
-              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
+              Resource:
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${IqAirKeyParam}
       Events:
         GetAQI:
           Type: Api
@@ -451,7 +479,9 @@ Resources:
               Resource: !GetAtt EventBus.Arn
             - Effect: Allow
               Action: ssm:GetParameter
-              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
+              Resource:
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${IqAirKeyParam}
       Events:
         GetRecommendation:
           Type: Api
@@ -533,7 +563,9 @@ Resources:
               Resource: !GetAtt EventBus.Arn
             - Effect: Allow
               Action: ssm:GetParameter
-              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
+              Resource:
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${IqAirKeyParam}
       Events:
         CreateAlert:
           Type: Api
@@ -611,7 +643,9 @@ Resources:
               Resource: !GetAtt EventBus.Arn
             - Effect: Allow
               Action: ssm:GetParameter
-              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
+              Resource:
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${IqAirKeyParam}
       Events:
         GetDraft:
           Type: Api
@@ -684,7 +718,9 @@ Resources:
               Resource: !GetAtt EventBus.Arn
             - Effect: Allow
               Action: ssm:GetParameter
-              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
+              Resource:
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${IqAirKeyParam}
       Events:
         GetExplanation:
           Type: Api
@@ -730,7 +766,9 @@ Resources:
               Resource: !GetAtt RulesConfigTable.Arn
             - Effect: Allow
               Action: ssm:GetParameter
-              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
+              Resource:
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleAqKeyParam}
+                - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${IqAirKeyParam}
       Events:
         GetTrends:
           Type: Api
@@ -762,8 +800,18 @@ Resources:
       Environment:
         Variables:
           USER_POOL_CLIENT_ID: !Ref UserPoolClient
-      # Only public Cognito client APIs (no IAM permissions). Sign-in itself
-      # happens in the browser with SRP, directly against Cognito.
+          PROFILES_TABLE_NAME: !Ref ProfilesTable
+      # Cognito calls are public client APIs authorised by the caller's own
+      # access token; the only IAM permission is the profiles table. Sign-in
+      # itself happens in the browser with SRP, directly against Cognito.
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+              Resource: !GetAtt ProfilesTable.Arn
       LoggingConfig:
         LogGroup: !Ref AuthLogGroup
       Events:
@@ -791,6 +839,12 @@ Resources:
             RestApiId: !Ref BreatheSafeApi
             Path: /api/v1/auth/profile
             Method: GET
+        UpdateProfile:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/auth/profile
+            Method: PUT
         ForgotPassword:
           Type: Api
           Properties:

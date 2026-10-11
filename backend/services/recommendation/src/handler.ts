@@ -1,6 +1,7 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { evaluate, evaluateUnavailable } from "../../../shared/src/evaluate.js";
+import { EMERGENCY_SERVICES } from "../../../shared/src/emergency.js";
 import { dataContextFromEnv, getAreaReading } from "../../../shared/src/area-readings.js";
 import { getActiveRuleset } from "../../../shared/src/rules.js";
 import {
@@ -84,5 +85,6 @@ function catalog(ruleset: Ruleset): Catalog {
       return { value, label: band ? `${band.status} (${band.minAqi}–${band.maxAqi})` : value };
     }),
     defaultDemoScenario: DEFAULT_DEMO_SCENARIO,
+    emergencyServices: EMERGENCY_SERVICES,
   };
 }

@@ -22,8 +22,6 @@ import AlertForm from "@/components/AlertForm";
 import DecisionRecorder from "@/components/DecisionRecorder";
 import WhatsAppShare from "@/components/WhatsAppShare";
 
-const CPCB_URL = "https://cpcb.nic.in";
-
 export default function DashboardPage() {
   // Remount per area so every piece of state belongs to one area.
   return <AreaGate>{(area) => <Dashboard key={area.id} area={area} />}</AreaGate>;
@@ -119,19 +117,10 @@ function Dashboard({ area }: { area: AreaInfo }) {
       {aqiUnavailable && (
         <div className="rounded-2xl border border-border bg-surface p-6">
           <p className="font-medium text-foreground">
-            Air quality data unavailable
+            We can&apos;t get a reading for this area right now
           </p>
           <p className="text-sm text-muted mt-1">
-            No valid air-quality reading is available for this area right now. Check{" "}
-            <a
-              href={CPCB_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline font-medium"
-            >
-              official CPCB sources
-            </a>{" "}
-            or choose a different area.
+            Please try again in a little while, or choose a nearby area.
           </p>
           <RetryButton onClick={() => aqiQuery.refetch()} />
         </div>
@@ -157,7 +146,7 @@ function Dashboard({ area }: { area: AreaInfo }) {
                 <div className="flex items-center justify-between gap-3 mb-4">
                   <h2 className="text-sm font-medium text-muted">Pollutants this hour</h2>
                   <span className="text-xs text-muted">
-                    vs CPCB limits
+                    vs safe limits
                   </span>
                 </div>
                 <PollutantBreakdown
@@ -236,7 +225,7 @@ function SentAlertPanel({ alert, onDismiss }: { alert: Alert; onDismiss: () => v
           <p className="font-semibold">Alert sent</p>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
             <span className="rounded-full bg-green-100 dark:bg-green-900/40 px-2 py-0.5 text-green-800 dark:text-green-200">
-              In-app notice published
+              Posted on your area&apos;s notice page
             </span>
             {email && (
               <span className={`rounded-full px-2 py-0.5 ${email.className}`}>{email.label}</span>
@@ -261,15 +250,13 @@ function SentAlertPanel({ alert, onDismiss }: { alert: Alert; onDismiss: () => v
         </Link>
         <WhatsAppShare alert={alert} />
         <Link href="/alerts" className="text-sm underline">
-          Alerts & Decisions
+          Shared alerts
         </Link>
       </div>
 
       <div className="mt-4 rounded-xl bg-surface p-4 text-foreground">
-        <p className="text-sm font-medium">Record your decision</p>
-        <p className="text-xs text-muted">
-          Log the action you took so the audit trail is complete.
-        </p>
+        <p className="text-sm font-medium">What did you decide?</p>
+        <p className="text-xs text-muted">Saving it helps you and others look back on bad-air days.</p>
         <DecisionRecorder alert={alert} startOpen />
       </div>
     </section>
@@ -293,9 +280,7 @@ function ErrorCard({ title, onRetry }: { title: string; onRetry: () => void }) {
   return (
     <div className="rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 p-6 text-red-800 dark:text-red-200">
       <p className="font-medium">{title}</p>
-      <p className="text-sm mt-1">
-        The API may be temporarily unavailable. Please try again.
-      </p>
+      <p className="text-sm mt-1">Something went wrong on our side. Please try again.</p>
       <RetryButton onClick={onRetry} />
     </div>
   );

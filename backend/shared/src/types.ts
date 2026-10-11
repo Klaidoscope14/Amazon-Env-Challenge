@@ -10,6 +10,8 @@ export interface AQIReading {
   dataMode: "live" | "cached" | "demo";
   /** Pollutant values are concentrations: µg/m³ (CO in mg/m³). */
   pollutantScale?: "concentration";
+  /** The AQI was estimated from another scale (IQAir's US/China indices), not reported on India's. */
+  estimated?: true;
 }
 
 /** The place everything is scoped to: a ~11 km grid cell around the user, or a city. */
@@ -207,4 +209,34 @@ export interface Catalog {
   /** Presenter demo scenarios, labelled with the active ruleset's category and range. */
   demoScenarios: CatalogOption[];
   defaultDemoScenario: string;
+  /** National emergency numbers offered on the SOS screen. */
+  emergencyServices: EmergencyService[];
+}
+
+export interface EmergencyService {
+  label: string;
+  /** Number to dial, e.g. "112". */
+  number: string;
+}
+
+export interface EmergencyContact {
+  name: string;
+  /** E.164, e.g. "+919876543210". */
+  phone: string;
+  relation?: string;
+}
+
+/** A signed-in person's own details (GET/PUT /auth/profile). */
+export interface UserProfile {
+  email: string;
+  name: string;
+  role?: string;
+  mfaEnabled: boolean;
+  /** E.164, or absent. */
+  phone?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  /** Small profile photo as a data URL (resized in the browser). */
+  avatar?: string;
+  emergencyContacts: EmergencyContact[];
 }

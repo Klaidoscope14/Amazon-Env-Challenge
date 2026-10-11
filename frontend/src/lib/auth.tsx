@@ -11,13 +11,9 @@ import {
 } from "react";
 import { API_URL } from "./config";
 import { authSignOut } from "./api";
+import type { UserProfile } from "./types";
 
-interface User {
-  email: string;
-  name: string;
-  /** Two-step verification (authenticator app) is on. */
-  mfaEnabled?: boolean;
-}
+type User = UserProfile;
 
 interface AuthTokens {
   accessToken: string;
@@ -34,6 +30,11 @@ interface AuthContextType {
   signOut: () => void;
   /** Re-reads the profile (e.g. after changing two-step verification). */
   refreshProfile: () => Promise<void>;
+  /**
+   * Shows a just-saved profile and refreshes the tokens, so the new name is in
+   * the ID token that signs shared alerts.
+   */
+  profileSaved: (profile: UserProfile) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -197,6 +198,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (profile) setUser(profile);
   }, [tokens, fetchProfile]);
 
+  const profileSaved = useCallback(
+    async (profile: UserProfile) => {
+      setUser(profile);
+      if (!tokens) return;
+      const next = await refreshTokens(tokens.refreshToken);
+      if (!next) return;
+      setTokens(next);
+      try {
+        localStorage.setItem(TOKENS_KEY, JSON.stringify(next));
+      } catch {}
+      scheduleRefresh(next);
+    },
+    [tokens, refreshTokens, scheduleRefresh]
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -207,6 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signOut,
         refreshProfile,
+        profileSaved,
       }}
     >
       {children}

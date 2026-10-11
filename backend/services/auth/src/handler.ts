@@ -11,13 +11,18 @@ import {
   AssociateSoftwareTokenCommand,
   VerifySoftwareTokenCommand,
   SetUserMFAPreferenceCommand,
+  UpdateUserAttributesCommand,
+  GetUserCommandOutput,
 } from "@aws-sdk/client-cognito-identity-provider";
+import { DynamoDBClient, GetItemCommand, PutItemCommand } from "@aws-sdk/client-dynamodb";
+import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import {
   ConfirmBodySchema,
   EmailBodySchema,
   MfaCodeBodySchema,
   parse,
+  ProfileBodySchema,
   ResetPasswordBodySchema,
   RefreshBodySchema,
   SignUpBodySchema,
@@ -25,9 +30,12 @@ import {
 } from "../../../shared/src/schemas.js";
 import { header, parseJsonBody, respond } from "../../../shared/src/http.js";
 import { errorFields, log } from "../../../shared/src/observability.js";
+import { EmergencyContact, UserProfile } from "../../../shared/src/types.js";
 
 const cognito = new CognitoIdentityProviderClient({});
+const dynamodb = new DynamoDBClient({});
 const CLIENT_ID = process.env.USER_POOL_CLIENT_ID!;
+const PROFILES_TABLE = process.env.PROFILES_TABLE_NAME!;
 
 export async function handler(
   event: APIGatewayProxyEvent
@@ -45,6 +53,7 @@ export async function handler(
     if (method === "POST" && path.endsWith("/confirm")) return await confirmSignUp(event);
     if (method === "POST" && path.endsWith("/refresh")) return await refreshToken(event);
     if (method === "GET" && path.endsWith("/profile")) return await getProfile(event);
+    if (method === "PUT" && path.endsWith("/profile")) return await updateProfile(event);
     if (method === "POST" && path.endsWith("/forgot-password")) return await forgotPassword(event);
     if (method === "POST" && path.endsWith("/reset-password")) return await resetPassword(event);
     if (method === "POST" && path.endsWith("/resend-code")) return await resendCode(event);
@@ -153,28 +162,93 @@ function accessToken(event: APIGatewayProxyEvent): string | null {
   return value?.startsWith("Bearer ") ? value.slice("Bearer ".length).trim() || null : null;
 }
 
-async function getProfile(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  const token = accessToken(event);
-
-  if (!token) {
-    return respond(401, { error: "Authorization token required" });
-  }
-
-  const result = await cognito.send(
-    new GetUserCommand({ AccessToken: token })
-  );
-
+function attributesOf(user: GetUserCommandOutput): Record<string, string> {
   const attributes: Record<string, string> = {};
-  for (const attr of result.UserAttributes || []) {
+  for (const attr of user.UserAttributes || []) {
     if (attr.Name && attr.Value) attributes[attr.Name] = attr.Value;
   }
+  return attributes;
+}
 
-  return respond(200, {
+/** Details kept outside Cognito (phone, address, photo, emergency contacts), keyed by the user's sub. */
+interface StoredProfile {
+  userId: string;
+  phone?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  avatar?: string;
+  emergencyContacts?: EmergencyContact[];
+  updatedAt: string;
+}
+
+async function loadStoredProfile(userId: string): Promise<StoredProfile | null> {
+  const result = await dynamodb.send(
+    new GetItemCommand({ TableName: PROFILES_TABLE, Key: marshall({ userId }), ConsistentRead: true })
+  );
+  return result.Item ? (unmarshall(result.Item) as StoredProfile) : null;
+}
+
+function toProfile(user: GetUserCommandOutput, stored: StoredProfile | null): UserProfile {
+  const attributes = attributesOf(user);
+  return {
     email: attributes.email,
     name: attributes.name,
     role: attributes["custom:role"],
-    mfaEnabled: (result.UserMFASettingList ?? []).includes("SOFTWARE_TOKEN_MFA"),
-  });
+    mfaEnabled: (user.UserMFASettingList ?? []).includes("SOFTWARE_TOKEN_MFA"),
+    ...(stored?.phone ? { phone: stored.phone } : {}),
+    ...(stored?.addressLine1 ? { addressLine1: stored.addressLine1 } : {}),
+    ...(stored?.addressLine2 ? { addressLine2: stored.addressLine2 } : {}),
+    ...(stored?.avatar ? { avatar: stored.avatar } : {}),
+    emergencyContacts: stored?.emergencyContacts ?? [],
+  };
+}
+
+/** Cognito user for the caller's access token; throws MissingToken without one. */
+async function currentUser(event: APIGatewayProxyEvent): Promise<{ token: string; user: GetUserCommandOutput }> {
+  const token = requireAccessToken(event);
+  return { token, user: await cognito.send(new GetUserCommand({ AccessToken: token })) };
+}
+
+async function getProfile(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const { user } = await currentUser(event);
+  const sub = attributesOf(user).sub;
+  const stored = sub ? await loadStoredProfile(sub) : null;
+  return respond(200, toProfile(user, stored));
+}
+
+/**
+ * Replaces the caller's profile. The name lives in Cognito (it signs the
+ * alerts they share, via the ID token), everything else in the profiles table.
+ */
+async function updateProfile(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const { token, user } = await currentUser(event);
+  const body = parse(ProfileBodySchema, parseJsonBody(event));
+  const attributes = attributesOf(user);
+  if (!attributes.sub) throw new Error("Cognito user has no sub");
+
+  if (body.name !== attributes.name) {
+    await cognito.send(
+      new UpdateUserAttributesCommand({ AccessToken: token, UserAttributes: [{ Name: "name", Value: body.name }] })
+    );
+    attributes.name = body.name;
+  }
+
+  // avatar: undefined keeps the current photo, null removes it.
+  const previous = body.avatar === undefined ? await loadStoredProfile(attributes.sub) : null;
+  const stored: StoredProfile = {
+    userId: attributes.sub,
+    phone: body.phone,
+    addressLine1: body.addressLine1,
+    addressLine2: body.addressLine2,
+    avatar: body.avatar === undefined ? previous?.avatar : body.avatar ?? undefined,
+    emergencyContacts: body.emergencyContacts,
+    updatedAt: new Date().toISOString(),
+  };
+  await dynamodb.send(
+    new PutItemCommand({ TableName: PROFILES_TABLE, Item: marshall(stored, { removeUndefinedValues: true }) })
+  );
+  log("info", "profile_updated", { contacts: body.emergencyContacts.length, avatar: !!stored.avatar });
+  return respond(200, toProfile({ ...user, UserAttributes: Object.entries(attributes).map(([Name, Value]) => ({ Name, Value })) }, stored));
 }
 
 // Same answer whether or not the account exists, so the endpoint can't be

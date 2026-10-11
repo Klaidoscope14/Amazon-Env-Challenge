@@ -17,7 +17,8 @@ keep the original "campus" naming so existing resources are never replaced.)
 | Identity | Amazon Cognito user pool | Email sign-up; users may only write `email` and `name`. Optional TOTP MFA. Optional SES sender (`SesFromEmail`). Deletion protection on. |
 | Messaging | Amazon SNS | `alerts` topic (alert emails), `ops` topic (alarm emails). |
 | Speech | Amazon Polly | Neural voice *Kajal*, `en-IN` and `hi-IN`. |
-| Secrets | SSM Parameter Store (SecureString) | Google Air Quality key (functions that look up air quality) and Gemini key (notices, explain). |
+| Profiles | DynamoDB `breathesafe-profiles-<stage>` (PK `userId` = Cognito sub) | Phone, address, profile photo (≤150 KB data URL) and up to 5 emergency contacts. Only the auth function can read/write it, and only for the caller's own access token (`GET`/`PUT /auth/profile`); the name stays in Cognito. |
+| Secrets | SSM Parameter Store (SecureString) | Google Air Quality and IQAir keys (functions that look up air quality) and Gemini key (notices, explain). |
 | Observability | CloudWatch Logs (14 days), 7 CloudWatch alarms, AWS X-Ray | Logs in `/breathesafe/<stage>/<function>`; events in `/aws/events/breathesafe-<stage>`. |
 | Validation | Zod | Every API input and the Google Air Quality response (`backend/shared/src/schemas.ts`, `google-aq.ts`). |
 | CI | GitHub Actions | Typecheck, Vitest, ESLint, Next build, `sam validate --lint`, `sam build`. Deploys stay manual. |
@@ -52,15 +53,21 @@ carry `?area=<id>`.
 
 For a live request (`DATA_MODE=live`), `getAreaReading` (backend/shared/src/area-readings.ts):
 
-1. **Recent stored reading** — if the area has a Google reading fetched in the last 30 minutes (in
+1. **Recent stored reading** — if the area has a Google or IQAir reading fetched in the last 30 minutes (in
    DynamoDB), it is reused, so API calls stay low across Lambda containers.
 2. **Google Air Quality API** — `POST currentConditions:lookup` for the area's coordinates with
    `customLocalAqis: [{regionCode: "IN", aqi: "ind_cpcb"}]`, `LOCAL_AQI` and `POLLUTANT_CONCENTRATION`.
    The AQI, category and dominant pollutant come from the `ind_cpcb` index (India's National AQI, CPCB
    scale); gas concentrations are converted from ppb to µg/m³ (CO to mg/m³). Response validated with
    Zod; one retry; 30-minute in-memory cache per area. The key is read from SSM.
-3. **Cached** — if that fails, the area's last stored reading from the past 3 hours, labelled `cached`.
-4. Otherwise **unavailable** (HTTP 503) — no stale value is shown as current.
+3. **IQAir (estimated)** — `GET nearest_city` (free Community plan: US EPA and China AQI plus each
+   one's main pollutant, no Indian AQI or concentrations). Each index is inverted to the concentration
+   of its main pollutant (PM2.5, PM10, or ozone from the US index only, since China's is 1-hour) and CPCB
+   breakpoints give the Indian AQI (the higher sub-index
+   wins). Stored with `estimated: true`, no pollutant breakdown, and shown as an estimate
+   (`backend/shared/src/iqair.ts`). 30-minute cache per area; key in SSM.
+4. **Cached** — if that fails, the area's last stored reading from the past 3 hours, labelled `cached`.
+5. Otherwise **unavailable** (HTTP 503) — no stale value is shown as current.
 
 Trends use `POST history:lookup` (168 hourly records, fetched once per area per hour and sliced for each
 window); if it fails, stored readings are used.

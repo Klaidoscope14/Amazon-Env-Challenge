@@ -193,7 +193,7 @@ function ChartSVG({
         <desc id={`${gradientId}-desc`}>
           {`${points.length} readings. Lowest AQI ${Math.min(...points.map((p) => p.aqi))}, highest ${Math.max(
             ...points.map((p) => p.aqi)
-          )}. Background bands show the CPCB categories.`}
+          )}. Background bands show the air-quality categories.`}
         </desc>
 
         {visibleBands.map((b) => (

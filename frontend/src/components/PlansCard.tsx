@@ -243,9 +243,6 @@ export default function PlansCard({ areaId, scenario }: { areaId: string; scenar
         <p className="mt-4 text-sm text-muted">You can track up to {MAX_PLANS} plans.</p>
       )}
 
-      {verdictsQuery.data && (
-        <p className="mt-3 text-xs text-muted">{verdictsQuery.data.disclaimer}</p>
-      )}
     </Card>
   );
 }

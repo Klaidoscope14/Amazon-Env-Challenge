@@ -3,6 +3,7 @@ import { AQIReading, TrendPoint } from "./types.js";
 import { fetchDemoReading } from "./demo.js";
 import { Area, areaCoordinates, readingPlaceName, resolveArea } from "./areas.js";
 import { getGoogleReading, getGoogleTrend, GOOGLE_SOURCE } from "./google-aq.js";
+import { getIqAirReading, IQAIR_SOURCE } from "./iqair.js";
 import { getLatestReading, getReadingBefore, persistReading } from "./readings.js";
 import { getThresholdForAqi } from "./aqi-categories.js";
 import { getActiveRuleset } from "./rules.js";
@@ -50,7 +51,7 @@ export interface AreaReading {
   reading: AQIReading | null;
 }
 
-/** A stored Google reading younger than this is reused instead of calling the API. */
+/** A stored reading younger than this is reused instead of calling an API. */
 const REUSE_STORED_MS = 30 * 60 * 1000;
 /** Without a fresh reading, the last stored one is shown (labelled cached) for this long. */
 const CACHED_FALLBACK_MS = 3 * 60 * 60 * 1000;
@@ -58,9 +59,10 @@ const CACHED_FALLBACK_MS = 3 * 60 * 60 * 1000;
 /**
  * The current reading for an area. Demo/presenter requests get a labelled
  * fixture named after the area. Live requests use the Google Air Quality API
- * (India's National AQI for the area's location); a reading stored in the
- * last 30 minutes is reused, which keeps API calls (and cost) low across
- * Lambda containers. New readings are stored once per source timestamp.
+ * (India's National AQI for the area's location), else IQAir (an Indian AQI
+ * estimated from its US/China indices, labelled as such); a reading stored
+ * in the last 30 minutes is reused, which keeps API calls (and cost) low
+ * across Lambda containers. New readings are stored once per source timestamp.
  */
 export async function getAreaReading(
   dynamodb: DynamoDBClient,
@@ -78,7 +80,7 @@ export async function getAreaReading(
   const last = await getLatestReading(dynamodb, ctx.aqiTable, area.id).catch(() => null);
   if (
     last &&
-    last.source === GOOGLE_SOURCE &&
+    (last.source === GOOGLE_SOURCE || last.source === IQAIR_SOURCE) &&
     last.dataMode === "live" &&
     Date.now() - new Date(last.fetchedAt).getTime() < REUSE_STORED_MS
   ) {
@@ -86,7 +88,10 @@ export async function getAreaReading(
   }
 
   const coords = areaCoordinates(area);
-  const reading = coords ? await getGoogleReading(area.id, { ...coords, name: area.name }) : null;
+  const place = coords ? { ...coords, name: area.name } : null;
+  const reading = place
+    ? (await getGoogleReading(area.id, place)) ?? (await getIqAirReading(area.id, place))
+    : null;
   if (reading) {
     if (await persistReading(dynamodb, ctx.aqiTable, reading)) {
       await announceReading(dynamodb, ctx, area, reading);

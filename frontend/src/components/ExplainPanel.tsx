@@ -41,7 +41,6 @@ export default function ExplainPanel({ areaId, scenario }: { areaId: string; sce
   }
 
   const result = query.data;
-  const rejected = result?.fallbackReason?.startsWith("guardrail:");
 
   return (
     <section
@@ -50,11 +49,7 @@ export default function ExplainPanel({ areaId, scenario }: { areaId: string; sce
     >
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <span className="text-xs font-medium text-indigo-800 dark:text-indigo-300">
-          {result?.generatedBy === "ai"
-            ? "AI-generated · checked against the reading"
-            : result
-              ? "Standard explanation"
-              : "Plain-language explanation"}
+          In plain language
         </span>
         <div role="group" aria-label="Explanation language" className="flex gap-1">
           {LANGS.map((option) => (
@@ -85,15 +80,9 @@ export default function ExplainPanel({ areaId, scenario }: { areaId: string; sce
           </p>
         )}
         {result && (
-          <>
-            <p className="text-sm text-indigo-950 dark:text-indigo-100" lang={result.lang}>
-              {result.explanation}
-            </p>
-            <p className="text-xs text-indigo-800 dark:text-indigo-300 mt-2">
-              {result.disclaimer}
-              {rejected && " (An AI draft was discarded by the safety checks, so the standard wording is shown.)"}
-            </p>
-          </>
+          <p className="text-sm text-indigo-950 dark:text-indigo-100" lang={result.lang}>
+            {result.explanation}
+          </p>
         )}
       </div>
     </section>

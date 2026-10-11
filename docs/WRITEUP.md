@@ -42,7 +42,9 @@ The whole backend is serverless on AWS, defined as code with AWS SAM:
 - **SSM Parameter Store** — encrypted API keys. **CloudWatch + X-Ray** — logs, seven alarms, tracing.
 
 Real-time air-quality data comes from the Google Air Quality API, which reports India's National AQI
-(CPCB scale) for any location in India, plus hourly history for the trend chart.
+(CPCB scale) for any location in India, plus hourly history for the trend chart. When it is
+unavailable, IQAir is the fallback: its free data has only US and China indices, so the Indian AQI is
+estimated from them with CPCB breakpoints and clearly labelled as an estimate.
 
 ## Responsible AI
 

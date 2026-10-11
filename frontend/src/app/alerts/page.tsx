@@ -22,64 +22,29 @@ function formatTime(ts: string): string {
 }
 
 function DeliveryChips({ alert }: { alert: Alert }) {
-  // Alerts created before delivery tracking only have the legacy status.
-  if (!alert.delivery) {
-    return (
-      <span className="text-xs px-2 py-0.5 rounded-full bg-surface-2 text-muted-strong">
-        In-app
-      </span>
-    );
-  }
-  const email = EMAIL_DELIVERY[alert.delivery.email];
-  return (
-    <>
-      <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200">In-app</span>
-      {alert.delivery.email !== "not_configured" && (
-        <span className={`text-xs px-2 py-0.5 rounded-full ${email.className}`}>{email.label}</span>
-      )}
-    </>
-  );
+  const email = alert.delivery ? EMAIL_DELIVERY[alert.delivery.email] : null;
+  if (!email || alert.delivery?.email === "not_configured") return null;
+  return <span className={`text-xs px-2 py-0.5 rounded-full ${email.className}`}>{email.label}</span>;
 }
 
-function EvidenceDetails({ alert }: { alert: Alert }) {
-  const rec = alert.recommendation;
+function AlertDetails({ alert }: { alert: Alert }) {
   const snap = alert.aqiSnapshot;
+  if (!alert.messageHi && !snap) return null;
   return (
     <details className="mt-3 group">
       <summary className="cursor-pointer text-sm font-medium text-blue-700 hover:text-blue-900 dark:text-blue-200">
-        Evidence{alert.messageHi ? " & Hindi notice" : ""}
+        {alert.messageHi ? "Hindi version & details" : "Details"}
       </summary>
       <div className="mt-2 space-y-3 rounded-lg bg-surface-2 border border-border p-4 text-sm text-foreground">
         {alert.messageHi && (
-          <div lang="hi">
-            <p className="text-xs font-medium text-muted mb-1">Hindi notice</p>
-            <p className="whitespace-pre-line">{alert.messageHi}</p>
-          </div>
-        )}
-        {rec?.rule && (
-          <div>
-            <p className="text-xs font-medium text-muted">Rule applied</p>
-            <p>{rec.rule.name}</p>
-            <p className="text-xs text-muted">{rec.action}</p>
-          </div>
+          <p lang="hi" className="whitespace-pre-line">{alert.messageHi}</p>
         )}
         {snap && (
-          <div>
-            <p className="text-xs font-medium text-muted">Reading at time of alert</p>
-            <p>
-              AQI {snap.aqi ?? "N/A"}
-              {snap.dominantPollutant ? ` · ${formatPollutant(snap.dominantPollutant).label}` : ""}
-              {snap.stationName ? ` · ${snap.stationName}` : ""}
-            </p>
-            <p className="text-xs text-muted">
-              Source: {snap.source ?? "unknown"}
-              {snap.timestamp ? ` · observed ${formatTime(snap.timestamp)}` : ""}
-            </p>
-          </div>
-        )}
-        {alert.noticeSource && (
           <p className="text-xs text-muted">
-            Notice text: {alert.noticeSource === "ai" ? "AI-assisted draft, reviewed by the sender" : "approved template"}
+            Air when shared: AQI {snap.aqi ?? "N/A"}
+            {snap.dominantPollutant ? ` · mainly ${formatPollutant(snap.dominantPollutant).label}` : ""}
+            {snap.stationName ? ` · ${snap.stationName}` : ""}
+            {snap.timestamp ? ` · ${formatTime(snap.timestamp)}` : ""}
           </p>
         )}
       </div>
@@ -106,7 +71,7 @@ function AlertsLog({ area }: { area: AreaInfo }) {
     <div className="space-y-6">
       <AreaHeader
         area={area}
-        title="Alerts & Decision Log — every alert with its AQI evidence and the decision taken"
+        title="Shared alerts — what was shared for this area, and what people decided"
         actions={
           <Link
             href={`/notice?area=${encodeURIComponent(area.id)}`}
@@ -175,7 +140,7 @@ function AlertsLog({ area }: { area: AreaInfo }) {
               <p className="text-sm text-foreground whitespace-pre-line">{alert.message}</p>
             </div>
 
-            <EvidenceDetails alert={alert} />
+            <AlertDetails alert={alert} />
             <DecisionRecorder alert={alert} />
           </article>
         ))}

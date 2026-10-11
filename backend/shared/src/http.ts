@@ -9,7 +9,7 @@ export function respond(statusCode: number, body: unknown): APIGatewayProxyResul
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Headers": "Content-Type,Authorization,Idempotency-Key",
-      "Access-Control-Allow-Methods": "GET,POST,PATCH,OPTIONS",
+      "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,OPTIONS",
     },
     body: JSON.stringify(body),
   };
