@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { getNearbyHospitals } from "@/lib/api";
@@ -99,16 +100,18 @@ export default function SosDialog({ onClose }: { onClose: () => void }) {
 
   const canShare = typeof navigator !== "undefined" && "share" in navigator;
 
-  return (
+  // Rendered at the end of <body>: inside the navbar, its backdrop blur would
+  // make the overlay position itself against the navbar instead of the screen.
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-4"
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 p-0 backdrop-blur-sm sm:p-6"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={`${id}-title`}
-        className="w-full sm:max-w-md max-h-[92vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl bg-surface p-5 shadow-xl"
+        className="w-full sm:max-w-md max-h-[92dvh] sm:max-h-[85dvh] overflow-y-auto overscroll-contain rounded-t-2xl sm:rounded-2xl bg-surface p-5 shadow-xl"
       >
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -260,6 +263,7 @@ export default function SosDialog({ onClose }: { onClose: () => void }) {
           )}
         </section>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
