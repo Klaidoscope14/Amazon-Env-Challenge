@@ -64,7 +64,7 @@ function VerifyForm() {
             </p>
             <Link
               href="/login"
-              className="mt-4 inline-block text-sm text-blue-600 hover:text-blue-700 font-medium"
+              className="mt-4 inline-block text-sm text-accent-text hover:opacity-80 font-medium"
             >
               Continue now
             </Link>
@@ -97,7 +97,7 @@ function VerifyForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-text"
               />
             </div>
 
@@ -114,7 +114,7 @@ function VerifyForm() {
                 onChange={(e) => setCode(e.target.value)}
                 required
                 maxLength={6}
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-center tracking-[0.5em] text-lg font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-center tracking-[0.5em] text-lg font-mono focus:outline-none focus:ring-2 focus:ring-accent-text"
                 placeholder="000000"
               />
             </div>
@@ -140,7 +140,7 @@ function VerifyForm() {
                   type="button"
                   onClick={handleResend}
                   disabled={resendStatus === "sending"}
-                  className="text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
+                  className="text-accent-text hover:opacity-80 font-medium disabled:opacity-50"
                 >
                   {resendStatus === "sending" ? "Sending…" : "Send a new code"}
                 </button>
@@ -151,7 +151,7 @@ function VerifyForm() {
           <p className="mt-6 text-sm text-muted text-center">
             <Link
               href="/login"
-              className="text-blue-600 hover:text-blue-700 font-medium"
+              className="text-accent-text hover:opacity-80 font-medium"
             >
               Back to Sign In
             </Link>

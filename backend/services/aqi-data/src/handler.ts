@@ -10,6 +10,7 @@ import {
   parse,
   PlaceResolveQuerySchema,
   PlaceSearchQuerySchema,
+  SitesQuerySchema,
   ValidationError,
 } from "../../../shared/src/schemas.js";
 import { respond } from "../../../shared/src/http.js";
@@ -19,6 +20,7 @@ import {
   usesDemo,
 } from "../../../shared/src/area-readings.js";
 import { errorFields, log, metric } from "../../../shared/src/observability.js";
+import { usAqiFrom } from "../../../shared/src/aqi-scales.js";
 import { nearbyHospitals, placeNameAt, resolvePlace, searchPlaces } from "../../../shared/src/google-places.js";
 
 const dynamodb = new DynamoDBClient({});
@@ -29,6 +31,7 @@ export async function handler(
 ): Promise<APIGatewayProxyResult> {
   try {
     if (event.path.endsWith("/areas/nearest")) return await handleNearest(event);
+    if (event.path.endsWith("/aqi/sites")) return await handleSites(event);
     if (event.path.endsWith("/places/search")) return await handlePlaceSearch(event);
     if (event.path.endsWith("/places/resolve")) return await handlePlaceResolve(event);
     if (event.path.endsWith("/places/hospitals")) return await handleHospitals(event);
@@ -74,6 +77,59 @@ async function handleNearest(event: APIGatewayProxyEvent): Promise<APIGatewayPro
   // Live mode: name the area after the neighbourhood (e.g. "Lajpat Nagar") when Google knows it.
   const place = ctx.dataMode === "live" ? await placeNameAt(lat, lon) : null;
   return respond(200, { area: place ? { ...area, name: place } : area });
+}
+
+/** Globe and nearby cities can reuse a stored reading this old, to bound Google calls per city. */
+const SITE_REUSE_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Current readings for many places at once (the globe and "cities near you"),
+ * keyed "lat,lon" with 2 decimals. Places in India get the same reading as the
+ * dashboard for their area; anywhere else, or without data, gets null. The
+ * US AQI is worked out from the same pollutant values, for the standard switch.
+ */
+async function handleSites(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
+  const { points } = parse(SitesQuerySchema, event.queryStringParameters ?? {});
+  const key = (p: { lat: number; lon: number }) => `${p.lat.toFixed(2)},${p.lon.toFixed(2)}`;
+  const live = ctx.dataMode === "live";
+
+  // Several cities can share one area; look each area up once.
+  const areaOf = new Map(points.map((p) => [key(p), live ? findNearestArea(p.lat, p.lon, true) : null]));
+  const areaIds = [...new Set([...areaOf.values()].flatMap((a) => (a ? [a.id] : [])))];
+  const readings = new Map(
+    await Promise.all(
+      areaIds.map(async (id) => {
+        const { reading } = await getAreaReading(dynamodb, ctx, id, undefined, {
+          reuseStoredMs: SITE_REUSE_MS,
+          iqAirFallback: false,
+        }).catch(() => ({ reading: null }));
+        return [id, reading] as const;
+      })
+    )
+  );
+
+  const result: Record<string, object | null> = {};
+  for (const [k, area] of areaOf) {
+    const reading = area ? readings.get(area.id) : null;
+    if (!reading || reading.dataMode === "demo") {
+      result[k] = null;
+      continue;
+    }
+    const p = reading.pollutants ?? {};
+    const us = usAqiFrom(p);
+    result[k] = {
+      aqi: reading.aqi,
+      dominant: reading.dominantPollutant,
+      usAqi: us?.aqi ?? null,
+      usDominant: us?.dominant ?? null,
+      pm25: p.pm25 ?? null,
+      pm10: p.pm10 ?? null,
+      o3: p.o3 ?? null,
+      no2: p.no2 ?? null,
+      time: reading.timestamp,
+    };
+  }
+  return respond(200, { points: result });
 }
 
 // Google-backed lookups: a 503 tells the browser to fall back (city list, no hospitals).

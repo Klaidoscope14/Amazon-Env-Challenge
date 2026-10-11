@@ -7,7 +7,7 @@ const BASE =
   "inline-flex items-center justify-center rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-blue-600 text-white hover:bg-blue-700",
+  primary: "bg-accent text-accent-fg hover:opacity-90",
   danger: "bg-red-600 text-white hover:bg-red-700",
   secondary: "border border-border-strong text-muted-strong hover:bg-surface-2",
 };

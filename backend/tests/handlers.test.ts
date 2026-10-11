@@ -236,6 +236,23 @@ describe("live readings and events", () => {
     }
   });
 
+  it("serves many places at once for the globe, with the US AQI worked out alongside", async () => {
+    const res = await aqi(
+      request("GET", "/api/v1/aqi/sites", { query: { points: "26.92,75.79;26.93,75.80;51.51,-0.13" } })
+    );
+    expect(res.statusCode).toBe(200);
+    const { points } = json(res);
+    // PM2.5 100 µg/m³ -> US AQI 182; both Jaipur points share one area (one lookup).
+    expect(points["26.92,75.79"]).toMatchObject({ aqi: 233, dominant: "pm25", usAqi: 182, usDominant: "pm25", pm25: 100 });
+    expect(points["26.93,75.80"]).toEqual(points["26.92,75.79"]);
+    expect(points["51.51,-0.13"]).toBeNull(); // outside India
+  });
+
+  it("rejects malformed site lists", async () => {
+    const res = await aqi(request("GET", "/api/v1/aqi/sites", { query: { points: "28.6;77.2" } }));
+    expect(res.statusCode).toBe(400);
+  });
+
   it("serves readings even when EventBridge is down", async () => {
     eventSend.mockRejectedValueOnce(new Error("EventBridge unavailable"));
     const res = await aqi(request("GET", "/api/v1/aqi/current", { query: { campus: "city-nagpur" } }));

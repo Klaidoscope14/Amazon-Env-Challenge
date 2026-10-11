@@ -29,7 +29,7 @@ export default function AreaHeader({ area, title, actions }: AreaHeaderProps) {
               type="button"
               onClick={() => setChanging((v) => !v)}
               aria-expanded={changing}
-              className="font-medium text-blue-700 underline"
+              className="font-medium text-accent-text underline"
             >
               {changing ? "Cancel" : "Change location"}
             </button>

@@ -97,7 +97,7 @@ function LoginForm() {
                   onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
                   required
                   autoFocus
-                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-lg text-center tracking-[0.5em] font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-border-strong px-3 py-2 text-lg text-center tracking-[0.5em] font-mono focus:outline-none focus:ring-2 focus:ring-accent-text"
                   placeholder="000000"
                 />
               </div>
@@ -116,7 +116,7 @@ function LoginForm() {
                   setMfaCode("");
                   setError("");
                 }}
-                className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium"
+                className="w-full text-sm text-accent-text hover:opacity-80 font-medium"
               >
                 Back to sign in
               </button>
@@ -150,7 +150,7 @@ function LoginForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-text"
                 placeholder="you@example.com"
               />
             </div>
@@ -166,13 +166,13 @@ function LoginForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-text"
                 placeholder="Your password"
               />
               <p className="mt-1 text-right text-xs">
                 <Link
                   href={`/forgot-password${email ? `?email=${encodeURIComponent(email)}` : ""}`}
-                  className="text-blue-600 hover:text-blue-700 font-medium"
+                  className="text-accent-text hover:opacity-80 font-medium"
                 >
                   Forgot password?
                 </Link>
@@ -211,7 +211,7 @@ function LoginForm() {
             Don&apos;t have an account?{" "}
             <Link
               href="/signup"
-              className="text-blue-600 hover:text-blue-700 font-medium"
+              className="text-accent-text hover:opacity-80 font-medium"
             >
               Sign Up
             </Link>

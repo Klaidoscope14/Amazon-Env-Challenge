@@ -94,6 +94,31 @@ export const TrendsQuerySchema = AreaQuerySchema.extend({
 
 export const NearestQuerySchema = z.object({ lat: latitude, lon: longitude });
 
+export const MAX_SITES = 30;
+const sitesMessage = `points must be up to ${MAX_SITES} "lat,lon" pairs separated by ";"`;
+
+/** GET /aqi/sites?points=28.61,77.21;19.08,72.88 — places anywhere (only those in India get a reading). */
+export const SitesQuerySchema = z.object({
+  points: z
+    .string({ error: sitesMessage })
+    .max(MAX_SITES * 24, sitesMessage)
+    .transform((value, ctx) => {
+      const pairs = value.split(";").filter(Boolean);
+      const points = pairs.map((pair) => pair.split(",").map(Number));
+      const valid =
+        pairs.length > 0 &&
+        pairs.length <= MAX_SITES &&
+        points.every(
+          (p) => p.length === 2 && p.every(Number.isFinite) && Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180
+        );
+      if (!valid) {
+        ctx.addIssue({ code: "custom", message: sitesMessage });
+        return z.NEVER;
+      }
+      return points.map(([lat, lon]) => ({ lat, lon }));
+    }),
+});
+
 /** Google Places session token: groups a search and the chosen result for billing. */
 const placesSession = z.preprocess(
   blankToUndefined,

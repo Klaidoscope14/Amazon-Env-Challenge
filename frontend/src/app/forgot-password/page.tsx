@@ -8,7 +8,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 
 const INPUT =
-  "w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+  "w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-text";
 
 function ForgotPasswordForm() {
   const searchParams = useSearchParams();
@@ -143,7 +143,7 @@ function ForgotPasswordForm() {
                   setStep("request");
                   setError("");
                 }}
-                className="w-full text-sm text-blue-600 hover:text-blue-700 font-medium"
+                className="w-full text-sm text-accent-text hover:opacity-80 font-medium"
               >
                 Use a different email or send a new code
               </button>
@@ -151,7 +151,7 @@ function ForgotPasswordForm() {
           )}
 
           <p className="mt-6 text-sm text-muted text-center">
-            <Link href="/login" className="text-blue-600 hover:text-blue-700 font-medium">
+            <Link href="/login" className="text-accent-text hover:opacity-80 font-medium">
               Back to Sign In
             </Link>
           </p>

@@ -41,7 +41,7 @@ export default function AboutPage() {
       <section className="grid gap-4 sm:grid-cols-2">
         {STEPS.map((step, i) => (
           <div key={step.title} className="rounded-2xl border border-border bg-surface p-5">
-            <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">Step {i + 1}</p>
+            <p className="text-xs font-semibold text-accent-text">Step {i + 1}</p>
             <h2 className="mt-1 font-semibold text-foreground">{step.title}</h2>
             <p className="mt-1 text-sm text-muted-strong">{step.body}</p>
           </div>
@@ -56,7 +56,7 @@ export default function AboutPage() {
           <li>Publish alerts on your area&apos;s notice board, signed with your name.</li>
         </ul>
         <p className="text-sm text-muted">Checking the air and sharing on WhatsApp work without an account.</p>
-        <Link href="/signup" className="inline-block text-sm font-medium text-blue-700 dark:text-blue-300 underline">
+        <Link href="/signup" className="inline-block text-sm font-medium text-accent-text underline">
           Create a free account
         </Link>
       </section>

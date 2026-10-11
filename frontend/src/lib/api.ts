@@ -15,6 +15,7 @@ import {
   Hospital,
 } from "./types";
 import { API_URL } from "./config";
+import type { AirPoint } from "./useAirLayer";
 
 
 /**
@@ -129,6 +130,19 @@ export async function getAreas(): Promise<{ areas: AreaInfo[]; source: "cities" 
 /** Nearest monitoring area. Coordinates should already be rounded (~1 km). */
 export async function getNearestArea(lat: number, lon: number): Promise<{ area: AreaInfo }> {
   return fetchApi(`/api/v1/areas/nearest?${query({ lat, lon })}`);
+}
+
+/** Readings for many places at once, keyed "lat,lon" (2 decimals); null outside India or without data. */
+export async function getAirSites(
+  sites: { lat: number; lon: number }[]
+): Promise<Record<string, AirPoint>> {
+  const points = sites.map((s) => `${s.lat.toFixed(2)},${s.lon.toFixed(2)}`).join(";");
+  const { points: found } = await fetchApi<{ points: Record<string, AirPoint | null> }>(
+    `/api/v1/aqi/sites?${query({ points })}`
+  );
+  const out: Record<string, AirPoint> = {};
+  for (const [key, point] of Object.entries(found)) if (point) out[key] = point;
+  return out;
 }
 
 /** Localities in India matching the text (Google Places). `session` groups one search for billing. */

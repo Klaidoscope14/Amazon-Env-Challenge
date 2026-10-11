@@ -182,6 +182,18 @@ export async function mockApi(page: Page, options: { mfa?: boolean } = {}): Prom
     }
     if (path.endsWith("/rules")) return json(200, RULESET);
     if (path.endsWith("/catalog")) return json(200, CATALOG);
+    if (path.endsWith("/aqi/sites")) {
+      // Every requested place in India gets a reading; the rest have none.
+      const points: Record<string, unknown> = {};
+      for (const pair of (url.searchParams.get("points") ?? "").split(";").filter(Boolean)) {
+        const [lat, lon] = pair.split(",").map(Number);
+        const inIndia = lat > 6 && lat < 37 && lon > 68 && lon < 98;
+        points[pair] = inIndia
+          ? { aqi: 150 + Math.round((lat - 20) * 4), dominant: "pm25", usAqi: 160, usDominant: "pm25", pm25: 70, pm10: 120, o3: 40, no2: 20, time: now() }
+          : null;
+      }
+      return json(200, { points });
+    }
     if (path.endsWith("/places/search")) {
       return json(200, {
         places: [{ placeId: "ChIJ-lajpat-2", name: "Lajpat Nagar II", detail: "Lajpat Nagar, New Delhi, Delhi, India" }],

@@ -439,6 +439,13 @@ Resources:
             RestApiId: !Ref BreatheSafeApi
             Path: /api/v1/areas/nearest
             Method: GET
+        # Readings for many places at once (globe, nearby cities).
+        AqiSites:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/aqi/sites
+            Method: GET
         # Google Places / Geocoding, called server-side with the key in SSM.
         PlaceSearch:
           Type: Api

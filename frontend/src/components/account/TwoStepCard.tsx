@@ -112,7 +112,7 @@ export default function TwoStepCard({ user }: { user: UserProfile }) {
                 <code className="block break-all rounded bg-surface-2 px-2 py-1 font-mono text-xs text-foreground">
                   {setup.secret}
                 </code>
-                <a href={setup.otpauthUri} className="text-blue-600 font-medium">
+                <a href={setup.otpauthUri} className="text-accent-text font-medium">
                   Open in authenticator app (on this device)
                 </a>
               </div>
