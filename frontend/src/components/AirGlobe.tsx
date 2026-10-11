@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getNearestArea } from "@/lib/api";
-import { MAX_ZOOM, MIN_ZOOM, coordsForArea, distanceKm, projector, type View } from "@/lib/geo";
+import { useQuery } from "@tanstack/react-query";
+import { getAreas, getNearestArea } from "@/lib/api";
+import { CITY_COORDS, MAX_ZOOM, MIN_ZOOM, coordsForArea, distanceKm, projector, type View } from "@/lib/geo";
 import { countryAt, loadWorld, nearestCountry, type City, type World } from "@/lib/world";
 import { siteKey, useAirLayer, type AirPoint } from "@/lib/useAirLayer";
 import { useBands } from "@/lib/catalog";
@@ -229,6 +230,15 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
   const [openError, setOpenError] = useState(false);
   const [dragging, setDragging] = useState(false);
   const bands = useBands();
+  // Names/states for the areas the API knows, so a switch needs no extra request.
+  const areasQuery = useQuery({
+    queryKey: ["areas"],
+    queryFn: getAreas,
+    staleTime: 30 * 60 * 1000,
+    refetchInterval: false,
+  });
+  const detailsRef = useRef<HTMLElement>(null);
+  const [revealTick, setRevealTick] = useState(0);
 
   const home = useMemo(() => coordsForArea(selected.id), [selected.id]);
   const startView = useMemo<View>(
@@ -474,6 +484,47 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
     }
   };
 
+  /** An area the API already knows that sits at (or right beside) a point. */
+  const knownAreaNear = (lat: number, lon: number): AreaInfo | null => {
+    let best: { slug: string; km: number } | null = null;
+    for (const [slug, coords] of Object.entries(CITY_COORDS)) {
+      const km = distanceKm([lat, lon], coords);
+      if (km < 30 && (!best || km < best.km)) best = { slug, km };
+    }
+    if (!best) return null;
+    const id = `city-${best.slug}`;
+    const listed = areasQuery.data?.areas.find((a) => a.id === id);
+    if (listed) return listed;
+    const name = best.slug.charAt(0).toUpperCase() + best.slug.slice(1);
+    return { id, kind: "city", name, city: name, state: "" };
+  };
+
+  /**
+   * Clicking a pin. In India this switches the whole dashboard to that city
+   * straight away; elsewhere it shows that city's details (and scrolls them
+   * into view, since the card sits below the globe).
+   */
+  const selectPin = (p: Pin) => {
+    setActiveKey(p.key);
+    setOpenError(false);
+    if (p.kind === "city" && focusA3 === "IND") {
+      const known = knownAreaNear(p.lat, p.lon);
+      if (known) {
+        onChooseArea(known);
+        return;
+      }
+      void openArea(p);
+    }
+    setRevealTick((t) => t + 1);
+  };
+
+  // Bring the details card into view after a pin is chosen.
+  useEffect(() => {
+    if (revealTick === 0) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    detailsRef.current?.scrollIntoView({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
+  }, [revealTick]);
+
   const recenter = () => {
     setView(startView);
     setActiveKey("home");
@@ -534,7 +585,10 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
                   <button
                     key={p.key}
                     type="button"
-                    onClick={() => setActiveKey(p.key)}
+                    onClick={() => {
+                      setActiveKey(p.key);
+                      setRevealTick((t) => t + 1);
+                    }}
                     aria-label={label}
                     aria-pressed={isActive}
                     className="absolute z-20 -translate-x-1/2 -translate-y-1/2"
@@ -558,7 +612,7 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
                 <button
                   key={p.key}
                   type="button"
-                  onClick={() => setActiveKey(p.key)}
+                  onClick={() => selectPin(p)}
                   aria-label={label}
                   aria-pressed={isActive}
                   title={label}
@@ -679,6 +733,7 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
       {/* Details for the selected pin: a normal block so it never hides the map. */}
       {mode === "globe" && active && activeInfo && (
         <aside
+          ref={detailsRef}
           aria-live="polite"
           className="glass mx-auto mt-4 w-full rounded-2xl p-4 text-sm"
           style={{ maxWidth: MAX_SIZE }}
@@ -746,14 +801,14 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
             </p>
           )}
 
-          {active.kind === "city" && activeIsIndia && (
+          {active.kind === "city" && activeIsIndia && (opening || openError) && (
             <button
               type="button"
               onClick={() => openArea(active)}
               disabled={opening}
               className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-accent px-3 text-sm font-semibold text-accent-fg transition-opacity hover:opacity-90 disabled:opacity-60"
             >
-              {opening ? "Opening…" : `Open dashboard for ${active.name}`}
+              {opening ? "Opening…" : `Try again: open dashboard for ${active.name}`}
             </button>
           )}
           {active.kind === "city" && !activeIsIndia && (
