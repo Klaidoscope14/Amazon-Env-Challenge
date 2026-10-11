@@ -6,15 +6,17 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ApiError, getAQI, getRecommendation, getTrends } from "@/lib/api";
 import { EMAIL_DELIVERY } from "@/lib/constants";
 import { useSearchParam } from "@/lib/useSearchParam";
-import { areaSubtitle } from "@/lib/area";
+import { areaSubtitle, useArea } from "@/lib/area";
 import { useCatalog } from "@/lib/catalog";
 import type { Alert, AreaInfo } from "@/lib/types";
 import AreaGate from "@/components/AreaGate";
 import AreaPicker from "@/components/AreaPicker";
+import AirGlobe from "@/components/AirGlobe";
 import AqiStatsCard from "@/components/AqiStatsCard";
 import ActionCard from "@/components/ActionCard";
 import PollutantTiles from "@/components/PollutantTiles";
 import TrendHistogram from "@/components/TrendHistogram";
+import OtherCities from "@/components/OtherCities";
 import PlansCard from "@/components/PlansCard";
 import AlertForm from "@/components/AlertForm";
 import DecisionRecorder from "@/components/DecisionRecorder";
@@ -39,6 +41,7 @@ export default function DashboardPage() {
 }
 
 function Dashboard({ area }: { area: AreaInfo }) {
+  const { chooseArea } = useArea();
   const [showAlertForm, setShowAlertForm] = useState(false);
   const [sentAlert, setSentAlert] = useState<Alert | null>(null);
   const [changing, setChanging] = useState(false);
@@ -151,7 +154,8 @@ function Dashboard({ area }: { area: AreaInfo }) {
                     ? "You opened this page in presenter mode. "
                     : "The service is currently serving sample data. "}
                   The figures for your area are a labelled sample, not a live reading, so you can preview how the
-                  advice and colours change from clean to hazardous air.
+                  advice and colours change from clean to hazardous air. Your area&apos;s marker on the globe shows the same
+                  sample; every other city, and the nearby-cities list, still shows real, independent readings.
                   {presenterParam && (
                     <>
                       {" "}
@@ -210,15 +214,13 @@ function Dashboard({ area }: { area: AreaInfo }) {
           )}
         </div>
 
-        {/* Right: how the air has moved. */}
-        <div className="space-y-5 lg:col-span-7">
-          {trendQuery.isError && (
-            <ErrorPanel title="Failed to load the AQI trend" onRetry={() => trendQuery.refetch()} />
-          )}
-          {trendQuery.data && (
-            <TrendHistogram trends={trendQuery.data} selectedHours={trendHours} onHoursChange={setTrendHours} />
-          )}
-          {trendQuery.isPending && <PanelSkeleton tall />}
+        {/* Right: the globe. */}
+        <div className="lg:sticky lg:top-24 lg:col-span-7 lg:self-start">
+          <AirGlobe
+            selected={area}
+            reading={reading ? { aqi: reading.aqi, status: reading.status, sample: isDemo } : null}
+            onChooseArea={chooseArea}
+          />
         </div>
       </div>
 
@@ -231,6 +233,19 @@ function Dashboard({ area }: { area: AreaInfo }) {
           <PollutantTiles pollutants={reading.pollutants} dominantPollutant={reading.dominantPollutant} />
         </section>
       )}
+
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          {trendQuery.isError && (
+            <ErrorPanel title="Failed to load the AQI trend" onRetry={() => trendQuery.refetch()} />
+          )}
+          {trendQuery.data && (
+            <TrendHistogram trends={trendQuery.data} selectedHours={trendHours} onHoursChange={setTrendHours} />
+          )}
+          {trendQuery.isPending && <PanelSkeleton tall />}
+        </div>
+        <OtherCities selected={area} onChooseArea={chooseArea} />
+      </div>
 
       {reading && <PlansCard areaId={area.id} scenario={activeScenario} />}
 
