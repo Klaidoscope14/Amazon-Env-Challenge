@@ -1,4 +1,4 @@
-# BreatheSafe — frontend
+# VayuSaathi — frontend
 
 Next.js (App Router) + TypeScript + Tailwind CSS + TanStack Query.
 

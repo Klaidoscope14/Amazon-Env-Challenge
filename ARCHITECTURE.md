@@ -1,4 +1,4 @@
-# BreatheSafe — Architecture (as built)
+# VayuSaathi — Architecture (as built)
 
 Serverless on AWS, defined entirely in [infrastructure/template.yaml](infrastructure/template.yaml)
 (AWS SAM). Region `ap-south-1`. Two stacks from the same template: `breathesafe-campus` (prod) and
@@ -163,7 +163,7 @@ with a rule, without changing producers.
   alerts / notices / explain ≥ 3/5 min.
 - X-Ray on API Gateway and all functions; 14-day log retention; structured JSON log events
   (`backend/shared/src/observability.ts`).
-- Business metrics via CloudWatch Embedded Metric Format, namespace `BreatheSafe`, dimension `Stage`:
+- Business metrics via CloudWatch Embedded Metric Format, namespace `BreatheSafe` (the app's earlier name, kept so existing metrics continue), dimension `Stage`:
   `AlertsCreated`, `DecisionsRecorded`, `ExplanationsAI`, `ExplanationsFallback`, `ReadingsUnavailable`
   (5 names × 2 stages = the 10 free custom metrics).
 - Caching (30 min Google reading per area — also reused from DynamoDB across containers — 60 min

@@ -8,7 +8,8 @@ import { formatPollutant } from "@/lib/constants";
 import StatusBadge from "./StatusBadge";
 import DataBadge from "./DataBadge";
 import Card from "./ui/Card";
-import Button, { buttonClasses } from "./ui/Button";
+import Button from "./ui/Button";
+import QuickShare from "./QuickShare";
 import ExplainPanel from "./ExplainPanel";
 
 interface RecommendationCardProps {
@@ -137,23 +138,24 @@ export default function RecommendationCard({
         </div>
       )}
 
-      <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
-        <p className="text-xs text-muted max-w-md">
-          {recommendation.disclaimer}
-        </p>
-        {recommendation.statusLevel >= 3 &&
-          (isAuthenticated ? (
-            <Button variant="danger" onClick={onIssueAlert} className="shrink-0 ml-4">
-              Share an alert
-            </Button>
-          ) : (
-            <Link
-              href="/login?redirect=/"
-              className={buttonClasses({ variant: "secondary", className: "shrink-0 ml-4" })}
-            >
-              Sign in to share an alert
-            </Link>
-          ))}
+      <div className="mt-4 pt-4 border-t border-border space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <QuickShare areaId={areaId} scenario={scenario} />
+          {recommendation.statusLevel >= 3 &&
+            (isAuthenticated ? (
+              <Button variant="secondary" onClick={onIssueAlert} className="min-h-11">
+                Publish a public alert
+              </Button>
+            ) : (
+              <Link
+                href="/login?redirect=/"
+                className="text-sm text-muted-strong underline underline-offset-2 sm:ml-2"
+              >
+                Sign in to publish a public alert for your area
+              </Link>
+            ))}
+        </div>
+        <p className="text-xs text-muted">{recommendation.disclaimer}</p>
       </div>
     </Card>
   );

@@ -245,10 +245,10 @@ async function mfaSetup(event: APIGatewayProxyEvent): Promise<APIGatewayProxyRes
     cognito.send(new GetUserCommand({ AccessToken: token })),
   ]);
   const email = user.UserAttributes?.find((a) => a.Name === "email")?.Value ?? "account";
-  const label = encodeURIComponent(`BreatheSafe:${email}`);
+  const label = encodeURIComponent(`VayuSaathi:${email}`);
   return respond(200, {
     secret: SecretCode,
-    otpauthUri: `otpauth://totp/${label}?secret=${SecretCode}&issuer=BreatheSafe`,
+    otpauthUri: `otpauth://totp/${label}?secret=${SecretCode}&issuer=VayuSaathi`,
   });
 }
 

@@ -43,7 +43,7 @@ export class ForbiddenError extends Error {
 /**
  * Requires the server-assigned "admin" role claim. Users can't set
  * custom:role themselves; the auth service grants it to every verified
- * account, so in practice this means "a verified BreatheSafe account" — and
+ * account, so in practice this means "a verified VayuSaathi account" — and
  * access can be narrowed later by promoting accounts manually instead.
  */
 export function requireRole(event: APIGatewayProxyEvent): void {

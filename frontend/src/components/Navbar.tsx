@@ -21,9 +21,9 @@ export default function Navbar() {
     <header className="bg-surface border-b border-border sticky top-0 z-40">
       <div className="max-w-5xl mx-auto px-4 sm:px-6">
         <div className="flex items-center justify-between h-16">
-          <Link href="/" className="flex items-center gap-2" aria-label="BreatheSafe — home">
+          <Link href="/" className="flex items-center gap-2" aria-label="VayuSaathi — home">
             <span className="text-xl" aria-hidden="true">&#127788;&#65039;</span>
-            <span className="font-bold text-foreground">BreatheSafe</span>
+            <span className="font-bold text-foreground">VayuSaathi</span>
           </Link>
 
           <nav className="hidden sm:flex items-center gap-1">

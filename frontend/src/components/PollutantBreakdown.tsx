@@ -109,7 +109,9 @@ export default function PollutantBreakdown({
         ))}
       </ul>
       <p className="mt-4 text-xs text-muted">
-        Bars are relative to the CPCB safe limit (dashed line). Colour shows severity.
+        Bars show this hour&apos;s level against the CPCB limit (dashed line), which applies to a
+        24-hour average (8-hour for O₃ and CO). One hour above the line is an early warning, not
+        the day&apos;s verdict: the AQI above is calculated from the proper averages.
       </p>
     </div>
   );

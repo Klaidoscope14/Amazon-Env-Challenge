@@ -1,4 +1,4 @@
-# BreatheSafe — Submission writeup
+# VayuSaathi — Submission writeup
 
 **Track:** Air · **Team:** Waterpark Enthusiasts — Chaitanya Saagar, Parul Garg, Nakshatra Kanchan, Divyansh Gupta
 **Repo:** _add public GitHub URL_ · **Demo video:** _add YouTube link_
@@ -13,7 +13,7 @@ decision that is understood, shared and remembered.
 
 ## What we built
 
-BreatheSafe is an air-quality **decision workflow for anyone in India** — **See → Act → Record**:
+VayuSaathi is an air-quality **decision workflow for anyone in India** — **See → Act → Record**:
 
 - **See** — the AQI where you are, anywhere in India (browser location rounded to ~1 km, never
   stored), on India's National AQI (CPCB scale), with a deterministic recommendation, the evidence behind it,

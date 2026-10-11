@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: BreatheSafe - air-quality decisions for anyone in India
+Description: VayuSaathi - air-quality decisions for anyone in India
 
 Globals:
   Function:
@@ -119,7 +119,7 @@ Resources:
       EmailConfiguration: !If
         - UseSesEmail
         - EmailSendingAccount: DEVELOPER
-          From: !Sub BreatheSafe <${SesFromEmail}>
+          From: !Sub VayuSaathi <${SesFromEmail}>
           SourceArn: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${SesFromEmail}
         - !Ref AWS::NoValue
       Policies:
@@ -181,7 +181,7 @@ Resources:
         AllowMethods: "'GET,POST,PATCH,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization,Idempotency-Key'"
         AllowOrigin: "'*'"
-      Description: BreatheSafe REST API
+      Description: VayuSaathi REST API
       # Caps abuse and cost on the public API.
       MethodSettings:
         - ResourcePath: '/*'
@@ -299,7 +299,7 @@ Resources:
     Type: AWS::Events::Archive
     Properties:
       ArchiveName: !Sub breathesafe-${Stage}-events
-      Description: All BreatheSafe domain events
+      Description: All VayuSaathi domain events
       SourceArn: !GetAtt EventBus.Arn
       RetentionDays: 30
       EventPattern:
@@ -335,7 +335,7 @@ Resources:
     DependsOn: EventLogPolicy
     Properties:
       Name: !Sub breathesafe-${Stage}-event-log
-      Description: Writes every BreatheSafe event to CloudWatch Logs
+      Description: Writes every VayuSaathi event to CloudWatch Logs
       EventBusName: !Ref EventBus
       EventPattern:
         source:
@@ -351,7 +351,7 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: !Sub breathesafe-alerts-${Stage}
-      DisplayName: BreatheSafe
+      DisplayName: VayuSaathi
 
   # AWS emails a confirmation link to this address; delivery starts once it
   # is confirmed. Until then alerts are recorded as "email not configured".
@@ -621,6 +621,13 @@ Resources:
             Method: GET
             Auth:
               Authorizer: CognitoAuth
+        # Public: reviewed template only (no AI, no sender), for WhatsApp sharing without an account.
+        GetTemplate:
+          Type: Api
+          Properties:
+            RestApiId: !Ref BreatheSafeApi
+            Path: /api/v1/notices/template
+            Method: GET
         GetAudio:
           Type: Api
           Properties:
@@ -984,7 +991,7 @@ Resources:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
-        Comment: !Sub BreatheSafe website and API (${Stage})
+        Comment: !Sub VayuSaathi website and API (${Stage})
         Enabled: true
         HttpVersion: http2and3
         IPV6Enabled: true
@@ -1081,7 +1088,7 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       TopicName: !Sub breathesafe-ops-${Stage}
-      DisplayName: BreatheSafe Ops
+      DisplayName: VayuSaathi Ops
 
   OpsEmailSubscription:
     Type: AWS::SNS::Subscription

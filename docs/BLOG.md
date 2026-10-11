@@ -1,6 +1,6 @@
 # Draft — AWS Builder Center blog
 
-**Title:** From an AQI number to a decision you can share: building BreatheSafe on AWS serverless
+**Title:** From an AQI number to a decision you can share: building VayuSaathi on AWS serverless
 
 **By team Waterpark Enthusiasts** — Chaitanya Saagar, Parul Garg, Nakshatra Kanchan, Divyansh Gupta
 
@@ -14,7 +14,7 @@ Every October, people across north India wake up to "Poor" or "Severe" air. Any 
 number — but then what? Is the evening walk a bad idea? Should the kids play outside? How do you warn
 your parents, who prefer Hindi, or your society's WhatsApp group? And next week, what did you decide?
 
-We built **BreatheSafe** around that gap: **See → Act → Record**.
+We built **VayuSaathi** around that gap: **See → Act → Record**.
 
 ## What it does
 
@@ -45,7 +45,7 @@ _Insert the architecture diagram from the README._
 1. **Our first data source went down mid-hackathon.** CPCB's public feed on data.gov.in started
    refusing connections — from our laptops, from AWS Mumbai, from everywhere. Because the data layer
    was built around "areas" with a single source-selection step, we could swap the source without
-   touching the rest of the app: BreatheSafe now uses the Google Air Quality API, which reports
+   touching the rest of the app: VayuSaathi now uses the Google Air Quality API, which reports
    India's National AQI (the CPCB scale) for any location, with hourly history for trends. To keep
    costs down, each area is looked up at most every 30 minutes and recent readings are reused.
 2. **Honest data beats impressive data.** "Unavailable" is a first-class state: if no source responds,

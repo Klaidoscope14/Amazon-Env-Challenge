@@ -1,6 +1,6 @@
 import type { Page, Request } from "@playwright/test";
 
-/** A fake BreatheSafe API served from inside the browser (host api.test). */
+/** A fake VayuSaathi API served from inside the browser (host api.test). */
 
 /** An unsigned JWT-shaped token (the app only decodes, never verifies, tokens). */
 function fakeJwt(claims: Record<string, unknown>): string {
@@ -130,10 +130,17 @@ export async function mockApi(page: Page, options: { mfa?: boolean } = {}): Prom
         ? json(200, { email: "asha@example.com", name: "Asha Verma", mfaEnabled: !!options.mfa })
         : json(401, { error: "Unauthorized" });
     }
+    if (path.endsWith("/notices/template")) {
+      return json(200, {
+        en: "Dear family,\n\nThe Air Quality Index (AQI) for Delhi is 268 (Poor). Please avoid prolonged outdoor activity today.\n\n— VayuSaathi",
+        hi: "प्रिय परिवारजनों,\n\nDelhi में वायु गुणवत्ता सूचकांक (AQI) 268 (खराब) है।\n\n— वायुसाथी",
+        source: "template", status: "Poor", aqi: 268,
+      });
+    }
     if (path.endsWith("/notices/draft")) {
       return json(200, {
-        en: "Dear family,\n\nThe Air Quality Index (AQI) for Delhi is 268 (Poor). Please avoid prolonged outdoor activity today.\n\n— Asha Verma (via BreatheSafe)",
-        hi: "प्रिय परिवारजनों,\n\nDelhi में वायु गुणवत्ता सूचकांक (AQI) 268 (खराब) है।\n\n— Asha Verma (BreatheSafe द्वारा)",
+        en: "Dear family,\n\nThe Air Quality Index (AQI) for Delhi is 268 (Poor). Please avoid prolonged outdoor activity today.\n\n— Asha Verma (via VayuSaathi)",
+        hi: "प्रिय परिवारजनों,\n\nDelhi में वायु गुणवत्ता सूचकांक (AQI) 268 (खराब) है।\n\n— Asha Verma (वायुसाथी द्वारा)",
         source: "template", status: "Poor", aqi: 268,
       });
     }

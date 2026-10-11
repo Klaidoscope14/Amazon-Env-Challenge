@@ -17,13 +17,13 @@ describe("notice templates", () => {
     const n = buildTemplateNotice(rec, { areaName: "Delhi area", areaKind: "geo", senderName: "Asha Verma" }, "family")!;
     expect(n.en).toContain("The Air Quality Index (AQI) for the Delhi area is 268 (Poor) as of 19:00 IST");
     expect(n.en).toMatch(/^Dear family,\n\n/);
-    expect(n.en).toMatch(/— Asha Verma \(via BreatheSafe\)$/);
+    expect(n.en).toMatch(/— Asha Verma \(via VayuSaathi\)$/);
     expect(n.hi).toMatch(/^प्रिय परिवारजनों,/);
     expect(n.hi).toContain("Delhi क्षेत्र में वायु गुणवत्ता");
     expect(n.en).not.toMatch(/monitoring station/);
   });
-  it("signs off as BreatheSafe when there is no sender name", () => {
-    expect(buildTemplateNotice(rec, { areaName: "Pune", areaKind: "city" }, "all")!.en).toMatch(/— BreatheSafe$/);
+  it("signs off as VayuSaathi when there is no sender name", () => {
+    expect(buildTemplateNotice(rec, { areaName: "Pune", areaKind: "city" }, "all")!.en).toMatch(/— VayuSaathi$/);
   });
   it("has wording for every audience and no institutional language", () => {
     for (const audience of AUDIENCES) {

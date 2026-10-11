@@ -195,6 +195,18 @@ export async function getNoticeDraft(params: {
   return fetchAuthed<NoticeDraft>(`/api/v1/notices/draft?${query(params)}`);
 }
 
+/**
+ * The reviewed bilingual notice for an area, with no account needed: no
+ * sender name and no AI polish. Used to forward the advice on WhatsApp.
+ */
+export async function getNoticeTemplate(params: {
+  campus: string;
+  audience: Audience;
+  scenario?: string;
+}): Promise<NoticeDraft> {
+  return fetchApi<NoticeDraft>(`/api/v1/notices/template?${query(params)}`);
+}
+
 /** Spoken version (Amazon Polly) of an issued alert, as a playable data URL. */
 export async function getNoticeAudio(
   alert: Pick<Alert, "alertId" | "createdAt" | "campus">,

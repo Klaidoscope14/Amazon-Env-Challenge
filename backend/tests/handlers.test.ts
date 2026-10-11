@@ -285,7 +285,25 @@ describe("notice drafts and auth", () => {
     const draft = json(res);
     expect(res.statusCode).toBe(200);
     expect(draft.en).toMatch(/^Dear family,/);
-    expect(draft.en).toMatch(/— Asha \(via BreatheSafe\)$/);
+    expect(draft.en).toMatch(/— Asha \(via VayuSaathi\)$/);
+  });
+
+  it("serves the reviewed template without sign-in, unsigned", async () => {
+    const res = await notices(
+      request("GET", "/api/v1/notices/template", { query: { campus: "city-delhi", scenario: "poor", audience: "family" } })
+    );
+    const draft = json(res);
+    expect(res.statusCode).toBe(200);
+    expect(draft.source).toBe("template");
+    expect(draft.en).toMatch(/— VayuSaathi$/);
+    expect(draft.hi).toMatch(/— वायुसाथी$/);
+  });
+
+  it("still requires sign-in for the personalised draft", async () => {
+    const res = await notices(
+      request("GET", "/api/v1/notices/draft", { query: { campus: "city-delhi", scenario: "poor", audience: "family" } })
+    );
+    expect(res.statusCode).toBe(401);
   });
 
   it("validates sign-up input before calling Cognito", async () => {
@@ -443,7 +461,7 @@ describe("two-step verification setup", () => {
       return {};
     }) as never);
     const setup = await auth(bearer(request("POST", "/api/v1/auth/mfa/setup", { body: {} })));
-    expect(json(setup)).toEqual({ secret: "ABCDEF", otpauthUri: "otpauth://totp/BreatheSafe%3Aa%40b.co?secret=ABCDEF&issuer=BreatheSafe" });
+    expect(json(setup)).toEqual({ secret: "ABCDEF", otpauthUri: "otpauth://totp/VayuSaathi%3Aa%40b.co?secret=ABCDEF&issuer=VayuSaathi" });
     const enable = await auth(bearer(request("POST", "/api/v1/auth/mfa/enable", { body: { code: "123456" } })));
     expect(json(enable)).toMatchObject({ mfaEnabled: true });
     expect(sent()).toContain("SetUserMFAPreferenceCommand");

@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "BreatheSafe — Air quality you can act on",
-    template: "%s — BreatheSafe",
+    default: "VayuSaathi — Air quality you can act on",
+    template: "%s — VayuSaathi",
   },
   description:
     "The AQI where you are, what to do about it, and an easy way to warn your family and neighbours — in English and Hindi.",

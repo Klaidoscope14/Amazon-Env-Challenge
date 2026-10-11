@@ -1,13 +1,13 @@
-# BreatheSafe
+# VayuSaathi
 
-**Air quality you can act on — for anyone in India.**
+**Air quality you can act on — for anyone in India.** *Vayu* (वायु) is air, *saathi* (साथी) a companion.
 
 Built for the **WeMakeDevs × AWS Environmental Hacks** (Air track) by team **Waterpark Enthusiasts**:
 Chaitanya Saagar, Parul Garg, Nakshatra Kanchan and Divyansh Gupta.
 
 Every October–November, air across north India turns Poor or Severe. Anyone can look up an AQI
 number, but the number doesn't tell you *what to do*, help you *warn the people you care about*,
-or *remember* what you decided. BreatheSafe closes that gap with one workflow:
+or *remember* what you decided. VayuSaathi closes that gap with one workflow:
 
 > **See → Act → Record**
 >

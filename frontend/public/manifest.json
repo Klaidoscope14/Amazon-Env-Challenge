@@ -1,6 +1,6 @@
 {
-  "name": "BreatheSafe",
-  "short_name": "BreatheSafe",
+  "name": "VayuSaathi",
+  "short_name": "VayuSaathi",
   "description": "Air quality you can act on: the AQI where you are, what to do, and alerts for your family and neighbours",
   "start_url": "/",
   "display": "standalone",

@@ -149,8 +149,8 @@ export function buildTemplateNotice(
   const greeting = GREETINGS[audience];
   const action = ACTIONS[band];
   const sender = place.senderName?.trim();
-  const signOffEn = sender ? `${sender} (via BreatheSafe)` : "BreatheSafe";
-  const signOffHi = sender ? `${sender} (BreatheSafe द्वारा)` : "BreatheSafe";
+  const signOffEn = sender ? `${sender} (via VayuSaathi)` : "VayuSaathi";
+  const signOffHi = sender ? `${sender} (वायुसाथी द्वारा)` : "वायुसाथी";
 
   const where = describePlace(place);
 

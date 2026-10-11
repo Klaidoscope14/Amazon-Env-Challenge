@@ -67,7 +67,7 @@ export function buildAlertEmail(alert: Alert, noticeUrl: string): { subject: str
 
   return {
     subject: toSubject(
-      `${isDemo ? "[DEMO] " : ""}BreatheSafe: ${status} air quality - ${place}`
+      `${isDemo ? "[DEMO] " : ""}VayuSaathi: ${status} air quality - ${place}`
     ),
     message: lines.join("\n"),
   };

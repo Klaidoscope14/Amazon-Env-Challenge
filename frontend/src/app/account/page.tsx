@@ -122,7 +122,7 @@ export default function AccountPage() {
               {/* eslint-disable-next-line @next/next/no-img-element -- generated data URL */}
               <img
                 src={setup.qr}
-                alt="QR code for adding BreatheSafe to an authenticator app"
+                alt="QR code for adding VayuSaathi to an authenticator app"
                 width={200}
                 height={200}
                 className="rounded-lg border border-border bg-white"

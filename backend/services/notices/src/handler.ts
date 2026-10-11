@@ -42,7 +42,12 @@ export async function handler(
 ): Promise<APIGatewayProxyResult> {
   try {
     if (event.httpMethod === "GET" && event.path.endsWith("/notices/draft")) {
-      return await handleDraft(event);
+      return await handleDraft(event, signedInName(event));
+    }
+    // Public: the reviewed template only (no sender name, no AI), so anyone can
+    // forward the current advice on WhatsApp without an account.
+    if (event.httpMethod === "GET" && event.path.endsWith("/notices/template")) {
+      return await handleDraft(event, undefined, { allowAi: false });
     }
     if (event.httpMethod === "GET" && event.path.endsWith("/notices/audio")) {
       return await handleAudio(event);
@@ -56,8 +61,11 @@ export async function handler(
   }
 }
 
-async function handleDraft(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
-  const senderName = signedInName(event);
+async function handleDraft(
+  event: APIGatewayProxyEvent,
+  senderName: string | undefined,
+  { allowAi = true }: { allowAi?: boolean } = {}
+): Promise<APIGatewayProxyResult> {
   const query = parse(NoticeDraftQuerySchema, event.queryStringParameters ?? {});
   const { campus: areaId, audience, scenario } = query;
 
@@ -84,7 +92,7 @@ async function handleDraft(event: APIGatewayProxyEvent): Promise<APIGatewayProxy
     return respond(503, { error: "No valid AQI reading available to draft a notice" });
   }
 
-  const polished = AI_ENABLED
+  const polished = AI_ENABLED && allowAi
     ? await polishNotice(
         template,
         { aqi: recommendation.evidence.aqi, audience, areaName: describePlace(place).keep },

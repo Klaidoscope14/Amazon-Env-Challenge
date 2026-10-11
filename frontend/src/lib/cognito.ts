@@ -11,7 +11,7 @@ import { COGNITO_CLIENT_ID, COGNITO_USER_POOL_ID } from "./config";
 /*
  * Sign-in with Cognito's Secure Remote Password (SRP) protocol, straight from
  * the browser: the password is used to compute a proof locally and is never
- * sent to Cognito or to BreatheSafe's API. Accounts with two-step
+ * sent to Cognito or to VayuSaathi's API. Accounts with two-step
  * verification answer a TOTP challenge afterwards.
  */
 

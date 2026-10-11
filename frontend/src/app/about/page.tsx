@@ -3,7 +3,7 @@ import RulesTable from "@/components/RulesTable";
 
 export const metadata: Metadata = {
   title: "How it works",
-  description: "How BreatheSafe turns air-quality data into decisions you can act on: rules, AI guardrails, data sources, limitations and privacy.",
+  description: "How VayuSaathi turns air-quality data into decisions you can act on: rules, AI guardrails, data sources, limitations and privacy.",
 };
 
 const AWS_SERVICES: { name: string; role: string }[] = [
@@ -24,7 +24,7 @@ export default function AboutPage() {
   return (
     <div className="space-y-8 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">How BreatheSafe works</h1>
+        <h1 className="text-2xl font-bold text-foreground">How VayuSaathi works</h1>
         <p className="text-sm text-muted mt-1">
           See → Act → Record: from the air-quality reading where you are, to what you and the people
           around you do about it, with a record of it.
@@ -148,7 +148,7 @@ export default function AboutPage() {
       </section>
 
       <p className="text-xs text-muted text-center pb-4">
-        BreatheSafe — built by team Waterpark Enthusiasts for the WeMakeDevs × AWS Environmental Hacks
+        VayuSaathi — built by team Waterpark Enthusiasts for the WeMakeDevs × AWS Environmental Hacks
         (Air track).
       </p>
     </div>

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { mockApi } from "./mock-api";
 
-test("see the AQI, check a plan, sign in, share an alert and record a decision", async ({ page }) => {
+test("see the AQI, check a plan, share on WhatsApp, sign in, publish an alert and record a decision", async ({ page }) => {
   const api = await mockApi(page);
 
   // See: the dashboard shows the area's reading and recommendation.
@@ -15,8 +15,16 @@ test("see the AQI, check a plan, sign in, share an alert and record a decision",
   await expect(page.getByText("Work out indoors or reschedule.")).toBeVisible();
   await expect(page.getByText("Avoid", { exact: true })).toBeVisible();
 
+  // Without an account: one tap forwards the Hindi + English advice to WhatsApp.
+  const whatsApp = page.getByRole("link", { name: "Send to family on WhatsApp" });
+  await expect(whatsApp).toHaveAttribute("href", /^https:\/\/wa\.me\/\?text=/);
+  const shared = decodeURIComponent((await whatsApp.getAttribute("href"))!.split("text=")[1]);
+  expect(shared).toMatch(/^प्रिय परिवारजनों/);
+  expect(shared).toContain("Dear family");
+  expect(shared).toContain("/notice?area=city-delhi");
+
   // Sign in from the recommendation card and come back to the dashboard.
-  await page.getByRole("link", { name: "Sign in to share an alert" }).click();
+  await page.getByRole("link", { name: "Sign in to publish a public alert for your area" }).click();
   await page.getByLabel("Email").fill("asha@example.com");
   await page.getByLabel("Password", { exact: true }).fill("secret123");
   await page.getByRole("button", { name: "Sign In" }).click();
@@ -25,11 +33,11 @@ test("see the AQI, check a plan, sign in, share an alert and record a decision",
   expect(api.srpProofReceived).toBe(true);
   expect(api.srpPasswordSent).toBe(false);
 
-  // Act: share a bilingual alert with the family.
-  await page.getByRole("button", { name: "Share an alert" }).click();
+  // Act: publish a bilingual alert for the family.
+  await page.getByRole("button", { name: "Publish a public alert" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByLabel("Message (English)")).toHaveValue(/Dear family/);
-  await dialog.getByRole("button", { name: "Share alert" }).click();
+  await dialog.getByRole("button", { name: "Publish alert" }).click();
   await expect(page.getByText("In-app notice published")).toBeVisible();
 
   expect(api.createdAlert?.body).toMatchObject({ campus: "city-delhi", audience: "family" });

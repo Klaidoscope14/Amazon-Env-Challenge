@@ -155,9 +155,9 @@ function Dashboard({ area }: { area: AreaInfo }) {
             {hasPollutants && (
               <Card className="p-6 lg:col-span-2">
                 <div className="flex items-center justify-between gap-3 mb-4">
-                  <h2 className="text-sm font-medium text-muted">Pollutant levels</h2>
+                  <h2 className="text-sm font-medium text-muted">Pollutants this hour</h2>
                   <span className="text-xs text-muted">
-                    vs CPCB safe limits
+                    vs CPCB limits
                   </span>
                 </div>
                 <PollutantBreakdown

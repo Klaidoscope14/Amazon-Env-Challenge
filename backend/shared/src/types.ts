@@ -99,7 +99,7 @@ export interface Ruleset {
 
 export type Audience = "all" | "family" | "neighbours" | "group";
 
-/** Audiences from before BreatheSafe opened to everyone; still on older alerts. */
+/** Audiences from before VayuSaathi opened to everyone; still on older alerts. */
 export type LegacyAudience = "students" | "staff" | "parents";
 
 /** Where an alert actually went. Absent on alerts created before delivery tracking. */

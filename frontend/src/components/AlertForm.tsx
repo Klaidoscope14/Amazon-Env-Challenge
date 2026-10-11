@@ -169,7 +169,7 @@ export default function AlertForm({
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 id={`${id}-title`} className="text-lg font-semibold text-foreground">
-              Share an air-quality alert
+              Publish a public alert
             </h2>
             <p className="text-xs text-muted">Area: {area.name}</p>
           </div>
@@ -279,13 +279,13 @@ export default function AlertForm({
         {confirming && (
           <p role="alert" className="mt-4 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
             This notice will be shown to <strong>everyone</strong> who opens the public notice page
-            for {area.name}. Press &ldquo;Confirm &amp; share&rdquo; to continue.
+            for {area.name}. Press &ldquo;Confirm &amp; publish&rdquo; to continue.
           </p>
         )}
 
         {mutation.isError && (
           <p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-300">
-            Failed to share the alert: {(mutation.error as Error).message}
+            Failed to publish the alert: {(mutation.error as Error).message}
           </p>
         )}
 
@@ -294,7 +294,7 @@ export default function AlertForm({
             Cancel
           </Button>
           <Button variant="danger" onClick={handleSend} disabled={!canSend}>
-            {mutation.isPending ? "Sharing..." : confirming ? "Confirm & share" : "Share alert"}
+            {mutation.isPending ? "Publishing…" : confirming ? "Confirm & publish" : "Publish alert"}
           </Button>
         </div>
       </div>
