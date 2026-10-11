@@ -4,6 +4,9 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "breathesafe",
   "compatibility_date": "2025-09-01",
+  // Serve on <name>.<subdomain>.workers.dev; no per-version preview URLs.
+  "workers_dev": true,
+  "preview_urls": false,
   "assets": {
     "directory": "./out",
     // /about -> about.html, and unknown paths get out/404.html with a 404 status.
