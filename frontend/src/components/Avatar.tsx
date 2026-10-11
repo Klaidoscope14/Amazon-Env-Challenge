@@ -16,7 +16,7 @@ export default function Avatar({ name, src, size = 32 }: { name: string; src?: s
     <span
       aria-hidden="true"
       style={{ ...style, fontSize: Math.max(11, size * 0.38) }}
-      className="shrink-0 inline-flex items-center justify-center rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200 font-semibold"
+      className="shrink-0 inline-flex items-center justify-center rounded-full bg-accent text-accent-fg font-semibold"
     >
       {initials}
     </span>

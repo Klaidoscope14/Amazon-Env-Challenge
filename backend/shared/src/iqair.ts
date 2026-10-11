@@ -2,6 +2,9 @@ import { GetParameterCommand, ParameterNotFound, SSMClient } from "@aws-sdk/clie
 import { z } from "zod";
 import { AQIReading } from "./types.js";
 import { errorFields, log } from "./observability.js";
+import { CN, IN, interpolate, Scale, US } from "./aqi-scales.js";
+
+type Pollutant = "pm25" | "pm10" | "o3";
 
 /*
  * Fallback source: IQAir (AirVisual) "nearest_city", used when Google's
@@ -22,48 +25,6 @@ const TIMEOUT_MS = 6000;
 const CACHE_MS = 30 * 60 * 1000;
 const CACHE_LIMIT = 200;
 export const IQAIR_SOURCE = "IQAir (estimated Indian AQI)";
-
-// ---- Breakpoints (concentration in µg/m³ <-> index), joined end to end ------
-
-interface Scale {
-  conc: number[];
-  index: number[];
-}
-
-type Pollutant = "pm25" | "pm10" | "o3";
-
-// Ozone ppb -> µg/m³ at 25 °C and 1 atm (48.00 g/mol / 24.45 L/mol).
-const O3_UG_PER_PPB = 48.0 / 24.45;
-
-// US EPA (PM2.5 as revised in 2024; ozone on its 8-hour scale, which ends at 300).
-const US: Partial<Record<Pollutant, Scale>> = {
-  pm25: { conc: [0, 9, 35.4, 55.4, 125.4, 225.4, 325.4], index: [0, 50, 100, 150, 200, 300, 500] },
-  pm10: { conc: [0, 54, 154, 254, 354, 424, 604], index: [0, 50, 100, 150, 200, 300, 500] },
-  o3: { conc: [0, 54, 70, 85, 105, 200].map((ppb) => ppb * O3_UG_PER_PPB), index: [0, 50, 100, 150, 200, 300] },
-};
-
-// China HJ 633-2012 (24-hour). Its ozone index is 1-hour, which would
-// overstate India's 8-hour ozone, so ozone is taken from the US index only.
-const CN: Partial<Record<Pollutant, Scale>> = {
-  pm25: { conc: [0, 35, 75, 115, 150, 250, 350, 500], index: [0, 50, 100, 150, 200, 300, 400, 500] },
-  pm10: { conc: [0, 50, 150, 250, 350, 420, 500, 600], index: [0, 50, 100, 150, 200, 300, 400, 500] },
-};
-
-// India CPCB National AQI (ozone: 8-hour).
-const IN: Record<Pollutant, Scale> = {
-  pm25: { conc: [0, 30, 60, 90, 120, 250, 380], index: [0, 50, 100, 200, 300, 400, 500] },
-  pm10: { conc: [0, 50, 100, 250, 350, 430, 510], index: [0, 50, 100, 200, 300, 400, 500] },
-  o3: { conc: [0, 50, 100, 168, 208, 748, 1000], index: [0, 50, 100, 200, 300, 400, 500] },
-};
-
-/** Piecewise-linear lookup of y for x along (xs, ys); clamped to the last point. */
-function interpolate(x: number, xs: number[], ys: number[]): number {
-  if (x <= xs[0]) return ys[0];
-  for (let i = 1; i < xs.length; i++) {
-    if (x <= xs[i]) return ys[i - 1] + ((x - xs[i - 1]) / (xs[i] - xs[i - 1])) * (ys[i] - ys[i - 1]);
-  }
-  return ys[ys.length - 1];
-}
 
 const MAIN_POLLUTANT: Record<string, Pollutant> = { p2: "pm25", p1: "pm10", o3: "o3" };
 
@@ -91,8 +52,9 @@ export function estimateIndianAqi(p: {
   let best: { aqi: number; dominantPollutant: Pollutant } | null = null;
   for (const pollutant of ["pm25", "pm10", "o3"] as const) {
     const c = concentration[pollutant];
-    if (c === undefined) continue;
-    const aqi = Math.round(interpolate(c, IN[pollutant].conc, IN[pollutant].index));
+    const scale = IN[pollutant];
+    if (c === undefined || !scale) continue;
+    const aqi = Math.round(interpolate(c, scale.conc, scale.index));
     if (!best || aqi > best.aqi) best = { aqi, dominantPollutant: pollutant };
   }
   return best;

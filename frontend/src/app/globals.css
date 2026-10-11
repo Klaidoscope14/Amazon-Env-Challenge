@@ -5,38 +5,139 @@
  * inline script in layout.tsx (resolving "system" to the OS preference). That
  * keeps the token variables below and Tailwind's `dark:` utilities in sync in
  * every mode — including a manual dark choice on a light OS, and vice versa.
+ *
+ * Palette: warm ink and paper. The interface itself is neutral; colour is kept
+ * for the data (AQI bands), with a single clay accent for links and focus.
  */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* Light theme (default). */
+/* ── Light theme (default): paper & ink ────────────────────────────────── */
 :root {
   color-scheme: light;
-  --canvas: #f9fafb; /* gray-50  — page background */
-  --surface: #ffffff; /* card background */
-  --surface-2: #f9fafb; /* inset / muted panel */
-  --border: #e5e7eb; /* gray-200 */
-  --border-strong: #d1d5db; /* gray-300 */
-  --foreground: #111827; /* gray-900 */
-  --muted: #6b7280; /* gray-500 */
-  --muted-strong: #374151; /* gray-700 */
+  --canvas: #f6f1e8;
+  --surface: #fffdf8;
+  --surface-2: #f0e9dc;
+  --border: #e3dac8;
+  --border-strong: #cfc3ac;
+  --foreground: #1b1620;
+  --muted: #6c6070;
+  --muted-strong: #3a3240;
+
+  /* Controls: filled ink buttons, clay for links / focus. */
+  --accent: #1b1620;
+  --accent-fg: #fffdf8;
+  --accent-text: #a8431f;
+
+  /* Frosted "glass" panels used by the dashboard. */
+  --glass: rgba(255, 252, 246, 0.74);
+  --glass-border: rgba(70, 45, 20, 0.12);
+  --glass-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset, 0 18px 40px -24px rgba(70, 40, 10, 0.35);
+
+  /* Page atmosphere. */
+  --atmos-1: rgba(255, 160, 100, 0.2);
+  --atmos-2: rgba(226, 112, 150, 0.14);
+  --grid-dot: rgba(70, 45, 20, 0.07);
+
+  /* Globe. */
+  --globe-ocean-a: #fbf4e6;
+  --globe-ocean-b: #e6d7be;
+  --globe-land: #d2c0a4;
+  --globe-land-home: #b98f68;
+  --globe-border: rgba(255, 252, 246, 0.85);
+  --globe-line: rgba(90, 60, 30, 0.14);
+  --globe-rim: rgba(168, 67, 31, 0.35);
+
+  /* AQI bands: fills, and deeper variants for text on light surfaces. */
+  --band-good: #16a34a;
+  --band-satisfactory: #65a30d;
+  --band-moderate: #ca8a04;
+  --band-poor: #ea580c;
+  --band-very-poor: #dc2626;
+  --band-severe: #7f1d1d;
+  --band-purple: #8e3a9e;
+  --band-unavailable: #8a7f8e;
+  --band-good-text: #15803d;
+  --band-satisfactory-text: #4d7c0f;
+  --band-moderate-text: #a16207;
+  --band-poor-text: #c2410c;
+  --band-very-poor-text: #b91c1c;
+  --band-severe-text: #7f1d1d;
+  --band-purple-text: #7e2f8d;
+  --band-unavailable-text: #5a505e;
+  /* Text drawn on top of a band fill. */
+  --band-good-ink: #1b1620;
+  --band-satisfactory-ink: #1b1620;
+  --band-moderate-ink: #1b1620;
+  --band-poor-ink: #1b1620;
+  --band-very-poor-ink: #ffffff;
+  --band-severe-ink: #ffffff;
+  --band-purple-ink: #ffffff;
+  --band-unavailable-ink: #ffffff;
 }
 
-/* Dark theme. */
+/* ── Dark theme: ink & ivory ───────────────────────────────────────────── */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --canvas: #0b1120; /* slate-950-ish */
-  --surface: #111827; /* gray-900 */
-  --surface-2: #1f2937; /* gray-800 */
-  --border: #1f2937; /* gray-800 */
-  --border-strong: #374151; /* gray-700 */
-  --foreground: #f3f4f6; /* gray-100 */
-  --muted: #9ca3af; /* gray-400 */
-  --muted-strong: #d1d5db; /* gray-300 */
+  --canvas: #0e0b10;
+  --surface: #17131b;
+  --surface-2: #211c27;
+  --border: #2d2735;
+  --border-strong: #403848;
+  --foreground: #f5eee5;
+  --muted: #a89eb0;
+  --muted-strong: #d9cfdc;
+
+  --accent: #f5eee5;
+  --accent-fg: #0e0b10;
+  --accent-text: #ffb38f;
+
+  --glass: rgba(34, 28, 40, 0.62);
+  --glass-border: rgba(255, 235, 220, 0.12);
+  --glass-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset, 0 24px 48px -28px rgba(0, 0, 0, 0.85);
+
+  --atmos-1: rgba(255, 140, 90, 0.15);
+  --atmos-2: rgba(200, 90, 160, 0.12);
+  --grid-dot: rgba(255, 235, 220, 0.05);
+
+  --globe-ocean-a: #31283a;
+  --globe-ocean-b: #0b080e;
+  --globe-land: #433a4b;
+  --globe-land-home: #6b5262;
+  --globe-border: rgba(14, 11, 16, 0.9);
+  --globe-line: rgba(255, 235, 220, 0.07);
+  --globe-rim: rgba(255, 179, 143, 0.5);
+
+  /* Brighter fills so bands read against the night canvas. */
+  --band-good: #2ee59d;
+  --band-satisfactory: #b6f23a;
+  --band-moderate: #ffd23f;
+  --band-poor: #ff8a3d;
+  --band-very-poor: #ff4d5e;
+  --band-severe: #d6336c;
+  --band-purple: #c58bd6;
+  --band-unavailable: #a89eb0;
+  --band-good-text: #5eead4;
+  --band-satisfactory-text: #c8f76a;
+  --band-moderate-text: #ffe083;
+  --band-poor-text: #ffab70;
+  --band-very-poor-text: #ff8a96;
+  --band-severe-text: #ff7fa8;
+  --band-purple-text: #deb0ec;
+  --band-unavailable-text: #c9bfd0;
+  --band-good-ink: #0e0b10;
+  --band-satisfactory-ink: #0e0b10;
+  --band-moderate-ink: #0e0b10;
+  --band-poor-ink: #0e0b10;
+  --band-very-poor-ink: #0e0b10;
+  --band-severe-ink: #ffffff;
+  --band-purple-ink: #0e0b10;
+  --band-unavailable-ink: #0e0b10;
 }
 
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-sora), var(--font-geist-sans), system-ui, sans-serif;
 
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
@@ -46,12 +147,52 @@
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-muted-strong: var(--muted-strong);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-text: var(--accent-text);
+  --color-glass: var(--glass);
+  --color-glass-border: var(--glass-border);
 }
 
 body {
   background-color: var(--canvas);
   color: var(--foreground);
+  overflow-x: clip;
 }
+
+/* Fixed atmosphere: two soft glows plus a faint dot grid, behind everything. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 560px at 8% -6%, var(--atmos-1), transparent 62%),
+    radial-gradient(820px 600px at 108% 12%, var(--atmos-2), transparent 58%),
+    radial-gradient(var(--grid-dot) 1px, transparent 1.2px) 0 0 / 28px 28px;
+}
+
+/* A frosted panel: translucent fill, hairline border, soft depth. */
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  backdrop-filter: blur(16px) saturate(140%);
+}
+
+/* Break a section out of the narrow page column to a wider dashboard column. */
+.bleed {
+  width: min(80rem, 100vw - 2rem);
+  margin-inline: calc((100% - min(80rem, 100vw - 2rem)) / 2);
+}
+
+@keyframes pin-pulse {
+  0% { transform: scale(0.8); opacity: 0.65; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+.pin-pulse { animation: pin-pulse 2.2s ease-out infinite; }
 
 /*
  * Visible keyboard focus for every interactive element. Inputs that opt into
@@ -59,7 +200,7 @@ body {
  * buttons that previously relied on the browser default outline only.
  */
 :focus-visible {
-  outline: 2px solid var(--color-blue-600);
+  outline: 2px solid var(--accent-text);
   outline-offset: 2px;
   border-radius: 0.25rem;
 }

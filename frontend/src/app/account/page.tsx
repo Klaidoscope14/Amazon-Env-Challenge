@@ -17,7 +17,7 @@ export default function AccountPage() {
     return (
       <Card className="p-8 max-w-md mx-auto text-center">
         <p className="text-foreground font-medium">Sign in to manage your account.</p>
-        <Link href="/login?redirect=/account" className="mt-3 inline-block text-blue-600 font-medium">
+        <Link href="/login?redirect=/account" className="mt-3 inline-block text-accent-text font-medium">
           Sign in
         </Link>
       </Card>

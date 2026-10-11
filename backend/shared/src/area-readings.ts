@@ -64,11 +64,19 @@ const CACHED_FALLBACK_MS = 3 * 60 * 60 * 1000;
  * in the last 30 minutes is reused, which keeps API calls (and cost) low
  * across Lambda containers. New readings are stored once per source timestamp.
  */
+export interface AreaReadingOptions {
+  /** Reuse a stored reading up to this old instead of calling an API (default 30 minutes). */
+  reuseStoredMs?: number;
+  /** Try IQAir when Google has no reading (default true; off for bulk lookups, given its rate limit). */
+  iqAirFallback?: boolean;
+}
+
 export async function getAreaReading(
   dynamodb: DynamoDBClient,
   ctx: DataContext,
   areaId: string,
-  scenario?: string
+  scenario?: string,
+  { reuseStoredMs = REUSE_STORED_MS, iqAirFallback = true }: AreaReadingOptions = {}
 ): Promise<AreaReading> {
   const area = resolveArea(areaId);
 
@@ -82,7 +90,7 @@ export async function getAreaReading(
     last &&
     (last.source === GOOGLE_SOURCE || last.source === IQAIR_SOURCE) &&
     last.dataMode === "live" &&
-    Date.now() - new Date(last.fetchedAt).getTime() < REUSE_STORED_MS
+    Date.now() - new Date(last.fetchedAt).getTime() < reuseStoredMs
   ) {
     return { area, reading: last };
   }
@@ -90,7 +98,7 @@ export async function getAreaReading(
   const coords = areaCoordinates(area);
   const place = coords ? { ...coords, name: area.name } : null;
   const reading = place
-    ? (await getGoogleReading(area.id, place)) ?? (await getIqAirReading(area.id, place))
+    ? (await getGoogleReading(area.id, place)) ?? (iqAirFallback ? await getIqAirReading(area.id, place) : null)
     : null;
   if (reading) {
     if (await persistReading(dynamodb, ctx.aqiTable, reading)) {

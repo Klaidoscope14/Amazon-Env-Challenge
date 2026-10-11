@@ -30,9 +30,9 @@ export default function ExplainPanel({ areaId, scenario }: { areaId: string; sce
     return (
       <button
         onClick={() => setLang("en")}
-        className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-indigo-700 dark:text-indigo-300 hover:text-indigo-900 dark:hover:text-indigo-100"
+        className="mt-4 inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-accent-text underline-offset-2 hover:underline"
       >
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
           <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h8M8 14h5m-9 6l3-3h10a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12z" />
         </svg>
         Explain in plain language
@@ -43,12 +43,9 @@ export default function ExplainPanel({ areaId, scenario }: { areaId: string; sce
   const result = query.data;
 
   return (
-    <section
-      aria-label="Plain-language explanation"
-      className="mt-3 rounded-lg border border-indigo-100 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950/40 px-4 py-3"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <span className="text-xs font-medium text-indigo-800 dark:text-indigo-300">
+    <section aria-label="Plain-language explanation" className="mt-4 rounded-xl border border-border bg-surface-2/70 px-4 py-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs font-medium text-muted-strong">
           In plain language
         </span>
         <div role="group" aria-label="Explanation language" className="flex gap-1">
@@ -57,10 +54,10 @@ export default function ExplainPanel({ areaId, scenario }: { areaId: string; sce
               key={option.value}
               onClick={() => setLang(option.value)}
               aria-pressed={lang === option.value}
-              className={`text-xs px-2 py-0.5 rounded border ${
+              className={`min-h-8 rounded-md border px-2.5 text-xs ${
                 lang === option.value
-                  ? "bg-indigo-600 border-indigo-600 text-white"
-                  : "bg-surface border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200 hover:bg-indigo-100 dark:hover:bg-indigo-900"
+                  ? "border-accent bg-accent font-semibold text-accent-fg"
+                  : "border-border-strong bg-surface text-muted-strong hover:bg-surface-2"
               }`}
             >
               {option.label}
@@ -70,17 +67,17 @@ export default function ExplainPanel({ areaId, scenario }: { areaId: string; sce
       </div>
 
       <div aria-live="polite">
-        {query.isPending && <p className="text-sm text-indigo-900 dark:text-indigo-200">Preparing an explanation…</p>}
+        {query.isPending && <p className="text-sm text-foreground">Preparing an explanation…</p>}
         {query.isError && (
-          <p className="text-sm text-red-700 dark:text-red-400">
+          <p className="text-sm text-red-700 dark:text-red-300">
             Couldn&apos;t load an explanation.{" "}
-            <button onClick={() => query.refetch()} className="underline font-medium">
+            <button onClick={() => query.refetch()} className="font-medium underline">
               Try again
             </button>
           </p>
         )}
         {result && (
-          <p className="text-sm text-indigo-950 dark:text-indigo-100" lang={result.lang}>
+          <p className="text-sm text-foreground" lang={result.lang}>
             {result.explanation}
           </p>
         )}

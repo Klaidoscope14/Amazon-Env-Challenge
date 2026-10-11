@@ -32,7 +32,7 @@ function AlertDetails({ alert }: { alert: Alert }) {
   if (!alert.messageHi && !snap) return null;
   return (
     <details className="mt-3 group">
-      <summary className="cursor-pointer text-sm font-medium text-blue-700 hover:text-blue-900 dark:text-blue-200">
+      <summary className="cursor-pointer text-sm font-medium text-accent-text hover:text-foreground">
         {alert.messageHi ? "Hindi version & details" : "Details"}
       </summary>
       <div className="mt-2 space-y-3 rounded-lg bg-surface-2 border border-border p-4 text-sm text-foreground">
@@ -75,7 +75,7 @@ function AlertsLog({ area }: { area: AreaInfo }) {
         actions={
           <Link
             href={`/notice?area=${encodeURIComponent(area.id)}`}
-            className="text-sm font-medium text-blue-700 underline"
+            className="text-sm font-medium text-accent-text underline"
           >
             View public notice
           </Link>

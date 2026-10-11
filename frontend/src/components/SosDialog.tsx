@@ -171,7 +171,7 @@ export default function SosDialog({ onClose }: { onClose: () => void }) {
                         href={h.mapsUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex min-h-11 items-center rounded-lg bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700"
+                        className="inline-flex min-h-11 items-center rounded-lg bg-accent px-3 text-sm font-medium text-accent-fg hover:opacity-90"
                       >
                         Directions
                       </a>
@@ -191,7 +191,7 @@ export default function SosDialog({ onClose }: { onClose: () => void }) {
 
           {!user && (
             <p className="mt-2 text-sm text-muted-strong">
-              <Link href="/login?redirect=/account" onClick={onClose} className="font-medium text-blue-700 dark:text-blue-300 underline">
+              <Link href="/login?redirect=/account" onClick={onClose} className="font-medium text-accent-text underline">
                 Sign in
               </Link>{" "}
               to save emergency contacts, so you can reach them from here in one tap.
@@ -201,7 +201,7 @@ export default function SosDialog({ onClose }: { onClose: () => void }) {
           {user && contacts.length === 0 && (
             <p className="mt-2 text-sm text-muted-strong">
               You haven&apos;t added any yet.{" "}
-              <Link href="/account#contacts" onClick={onClose} className="font-medium text-blue-700 dark:text-blue-300 underline">
+              <Link href="/account#contacts" onClick={onClose} className="font-medium text-accent-text underline">
                 Add emergency contacts
               </Link>
             </p>
@@ -253,7 +253,7 @@ export default function SosDialog({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               onClick={() => void navigator.share({ text: message }).catch(() => {})}
-              className="mt-3 inline-flex min-h-11 items-center text-sm font-medium text-blue-700 dark:text-blue-300 underline"
+              className="mt-3 inline-flex min-h-11 items-center text-sm font-medium text-accent-text underline"
             >
               Send another way
             </button>
