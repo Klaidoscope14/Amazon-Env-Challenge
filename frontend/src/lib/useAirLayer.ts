@@ -6,8 +6,8 @@ import { getAirSites } from "./api";
 /*
  * Current air quality for many places at once (the globe and "cities near
  * you"), from the VayuSaathi API: the same reading the dashboard shows for
- * each place's area, on India's AQI.
- * Places outside India have no reading.
+ * each place's area, on India's AQI. Places outside India have no Indian
+ * index, so the API estimates one from their PM2.5 / PM10 (`estimated`).
  */
 
 export type Pollutant = "pm25" | "pm10" | "no2" | "so2" | "co" | "o3";
@@ -18,7 +18,7 @@ export interface AirSite {
 }
 
 export interface AirPoint {
-  /** India's AQI for the place; null outside India or without a reading. */
+  /** India's AQI for the place; null without a reading. */
   aqi: number | null;
   dominant: Pollutant | null;
   /** Latest concentrations (µg/m³). */
@@ -28,6 +28,8 @@ export interface AirPoint {
   no2: number | null;
   /** When the reading was taken (ISO). */
   time: string | null;
+  /** True when `aqi` is estimated from particulates (places outside India), not an official Indian index. */
+  estimated?: boolean;
 }
 
 export function siteKey(lat: number, lon: number): string {
