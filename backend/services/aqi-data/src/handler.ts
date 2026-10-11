@@ -21,6 +21,7 @@ import {
 } from "../../../shared/src/area-readings.js";
 import { errorFields, log, metric } from "../../../shared/src/observability.js";
 import { nearbyHospitals, placeNameAt, resolvePlace, searchPlaces } from "../../../shared/src/google-places.js";
+import { getGoogleEstimate } from "../../../shared/src/google-aq.js";
 
 const dynamodb = new DynamoDBClient({});
 const ctx = dataContextFromEnv();
@@ -80,11 +81,15 @@ async function handleNearest(event: APIGatewayProxyEvent): Promise<APIGatewayPro
 
 /** Globe and nearby cities can reuse a stored reading this old, to bound Google calls per city. */
 const SITE_REUSE_MS = 2 * 60 * 60 * 1000;
+/** Most places outside India estimated per request (each is one Google call, cached 30 min). */
+const MAX_ESTIMATED_SITES = 25;
 
 /**
  * Current readings for many places at once (the globe and "cities near you"),
  * keyed "lat,lon" with 2 decimals. Places in India get the same reading as the
- * dashboard for their area; anywhere else, or without data, gets null.
+ * dashboard for their area. Anywhere else, Google has no Indian index, so the
+ * place gets an *estimated* Indian AQI from its PM2.5 / PM10 concentrations
+ * (`estimated: true`); with no data at all it gets null.
  */
 async function handleSites(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {
   const { points } = parse(SitesQuerySchema, event.queryStringParameters ?? {});
@@ -106,15 +111,9 @@ async function handleSites(event: APIGatewayProxyEvent): Promise<APIGatewayProxy
     )
   );
 
-  const result: Record<string, object | null> = {};
-  for (const [k, area] of areaOf) {
-    const reading = area ? readings.get(area.id) : null;
-    if (!reading || reading.dataMode === "demo") {
-      result[k] = null;
-      continue;
-    }
+  const pointOf = (reading: AQIReading, estimated: boolean) => {
     const p = reading.pollutants ?? {};
-    result[k] = {
+    return {
       aqi: reading.aqi,
       dominant: reading.dominantPollutant,
       pm25: p.pm25 ?? null,
@@ -122,7 +121,28 @@ async function handleSites(event: APIGatewayProxyEvent): Promise<APIGatewayProxy
       o3: p.o3 ?? null,
       no2: p.no2 ?? null,
       time: reading.timestamp,
+      ...(estimated ? { estimated: true } : {}),
     };
+  };
+
+  const result: Record<string, object | null> = {};
+  for (const [k, area] of areaOf) {
+    const reading = area ? readings.get(area.id) : null;
+    result[k] = reading && reading.dataMode !== "demo" ? pointOf(reading, false) : null;
+  }
+
+  // Places with no Indian reading (outside India, or no Indian index there)
+  // get an estimate from Google's particulate concentrations, capped per request.
+  if (live) {
+    const missing = [...new Map(points.filter((p) => result[key(p)] === null).map((p) => [key(p), p])).values()].slice(
+      0,
+      MAX_ESTIMATED_SITES
+    );
+    const estimates = await Promise.all(missing.map((p) => getGoogleEstimate(p).catch(() => null)));
+    missing.forEach((p, i) => {
+      const estimate = estimates[i];
+      if (estimate) result[key(p)] = pointOf(estimate, true);
+    });
   }
   return respond(200, { points: result });
 }

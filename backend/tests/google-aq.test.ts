@@ -1,13 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SSMClient } from "@aws-sdk/client-ssm";
 import {
+  getGoogleEstimate,
   getGoogleReading,
   getGoogleTrend,
   resetGoogleAq,
   toAqiUnits,
+  toEstimate,
   toReading,
   toTrendPoints,
 } from "../shared/src/google-aq.js";
+import { indianAqiFromParticles } from "../shared/src/aqi-scales.js";
 
 const ssmSend = vi.spyOn(SSMClient.prototype, "send");
 const fetchMock = vi.fn();
@@ -74,6 +77,60 @@ describe("response parsing", () => {
       ],
     });
     expect(points.map((p) => p.aqi)).toEqual([175, 182]);
+  });
+});
+
+// A place outside India: Google returns its own index and concentrations,
+// but no Indian index.
+const beijing = {
+  dateTime: "2026-10-11T05:00:00Z",
+  regionCode: "cn",
+  indexes: [{ code: "uaqi", aqi: 40, dominantPollutant: "pm10" }],
+  pollutants: [
+    { code: "pm25", concentration: { value: 55.28, units: "MICROGRAMS_PER_CUBIC_METER" } },
+    { code: "pm10", concentration: { value: 111.16, units: "MICROGRAMS_PER_CUBIC_METER" } },
+    { code: "o3", concentration: { value: 400, units: "PARTS_PER_BILLION" } },
+  ],
+};
+
+describe("estimated Indian AQI (places outside India)", () => {
+  it("takes the worst of PM2.5 and PM10 through CPCB's breakpoints", () => {
+    expect(indianAqiFromParticles({ pm25: 55.28, pm10: 111.16 })).toEqual({ aqi: 107, dominant: "pm10" });
+    expect(indianAqiFromParticles({ pm25: 100 })).toEqual({ aqi: 233, dominant: "pm25" });
+    expect(indianAqiFromParticles({ pm25: 0, pm10: 0 })).toEqual({ aqi: 0, dominant: "pm25" });
+  });
+  it("needs a particulate reading", () => {
+    expect(indianAqiFromParticles({})).toBeNull();
+    expect(indianAqiFromParticles({ pm25: null, pm10: Number.NaN })).toBeNull();
+    expect(indianAqiFromParticles({ pm25: -3 })).toBeNull();
+  });
+  it("builds a labelled estimate and ignores ozone", () => {
+    expect(toEstimate("est:39.90,116.40", beijing)).toMatchObject({
+      aqi: 107,
+      dominantPollutant: "pm10",
+      source: "Google Air Quality (estimated Indian AQI)",
+      timestamp: "2026-10-11T05:00:00.000Z",
+      dataMode: "live",
+    });
+  });
+  it("returns null without particulates, and rejects malformed responses", () => {
+    expect(toEstimate("e", { ...beijing, pollutants: [beijing.pollutants[2]] })).toBeNull();
+    expect(() => toEstimate("e", { indexes: "nope" })).toThrow(/validation/);
+  });
+  it("looks a place up once, asking Google for concentrations", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify(beijing)));
+    const place = { lat: 39.9042, lon: 116.4074 };
+    expect((await getGoogleEstimate(place))?.aqi).toBe(107);
+    await getGoogleEstimate(place);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+      location: { latitude: 39.9042, longitude: 116.4074 },
+      extraComputations: ["POLLUTANT_CONCENTRATION"],
+    });
+  });
+  it("returns null (never throws) on API errors", async () => {
+    fetchMock.mockResolvedValue(new Response("{}", { status: 500 }));
+    expect(await getGoogleEstimate({ lat: 39.9, lon: 116.4 })).toBeNull();
   });
 });
 
