@@ -241,6 +241,15 @@ const avatar = z
   .optional();
 
 export const MAX_EMERGENCY_CONTACTS = 5;
+export const MAX_PLACES = 5;
+
+const placeSchema = z.object({
+  label: requiredText("Place name", 30).pipe(z.string().min(1, "Give each place a name, like Home")),
+  areaId: requiredText("areaId", 90).pipe(z.string().regex(/^[a-z0-9][a-z0-9-]{0,89}$/, "Invalid area")),
+  name: requiredText("name", 80),
+  lat: z.number().min(5).max(38),
+  lon: z.number().min(67).max(99),
+});
 
 export const ProfileBodySchema = z.object({
   name: requiredText("name", 80).pipe(z.string().min(1, "Enter your name")),
@@ -262,6 +271,11 @@ export const ProfileBodySchema = z.object({
     )
     .max(MAX_EMERGENCY_CONTACTS, `You can save up to ${MAX_EMERGENCY_CONTACTS} emergency contacts`)
     .default([]),
+  /** Omitted keeps the saved places as they are. */
+  places: z
+    .array(placeSchema, { error: "places must be a list" })
+    .max(MAX_PLACES, `You can save up to ${MAX_PLACES} places`)
+    .optional(),
 });
 
 export const EvaluatePlansBodySchema = z.object({

@@ -143,14 +143,14 @@ export default function ActionCard({
                 onClick={onIssueAlert}
                 className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent px-4 text-sm font-semibold text-accent-fg transition-opacity hover:opacity-90"
               >
-                Publish a public alert
+                Post an alert for your area
               </button>
             ) : (
               <Link
                 href="/login?redirect=/"
                 className="text-sm font-medium text-accent-text underline underline-offset-2 sm:ml-2"
               >
-                Sign in to publish a public alert for your area
+                Sign in to post an alert for your area
               </Link>
             ))}
         </div>

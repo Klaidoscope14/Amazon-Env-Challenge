@@ -17,8 +17,8 @@ export default function AreaGate({ children }: { children: (area: AreaInfo) => R
     <Card role="status" className="p-6 text-sm text-muted-strong shadow-none">
       <p className="font-medium text-foreground">Finding your area…</p>
       <p className="mt-1 text-muted">
-        Allow location access when your browser asks. Your location is rounded to about 1 km,
-        used only to find your area, and not stored.
+        Allow location when your browser asks. We only use it to find your area, and we don&apos;t
+        keep it.
       </p>
     </Card>
   );

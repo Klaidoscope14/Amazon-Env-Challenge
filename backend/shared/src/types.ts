@@ -219,7 +219,7 @@ export interface Catalog {
   /** One-tap answers to "What did you decide?". */
   decisionOptions: string[];
   /** The same limits the API enforces, so forms can say so up front. */
-  limits: { maxEmergencyContacts: number; maxAlertMessage: number; maxPlans: number };
+  limits: { maxEmergencyContacts: number; maxAlertMessage: number; maxPlans: number; maxPlaces: number };
   /** Where air quality is available. */
   indiaBounds: { minLat: number; maxLat: number; minLon: number; maxLon: number };
 }
@@ -255,6 +255,18 @@ export interface UserProfile {
   /** Small profile photo as a data URL (resized in the browser). */
   avatar?: string;
   emergencyContacts: EmergencyContact[];
+  /** Places the person keeps an eye on (home, work, a parent's home…). */
+  places: SavedPlace[];
+}
+
+export interface SavedPlace {
+  /** The person's own name for it, e.g. "Home" or "Papa's place". */
+  label: string;
+  /** The area it belongs to, with its display name and coordinates. */
+  areaId: string;
+  name: string;
+  lat: number;
+  lon: number;
 }
 
 /** A locality suggestion from GET /places/search. */

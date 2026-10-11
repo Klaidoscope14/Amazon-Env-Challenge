@@ -30,7 +30,7 @@ import {
 } from "../../../shared/src/schemas.js";
 import { header, parseJsonBody, respond } from "../../../shared/src/http.js";
 import { errorFields, log } from "../../../shared/src/observability.js";
-import { EmergencyContact, UserProfile } from "../../../shared/src/types.js";
+import { EmergencyContact, SavedPlace, UserProfile } from "../../../shared/src/types.js";
 
 const cognito = new CognitoIdentityProviderClient({});
 const dynamodb = new DynamoDBClient({});
@@ -178,6 +178,7 @@ interface StoredProfile {
   addressLine2?: string;
   avatar?: string;
   emergencyContacts?: EmergencyContact[];
+  places?: SavedPlace[];
   updatedAt: string;
 }
 
@@ -200,6 +201,7 @@ function toProfile(user: GetUserCommandOutput, stored: StoredProfile | null): Us
     ...(stored?.addressLine2 ? { addressLine2: stored.addressLine2 } : {}),
     ...(stored?.avatar ? { avatar: stored.avatar } : {}),
     emergencyContacts: stored?.emergencyContacts ?? [],
+    places: stored?.places ?? [],
   };
 }
 
@@ -233,8 +235,9 @@ async function updateProfile(event: APIGatewayProxyEvent): Promise<APIGatewayPro
     attributes.name = body.name;
   }
 
-  // avatar: undefined keeps the current photo, null removes it.
-  const previous = body.avatar === undefined ? await loadStoredProfile(attributes.sub) : null;
+  // avatar: undefined keeps the current photo, null removes it; places: undefined keeps them.
+  const previous =
+    body.avatar === undefined || body.places === undefined ? await loadStoredProfile(attributes.sub) : null;
   const stored: StoredProfile = {
     userId: attributes.sub,
     phone: body.phone,
@@ -242,6 +245,7 @@ async function updateProfile(event: APIGatewayProxyEvent): Promise<APIGatewayPro
     addressLine2: body.addressLine2,
     avatar: body.avatar === undefined ? previous?.avatar : body.avatar ?? undefined,
     emergencyContacts: body.emergencyContacts,
+    places: body.places ?? previous?.places ?? [],
     updatedAt: new Date().toISOString(),
   };
   await dynamodb.send(

@@ -90,7 +90,7 @@ export default function OtherCities({ selected, onChooseArea }: OtherCitiesProps
         </ul>
       ) : rows.length === 0 || air.isError ? (
         <p className="mt-3 text-sm text-muted">
-          {air.isError ? "Couldn't load readings for nearby cities right now." : "No other major cities on file nearby."}
+          {air.isError ? "Couldn't load readings for nearby cities right now." : "No big cities close by."}
         </p>
       ) : (
         <ul className="mt-3 space-y-2">

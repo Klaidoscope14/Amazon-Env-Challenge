@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { getAlerts, getNoticeTemplate } from "@/lib/api";
 import { useAudienceLabel } from "@/lib/catalog";
 import { describeAge, useNow } from "@/lib/useNow";
@@ -14,14 +14,11 @@ import StatusBadge from "@/components/StatusBadge";
 import DataBadge from "@/components/DataBadge";
 import NoticeAudioButton from "@/components/NoticeAudioButton";
 import WhatsAppShare from "@/components/WhatsAppShare";
+import PastAlerts, { formatAlertTime } from "@/components/PastAlerts";
+import DecisionRecorder from "@/components/DecisionRecorder";
+import { useAuth } from "@/lib/auth";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-function formatTime(ts: string): string {
-  const date = new Date(ts);
-  if (!Number.isFinite(date.getTime())) return ts;
-  return date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
-}
 
 export default function NoticePage() {
   // Shared links carry ?area=, so recipients see that area's notice without
@@ -36,23 +33,29 @@ export default function NoticePage() {
 function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
   const now = useNow();
   const audienceLabel = useAudienceLabel();
-  const latestQuery = useQuery({
-    queryKey: ["alerts", areaId, "latest"],
-    queryFn: () => getAlerts(areaId, 1),
+  const { isAuthenticated } = useAuth();
+  // One list, newest first: the latest alert is shown in full, the rest below
+  // as "Past alerts", 10 at a time.
+  const latestQuery = useInfiniteQuery({
+    queryKey: ["alerts", areaId],
+    queryFn: ({ pageParam }) => getAlerts(areaId, 10, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
   });
-
-  const alert = latestQuery.data?.alerts[0];
+  const alerts = latestQuery.data?.pages.flatMap((page) => page.alerts) ?? [];
+  const alert = alerts[0];
+  const past = alerts.slice(1);
   const issuedAt = alert ? new Date(alert.createdAt).getTime() : NaN;
   const isOld = Number.isFinite(issuedAt) && now - issuedAt > DAY_MS;
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {area ? (
-        <AreaHeader area={area} title="वायु गुणवत्ता सूचना · Air-quality notice" />
+        <AreaHeader area={area} title="वायु गुणवत्ता सूचना · Air-quality notices" />
       ) : (
         <div>
           <p className="text-sm text-muted">
-            <span lang="hi">वायु गुणवत्ता सूचना</span> · Air-quality notice
+            <span lang="hi">वायु गुणवत्ता सूचना</span> · Air-quality notices
           </p>
           <h1 className="text-2xl font-bold text-foreground">
             {alert?.areaName ?? "Air-quality advisory"}
@@ -63,7 +66,7 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
       <CurrentAir areaId={areaId} />
 
       <h2 className="text-sm font-medium text-muted pt-2">
-        <span lang="hi">आख़िरी साझा सूचना</span> · Latest shared notice
+        <span lang="hi">आख़िरी सूचना</span> · Latest alert
       </h2>
 
       {latestQuery.isPending && (
@@ -76,7 +79,7 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
 
       {latestQuery.isError && (
         <div className="rounded-2xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 p-6 text-red-800 dark:text-red-200">
-          <p className="font-medium">Couldn&apos;t load the latest notice</p>
+          <p className="font-medium">We couldn&apos;t load the alerts</p>
           <button onClick={() => latestQuery.refetch()} className="mt-2 text-sm font-medium underline">
             Retry
           </button>
@@ -86,7 +89,9 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
       {latestQuery.data && !alert && (
         <div className="rounded-2xl border border-border bg-surface p-8 text-center">
           <p className="text-foreground font-medium" lang="hi">इस क्षेत्र के लिए अभी कोई सूचना साझा नहीं की गई है।</p>
-          <p className="text-sm text-muted mt-1">No notice has been shared for this area yet. The current air is shown above.</p>
+          <p className="text-sm text-muted mt-1">
+            Nobody has posted an alert for this area yet. The air right now is shown above.
+          </p>
         </div>
       )}
 
@@ -110,7 +115,7 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
                   </span>
                 </p>
                 <p className="text-muted">
-                  {formatTime(alert.createdAt)} ({describeAge(alert.createdAt, now).label})
+                  {formatAlertTime(alert.createdAt)} ({describeAge(alert.createdAt, now).label})
                 </p>
               </div>
             </div>
@@ -148,7 +153,19 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
             <NoticeAudioButton alert={alert} lang="en" label="Listen (English)" />
             <WhatsAppShare alert={alert} />
           </div>
+
+          {/* The person who posted (or anyone signed in) can note what they did. */}
+          {isAuthenticated && !alert.decision && <DecisionRecorder alert={alert} />}
         </article>
+      )}
+
+      {past.length > 0 && (
+        <PastAlerts
+          alerts={past}
+          hasMore={!!latestQuery.hasNextPage}
+          loadingMore={latestQuery.isFetchingNextPage}
+          onLoadMore={() => void latestQuery.fetchNextPage()}
+        />
       )}
 
       <p className="text-xs text-muted">

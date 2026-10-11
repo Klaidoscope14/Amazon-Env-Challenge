@@ -73,7 +73,7 @@ export default function DecisionRecorder({
   if (!isAuthenticated) {
     return (
       <Link
-        href="/login?redirect=/alerts"
+        href="/login?redirect=/notice"
         className="mt-3 inline-block text-sm text-muted hover:opacity-80 underline"
       >
         Sign in to record a decision
@@ -87,7 +87,7 @@ export default function DecisionRecorder({
         onClick={() => setShowForm(true)}
         className="mt-3 text-sm text-accent-text hover:text-foreground font-medium"
       >
-        Record decision
+        Note what you did
       </button>
     );
   }
@@ -97,7 +97,7 @@ export default function DecisionRecorder({
 
   return (
     <div className="mt-3 space-y-2">
-      <p className="text-xs text-muted font-medium">Record what you decided:</p>
+      <p className="text-xs text-muted font-medium">What did you do?</p>
       <div className="flex flex-wrap gap-2">
         {decisionOptions.map((opt) => (
           <Button
@@ -128,7 +128,7 @@ export default function DecisionRecorder({
           value={customDecision}
           onChange={(e) => setCustomDecision(e.target.value)}
           maxLength={500}
-          placeholder="Or type a custom decision..."
+          placeholder="Or write your own…"
           className="flex-1 min-h-11 text-xs border border-border-strong rounded-lg px-3 text-foreground"
         />
         <Button type="submit" size="sm" disabled={mutation.isPending || !customDecision.trim()}>
@@ -139,7 +139,7 @@ export default function DecisionRecorder({
         <p className="text-xs text-red-700 dark:text-red-300" role="alert">
           {conflict
             ? "A decision was already recorded for this alert. Refreshing…"
-            : "Failed to save. Try again."}
+            : "That didn't save. Try again."}
         </p>
       )}
     </div>

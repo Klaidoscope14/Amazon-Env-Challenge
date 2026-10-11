@@ -135,7 +135,7 @@ function LoginForm() {
             Sign In
           </h1>
           <p className="text-sm text-muted text-center mb-6">
-            Sign in to share alerts and record what you decided
+            Welcome back. Your places, emergency contacts and alerts are waiting.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">

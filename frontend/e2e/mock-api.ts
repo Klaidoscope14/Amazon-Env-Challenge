@@ -48,7 +48,7 @@ const CATALOG = {
     co: { limit: 2, averaging: "8-hour" },
   },
   decisionOptions: ["Moved plans indoors", "Skipped outdoor exercise", "Kept windows closed", "No action needed"],
-  limits: { maxEmergencyContacts: 5, maxAlertMessage: 2000, maxPlans: 12 },
+  limits: { maxEmergencyContacts: 5, maxAlertMessage: 2000, maxPlans: 12, maxPlaces: 5 },
   indiaBounds: { minLat: 5, maxLat: 38, minLon: 67, maxLon: 99 },
   emergencyServices: [
     { label: "All emergencies", number: "112" },
@@ -108,6 +108,7 @@ export async function mockApi(page: Page, options: { mfa?: boolean } = {}): Prom
     name: "Asha Verma",
     mfaEnabled: !!options.mfa,
     emergencyContacts: [],
+    places: [],
   };
 
   await page.route("http://api.test/**", async (route) => {
@@ -156,7 +157,7 @@ export async function mockApi(page: Page, options: { mfa?: boolean } = {}): Prom
         // Mirror the server: Indian mobile numbers come back in +91 form.
         const e164 = (p: unknown) => (typeof p === "string" && /^\d{10}$/.test(p.replace(/\s/g, "")) ? `+91${p.replace(/\s/g, "")}` : p);
         const contacts = (body.emergencyContacts as { name: string; phone: string }[]).map((c) => ({ ...c, phone: e164(c.phone) }));
-        profile = { ...profile, ...body, phone: e164(body.phone), emergencyContacts: contacts };
+        profile = { ...profile, ...body, phone: e164(body.phone), emergencyContacts: contacts, places: body.places ?? profile.places };
         if (profile.avatar === null) delete profile.avatar;
       }
       return json(200, profile);

@@ -17,6 +17,7 @@ import PollutantTiles from "@/components/PollutantTiles";
 import TrendHistogram from "@/components/TrendHistogram";
 import OtherCities from "@/components/OtherCities";
 import PlansCard from "@/components/PlansCard";
+import YourPlaces from "@/components/YourPlaces";
 import AlertForm from "@/components/AlertForm";
 import DecisionRecorder from "@/components/DecisionRecorder";
 import WhatsAppShare from "@/components/WhatsAppShare";
@@ -87,12 +88,12 @@ function Dashboard({ area }: { area: AreaInfo }) {
   return (
     <div className="bleed space-y-6 sm:space-y-8">
       <div className="grid items-start gap-6 lg:grid-cols-12 lg:gap-8">
-        {/* Left: headline, key numbers, the decision. */}
+        {/* Left: headline, the decision, plans and your places. */}
         <div className="space-y-5 lg:col-span-5">
           <header>
             <p className="text-sm text-muted">Air quality near you</p>
             <h1 className="mt-1 font-display text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl xl:text-6xl">
-              Air Quality <span className="text-muted">Index</span>
+              How&apos;s the air <span className="text-muted">today?</span>
             </h1>
             <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-strong">
               <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -173,12 +174,12 @@ function Dashboard({ area }: { area: AreaInfo }) {
           )}
 
           {aqiQuery.isError && !aqiUnavailable && (
-            <ErrorPanel title="Failed to load air quality data" onRetry={() => aqiQuery.refetch()} />
+            <ErrorPanel title="We couldn't load the air quality" onRetry={() => aqiQuery.refetch()} />
           )}
 
           {recQuery.isPending && <PanelSkeleton tall />}
           {recQuery.isError && (
-            <ErrorPanel title="Failed to load the recommendation" onRetry={() => recQuery.refetch()} />
+            <ErrorPanel title="We couldn't load today's advice" onRetry={() => recQuery.refetch()} />
           )}
           {recQuery.data && !(aqiUnavailable && recQuery.data.dataQuality === "unavailable") && (
             <ActionCard
@@ -190,6 +191,10 @@ function Dashboard({ area }: { area: AreaInfo }) {
               onIssueAlert={() => setShowAlertForm(true)}
             />
           )}
+
+          {/* Right after the advice: what it means for today, and the places you watch. */}
+          {reading && <PlansCard areaId={area.id} scenario={activeScenario} />}
+          <YourPlaces current={area} onChooseArea={chooseArea} />
         </div>
 
         {/* Right: the globe. */}
@@ -206,7 +211,7 @@ function Dashboard({ area }: { area: AreaInfo }) {
         <section aria-label="Pollutant levels">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="font-display text-xl font-semibold text-foreground">Pollutants this hour</h2>
-            <p className="text-sm text-muted">Against the daily safe limit — the tick marks the limit</p>
+            <p className="text-sm text-muted">The line on each bar marks the daily safe limit</p>
           </div>
           <PollutantTiles pollutants={reading.pollutants} dominantPollutant={reading.dominantPollutant} />
         </section>
@@ -215,7 +220,7 @@ function Dashboard({ area }: { area: AreaInfo }) {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           {trendQuery.isError && (
-            <ErrorPanel title="Failed to load the AQI trend" onRetry={() => trendQuery.refetch()} />
+            <ErrorPanel title="We couldn't load the trend" onRetry={() => trendQuery.refetch()} />
           )}
           {trendQuery.data && (
             <TrendHistogram trends={trendQuery.data} selectedHours={trendHours} onHoursChange={setTrendHours} />
@@ -224,8 +229,6 @@ function Dashboard({ area }: { area: AreaInfo }) {
         </div>
         <OtherCities selected={area} onChooseArea={chooseArea} />
       </div>
-
-      {reading && <PlansCard areaId={area.id} scenario={activeScenario} />}
 
       {showAlertForm && (
         <AlertForm
@@ -277,12 +280,9 @@ function SentAlertPanel({ alert, onDismiss }: { alert: Alert; onDismiss: () => v
           href={`/notice?area=${encodeURIComponent(alert.campus)}`}
           className="glass inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-medium text-foreground"
         >
-          View public notice
+          See it on the notice page
         </Link>
         <WhatsAppShare alert={alert} />
-        <Link href="/alerts" className="text-sm underline">
-          Shared alerts
-        </Link>
       </div>
 
       <div className="glass mt-4 rounded-2xl p-4">

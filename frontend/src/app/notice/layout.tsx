@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Public Notice",
-  description: "The latest air-quality advisory shared for an area, in English and Hindi.",
+  title: "Notices",
+  description: "The air right now and the alerts people have posted for an area, in Hindi and English.",
 };
 
 export default function NoticeLayout({ children }: { children: React.ReactNode }) {

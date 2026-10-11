@@ -338,6 +338,8 @@ async function withAccessToken<T>(path: string, body: unknown = {}, method = "PO
 /** Fields a person can edit on their own profile. `avatar`: omitted keeps it, null removes it. */
 export type ProfileUpdate = Pick<UserProfile, "name" | "phone" | "addressLine1" | "addressLine2" | "emergencyContacts"> & {
   avatar?: string | null;
+  /** Omitted keeps the saved places. */
+  places?: UserProfile["places"];
 };
 
 export async function updateProfile(update: ProfileUpdate): Promise<UserProfile> {

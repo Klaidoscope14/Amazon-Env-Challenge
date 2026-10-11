@@ -31,7 +31,7 @@ describe("evaluatePlan", () => {
 
   it("explains itself without medical advice", () => {
     const v = evaluatePlan({ id: "a", activity: "kids_play", durationMinutes: 90, sensitive: true }, "Poor", 4);
-    expect(v).toMatchObject({ id: "a", verdict: "avoid", suggestion: "Keep children's play indoors today." });
+    expect(v).toMatchObject({ id: "a", verdict: "avoid", suggestion: "Keep the kids' play indoors today." });
     expect(v.reason).toBe("Children playing outside: Poor air, moderate activity, over 60 minutes, includes someone more sensitive.");
   });
 

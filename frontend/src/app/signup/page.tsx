@@ -42,7 +42,7 @@ export default function SignUpPage() {
             Create Account
           </h1>
           <p className="text-sm text-muted text-center mb-6">
-            Sign up to share air-quality alerts with your family, neighbours or group
+            Save the places you care about, add emergency contacts for SOS, and post alerts for your area.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">

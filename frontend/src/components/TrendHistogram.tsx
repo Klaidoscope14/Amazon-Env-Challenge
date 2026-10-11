@@ -87,7 +87,7 @@ export default function TrendHistogram({ trends, selectedHours, onHoursChange }:
               {active === bars.length - 1 ? " (latest)" : grouped ? " (worst hour)" : ""}
             </p>
           ) : (
-            <p className="mt-1 text-sm text-muted">No readings stored for this period yet.</p>
+            <p className="mt-1 text-sm text-muted">Nothing to show for this period yet.</p>
           )}
         </div>
         <div role="group" aria-label="Trend period" className="glass flex rounded-full p-1 text-sm font-medium">
@@ -112,7 +112,7 @@ export default function TrendHistogram({ trends, selectedHours, onHoursChange }:
           <svg aria-hidden="true" viewBox="0 0 24 24" className="h-7 w-7 text-muted" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
             <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
           </svg>
-          <p className="text-sm text-muted">The chart fills in as readings are collected.</p>
+          <p className="text-sm text-muted">The chart fills in hour by hour.</p>
           <p className="text-xs text-muted">Try a longer period, or check back soon.</p>
         </div>
       )}
@@ -192,7 +192,7 @@ export default function TrendHistogram({ trends, selectedHours, onHoursChange }:
       {rows.length > 0 && (
         <p className="mt-4 flex flex-wrap justify-between gap-2 text-xs text-muted">
           <span>
-            {rows.length} readings{grouped ? " · each bar shows the worst hour in its group" : ""}
+            {rows.length} readings{grouped ? " · each bar is the worst hour in that stretch" : ""}
           </span>
           <span>
             Range {Math.min(...rows.map((r) => r.aqi))} – {peak} AQI

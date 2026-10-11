@@ -51,9 +51,10 @@ export default function AboutPage() {
       <section className="rounded-2xl border border-border bg-surface p-6 space-y-3">
         <h2 className="text-lg font-semibold text-foreground">Why make an account?</h2>
         <ul className="text-sm text-muted-strong space-y-2 list-disc list-inside">
+          <li>Save home, work and your parents&apos; place, and see all their air at a glance.</li>
           <li>Save emergency contacts, so SOS can reach them in one tap.</li>
           <li>Keep your profile: name, photo, phone and address.</li>
-          <li>Publish alerts on your area&apos;s notice board, signed with your name.</li>
+          <li>Post alerts on your area&apos;s notice board, signed with your name.</li>
         </ul>
         <p className="text-sm text-muted">Checking the air and sharing on WhatsApp work without an account.</p>
         <Link href="/signup" className="inline-block text-sm font-medium text-accent-text underline">

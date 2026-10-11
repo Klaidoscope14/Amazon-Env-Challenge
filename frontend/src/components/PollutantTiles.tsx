@@ -23,7 +23,8 @@ export default function PollutantTiles({ pollutants, dominantPollutant }: Pollut
   const ordered = [...ORDER.filter((k) => keys.includes(k)), ...keys.filter((k) => !ORDER.includes(k))];
 
   return (
-    <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+    // Tiles share the row evenly, so 6 or 7 pollutants never leave one stranded below.
+    <ul className="grid grid-cols-2 gap-3 sm:grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))]">
       {ordered.map((key) => {
         const value = pollutants[key];
         const { label, unit } = formatPollutant(key);
@@ -58,7 +59,7 @@ export default function PollutantTiles({ pollutants, dominantPollutant }: Pollut
               role="img"
               aria-label={
                 ratio === null
-                  ? `${label}: no safe limit on file`
+                  ? `${label}: no safe limit set`
                   : `${label}: ${Math.round(ratio * 100)}% of the ${limit?.averaging} safe limit`
               }
             >
@@ -70,7 +71,7 @@ export default function PollutantTiles({ pollutants, dominantPollutant }: Pollut
             </div>
 
             <p className="mt-2 text-xs" style={{ color: bandText(status) }}>
-              {ratio === null ? "No limit on file" : `${Math.round(ratio * 100)}% of ${limit?.averaging} limit`}
+              {ratio === null ? "No safe limit set" : `${Math.round(ratio * 100)}% of the safe limit`}
             </p>
           </li>
         );

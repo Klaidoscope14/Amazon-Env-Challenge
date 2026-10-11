@@ -24,7 +24,7 @@ test("see the AQI, check a plan, share on WhatsApp, sign in, publish an alert an
   expect(shared).toContain("/notice?area=city-delhi");
 
   // Sign in from the recommendation card and come back to the dashboard.
-  await page.getByRole("link", { name: "Sign in to publish a public alert for your area" }).click();
+  await page.getByRole("link", { name: "Sign in to post an alert for your area" }).click();
   await page.getByLabel("Email").fill("asha@example.com");
   await page.getByLabel("Password", { exact: true }).fill("secret123");
   await page.getByRole("button", { name: "Sign In" }).click();
@@ -34,10 +34,10 @@ test("see the AQI, check a plan, share on WhatsApp, sign in, publish an alert an
   expect(api.srpPasswordSent).toBe(false);
 
   // Act: publish a bilingual alert for the family.
-  await page.getByRole("button", { name: "Publish a public alert" }).click();
+  await page.getByRole("button", { name: "Post an alert for your area" }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByLabel("Message (English)")).toHaveValue(/Dear family/);
-  await dialog.getByRole("button", { name: "Publish alert" }).click();
+  await dialog.getByRole("button", { name: "Post alert" }).click();
   await expect(page.getByText("Posted on your area's notice page")).toBeVisible();
 
   expect(api.createdAlert?.body).toMatchObject({ campus: "city-delhi", audience: "family" });
@@ -47,4 +47,11 @@ test("see the AQI, check a plan, share on WhatsApp, sign in, publish an alert an
   await page.getByRole("button", { name: "Moved plans indoors" }).click();
   await expect(page.getByText("Decision recorded")).toBeVisible();
   expect(api.decision).toMatchObject({ decision: "Moved plans indoors" });
+
+  // Notices: an old /alerts link lands on the merged page, with the alert as the latest one.
+  await page.goto("/alerts?area=city-delhi");
+  await expect(page).toHaveURL(/\/notice\?area=city-delhi$/);
+  await expect(page.getByText("Latest alert")).toBeVisible();
+  await expect(page.getByText(/Dear family/).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Notices" })).toBeVisible();
 });

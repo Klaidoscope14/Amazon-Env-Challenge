@@ -11,33 +11,45 @@ import FormMessage from "./FormMessage";
 
 const PHOTO_SIZE = 256;
 
-/** Center-crops and scales an image file to a small square JPEG data URL. */
+/** True for iPhone-style HEIC/HEIF photos, which only some browsers (Safari) can open. */
+const isHeic = (file: File) => /hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name);
+
+/**
+ * Opens any image the browser can decode (JPEG, PNG, WebP, GIF, AVIF, BMP,
+ * SVG, and HEIC in Safari), center-crops it and scales it to a small square
+ * JPEG data URL. The photo's own orientation is respected.
+ */
 async function toAvatar(file: File): Promise<string> {
+  if (!file.type.startsWith("image/") && !isHeic(file)) {
+    throw new Error("That file isn't a photo. Pick an image instead.");
+  }
   const url = URL.createObjectURL(file);
   try {
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const img = new Image();
       img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error("That file isn't an image we can read. Try a JPEG or PNG."));
+      img.onerror = () =>
+        reject(
+          new Error(
+            isHeic(file)
+              ? "This browser can't open iPhone (HEIC) photos. Try Safari, or save the photo as a JPEG first."
+              : "We couldn't open that photo. Try a JPEG, PNG, WebP or GIF."
+          )
+        );
       img.src = url;
     });
-    const side = Math.min(image.naturalWidth, image.naturalHeight);
+    // SVGs can have no natural size; treat them as square.
+    const width = image.naturalWidth || PHOTO_SIZE;
+    const height = image.naturalHeight || PHOTO_SIZE;
+    const side = Math.min(width, height);
     const canvas = document.createElement("canvas");
     canvas.width = PHOTO_SIZE;
     canvas.height = PHOTO_SIZE;
-    canvas
-      .getContext("2d")!
-      .drawImage(
-        image,
-        (image.naturalWidth - side) / 2,
-        (image.naturalHeight - side) / 2,
-        side,
-        side,
-        0,
-        0,
-        PHOTO_SIZE,
-        PHOTO_SIZE
-      );
+    const ctx = canvas.getContext("2d")!;
+    // White behind transparent images (PNG, GIF, SVG), since JPEG has no transparency.
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, PHOTO_SIZE, PHOTO_SIZE);
+    ctx.drawImage(image, (width - side) / 2, (height - side) / 2, side, side, 0, 0, PHOTO_SIZE, PHOTO_SIZE);
     return canvas.toDataURL("image/jpeg", 0.85);
   } finally {
     URL.revokeObjectURL(url);
@@ -103,7 +115,7 @@ export default function ProfileForm({ user }: { user: UserProfile }) {
         <div className="flex items-center gap-4">
           <Avatar name={name || user.email} src={shownAvatar} size={72} />
           <div className="flex flex-wrap gap-2">
-            <input ref={fileRef} type="file" accept="image/*" onChange={pickPhoto} className="hidden" id={`${id}-photo`} />
+            <input ref={fileRef} type="file" accept="image/*,.heic,.heif" onChange={pickPhoto} className="hidden" id={`${id}-photo`} />
             <Button type="button" variant="secondary" onClick={() => fileRef.current?.click()}>
               {shownAvatar ? "Change photo" : "Upload photo"}
             </Button>

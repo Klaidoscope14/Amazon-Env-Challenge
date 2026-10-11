@@ -86,6 +86,7 @@ describe("GET/PUT /auth/profile", () => {
       name: "Asha",
       mfaEnabled: false,
       emergencyContacts: [],
+      places: [],
     });
   });
 
@@ -124,6 +125,18 @@ describe("GET/PUT /auth/profile", () => {
     expect(stored).not.toHaveProperty("avatar");
     // Name unchanged: Cognito is not asked to update it.
     expect(cognitoSend.mock.calls.some(([c]) => name(c) === "UpdateUserAttributesCommand")).toBe(false);
+  });
+
+  it("saves places, keeps them when other details change, and validates them", async () => {
+    const home = { label: "Home", areaId: "geo-286-772", name: "Lajpat Nagar", lat: 28.6, lon: 77.2 };
+    const res = await auth(request("PUT", { name: "Asha", places: [home] }));
+    expect(json(res).places).toEqual([home]);
+    // Saving the profile form (no places sent) keeps them.
+    await auth(request("PUT", { name: "Asha", phone: "9876543210" }));
+    expect(stored).toMatchObject({ places: [home] });
+    expect((await auth(request("PUT", { name: "Asha", places: [{ ...home, lat: 51.5 }] }))).statusCode).toBe(400);
+    const six = Array.from({ length: 6 }, (_, i) => ({ ...home, label: `P${i}` }));
+    expect(json(await auth(request("PUT", { name: "Asha", places: six }))).error).toMatch(/up to 5 places/);
   });
 
   it("maps an expired session to 401", async () => {

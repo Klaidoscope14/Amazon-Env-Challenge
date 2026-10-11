@@ -542,7 +542,7 @@ describe("catalog and trend statuses", () => {
     // Reference data and limits the browser would otherwise copy.
     expect(catalog.pollutantLimits.pm25).toEqual({ limit: 60, averaging: "24-hour" });
     expect(catalog.decisionOptions).toContain("Moved plans indoors");
-    expect(catalog.limits).toEqual({ maxEmergencyContacts: 5, maxAlertMessage: 2000, maxPlans: 12 });
+    expect(catalog.limits).toEqual({ maxEmergencyContacts: 5, maxAlertMessage: 2000, maxPlans: 12, maxPlaces: 5 });
     expect(catalog.indiaBounds).toMatchObject({ minLat: 5, maxLon: 99 });
   });
 

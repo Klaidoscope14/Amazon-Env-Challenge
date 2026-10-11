@@ -618,7 +618,7 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
         ) : (
           <ul className="glass mx-auto max-h-[28rem] divide-y divide-glass-border overflow-y-auto rounded-3xl">
             {ranked.length === 0 && (
-              <li className="px-4 py-6 text-sm text-muted">No major cities on file for the country in view.</li>
+              <li className="px-4 py-6 text-sm text-muted">No big cities to show here.</li>
             )}
             {ranked.map(({ city, est }) => {
               const listValue = valueOf(est);
@@ -787,7 +787,7 @@ export default function AirGlobe({ selected, reading, onChooseArea }: AirGlobePr
           )}
           {active.kind === "city" && !activeIsIndia && (
             <p className="mt-3 text-xs text-muted">
-              Detailed guidance, alerts and plans are available for locations in India.
+              Advice, plans and alerts are available for places in India.
             </p>
           )}
           {openError && (

@@ -11,6 +11,7 @@ import {
   EvaluatePlansBodySchema,
   MAX_ALERT_MESSAGE,
   MAX_EMERGENCY_CONTACTS,
+  MAX_PLACES,
   MAX_PLANS,
   parse,
   ValidationError,
@@ -93,7 +94,12 @@ function catalog(ruleset: Ruleset): Catalog {
     emergencyServices: EMERGENCY_SERVICES,
     pollutantLimits: POLLUTANT_LIMITS,
     decisionOptions: DECISION_OPTIONS,
-    limits: { maxEmergencyContacts: MAX_EMERGENCY_CONTACTS, maxAlertMessage: MAX_ALERT_MESSAGE, maxPlans: MAX_PLANS },
+    limits: {
+      maxEmergencyContacts: MAX_EMERGENCY_CONTACTS,
+      maxAlertMessage: MAX_ALERT_MESSAGE,
+      maxPlans: MAX_PLANS,
+      maxPlaces: MAX_PLACES,
+    },
     indiaBounds: INDIA_BOUNDS,
   };
 }

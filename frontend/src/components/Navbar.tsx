@@ -10,8 +10,7 @@ import SosDialog from "./SosDialog";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard" },
-  { href: "/alerts", label: "Shared alerts" },
-  { href: "/notice", label: "Notice board" },
+  { href: "/notice", label: "Notices" },
   { href: "/about", label: "About" },
 ];
 

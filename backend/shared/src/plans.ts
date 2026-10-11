@@ -55,13 +55,13 @@ const LONG_MINUTES = 60;
 
 const SUGGESTIONS: Record<Rated, Record<Activity, string>> = {
   go: {
-    commute: "Go ahead as planned.",
-    walk: "Go ahead as planned.",
+    commute: "All clear, head out as usual.",
+    walk: "Enjoy your walk.",
     outdoor_event: "Go ahead as planned.",
-    kids_play: "Go ahead as planned.",
-    cycle: "Go ahead as planned.",
-    run: "Go ahead as planned.",
-    sports: "Go ahead as planned.",
+    kids_play: "Let them play outside.",
+    cycle: "Enjoy the ride.",
+    run: "A fine day for a run.",
+    sports: "Play on.",
   },
   modify: {
     commute: "Go ahead, but keep time outside short.",
@@ -76,7 +76,7 @@ const SUGGESTIONS: Record<Rated, Record<Activity, string>> = {
     commute: "Travel only if you need to, and keep time outside short.",
     walk: "Skip it today, or walk indoors.",
     outdoor_event: "Move it indoors or postpone it.",
-    kids_play: "Keep children's play indoors today.",
+    kids_play: "Keep the kids' play indoors today.",
     cycle: "Skip the ride today, or exercise indoors.",
     run: "Work out indoors or reschedule.",
     sports: "Move the session indoors or reschedule.",
@@ -91,7 +91,7 @@ export function evaluatePlan(plan: Plan, status: AQIStatus, statusLevel: number)
       id: plan.id,
       verdict: "unknown",
       reason: "No current air-quality reading for this area.",
-      suggestion: "Check official sources before heading out.",
+      suggestion: "We don't have a reading right now, so check again before heading out.",
     };
   }
 

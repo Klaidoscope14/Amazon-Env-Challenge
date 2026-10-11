@@ -14,7 +14,7 @@ export const CPCB_THRESHOLDS: AQIThreshold[] = [
     maxAqi: 50,
     status: "Good",
     statusLevel: 1,
-    action: "No action needed. Enjoy outdoor activities as usual.",
+    action: "The air is clean today. Get outside and enjoy it.",
     color: "#00B050",
   },
   {
@@ -23,7 +23,7 @@ export const CPCB_THRESHOLDS: AQIThreshold[] = [
     status: "Satisfactory",
     statusLevel: 2,
     action:
-      "Air quality is acceptable. People who are unusually sensitive should consider limiting prolonged outdoor exertion.",
+      "The air is fine for most people. If pollution usually bothers you, go easy on long, hard workouts outside.",
     color: "#92D050",
   },
   {
@@ -32,7 +32,7 @@ export const CPCB_THRESHOLDS: AQIThreshold[] = [
     status: "Moderate",
     statusLevel: 3,
     action:
-      "Children, older adults and people with breathing difficulties should limit prolonged outdoor exertion. Consider moving long outdoor plans indoors.",
+      "Kids, older family members and anyone with asthma should take it easy outdoors today. Move long outdoor plans inside if you can.",
     color: "#FFFF00",
   },
   {
@@ -41,7 +41,7 @@ export const CPCB_THRESHOLDS: AQIThreshold[] = [
     status: "Poor",
     statusLevel: 4,
     action:
-      "Avoid prolonged outdoor activity. Keep windows closed at peak hours and let your family and neighbours know.",
+      "Not a good day to spend long outside. Keep windows shut during rush hour, and give your family a heads-up.",
     color: "#FF9900",
   },
   {
@@ -50,7 +50,7 @@ export const CPCB_THRESHOLDS: AQIThreshold[] = [
     status: "Very Poor",
     statusLevel: 5,
     action:
-      "Avoid outdoor activities and stay indoors where possible. Warn your family, especially children, older adults and anyone with breathing conditions.",
+      "Stay indoors as much as you can today. Keep kids, older family members and anyone with asthma inside, and let them know why.",
     color: "#FF0000",
   },
   {
@@ -59,7 +59,7 @@ export const CPCB_THRESHOLDS: AQIThreshold[] = [
     status: "Severe",
     statusLevel: 6,
     action:
-      "Stay indoors and avoid all outdoor exertion. Follow official advisories and check on vulnerable family members and neighbours.",
+      "Stay indoors and skip any outdoor exercise. Follow official advice, and check on older family members and neighbours.",
     color: "#800000",
   },
 ];

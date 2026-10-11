@@ -5,7 +5,6 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { evaluatePlans } from "@/lib/api";
 import { useCatalog } from "@/lib/catalog";
 import type { PlansEvaluation } from "@/lib/types";
-import Card from "./ui/Card";
 import Button from "./ui/Button";
 
 const DURATIONS = [15, 30, 45, 60, 90, 120, 180];
@@ -130,11 +129,11 @@ export default function PlansCard({ areaId, scenario }: { areaId: string; scenar
     activities.find((o) => o.value === value)?.label ?? value;
 
   return (
-    <Card className="p-6">
-      <h2 className="text-lg font-semibold text-foreground">My plans today</h2>
+    <section aria-label="My plans today" className="glass @container rounded-3xl p-5 sm:p-6">
+      <h2 className="font-display text-lg font-semibold text-foreground">My plans today</h2>
       <p className="text-sm text-muted mt-1">
-        Add what you&apos;re planning outdoors and get a Go, Modify or Avoid for each, based on the
-        current reading. Plans are saved only in this browser.
+        Going out later? Add it here and we&apos;ll tell you whether to go ahead, change it, or skip
+        it. Your plans stay on this device.
       </p>
 
       {plans.length > 0 && (
@@ -182,8 +181,8 @@ export default function PlansCard({ areaId, scenario }: { areaId: string; scenar
       )}
 
       {plans.length < maxPlans ? (
-        <form onSubmit={addPlan} className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto_auto_auto] sm:items-end">
-          <div>
+        <form onSubmit={addPlan} className="mt-4 grid grid-cols-2 gap-3 @xl:grid-cols-[1fr_auto_auto_auto] @xl:items-end">
+          <div className="col-span-2 @xl:col-span-1">
             <label htmlFor={`${id}-activity`} className="block text-xs font-medium text-muted-strong mb-1">
               Activity
             </label>
@@ -202,7 +201,7 @@ export default function PlansCard({ areaId, scenario }: { areaId: string; scenar
           </div>
           <div>
             <label htmlFor={`${id}-time`} className="block text-xs font-medium text-muted-strong mb-1">
-              Time <span className="font-normal text-muted">(optional)</span>
+              When <span className="font-normal text-muted">(optional)</span>
             </label>
             <input
               id={`${id}-time`}
@@ -214,7 +213,7 @@ export default function PlansCard({ areaId, scenario }: { areaId: string; scenar
           </div>
           <div>
             <label htmlFor={`${id}-duration`} className="block text-xs font-medium text-muted-strong mb-1">
-              Duration
+              How long
             </label>
             <select
               id={`${id}-duration`}
@@ -229,23 +228,23 @@ export default function PlansCard({ areaId, scenario }: { areaId: string; scenar
               ))}
             </select>
           </div>
-          <Button type="submit" className="min-h-11">
+          <Button type="submit" className="col-span-2 min-h-11 @xl:col-span-1">
             Add plan
           </Button>
-          <label className="sm:col-span-4 flex items-center gap-2 text-sm text-muted-strong">
+          <label className="col-span-2 flex items-center gap-2 text-sm text-muted-strong @xl:col-span-4">
             <input
               type="checkbox"
               checked={sensitive}
               onChange={(e) => setSensitive(e.target.checked)}
               className="h-4 w-4"
             />
-            Includes children, older adults or someone with breathing problems
+            Kids, older family or someone with asthma are coming along
           </label>
         </form>
       ) : (
-        <p className="mt-4 text-sm text-muted">You can track up to {maxPlans} plans.</p>
+        <p className="mt-4 text-sm text-muted">That&apos;s {maxPlans} plans, the most we can check at once. Remove one to add another.</p>
       )}
 
-    </Card>
+    </section>
   );
 }

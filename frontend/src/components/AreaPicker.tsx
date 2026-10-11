@@ -93,7 +93,7 @@ export default function AreaPicker({ intro, onDone }: AreaPickerProps) {
           Choose your area
         </h2>
         <p className="text-sm text-muted mt-1">
-          {intro ?? "Air quality is shown for the area around your location, anywhere in India."}
+          {intro ?? "We'll show the air wherever you are in India."}
         </p>
       </div>
 
