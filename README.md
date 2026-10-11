@@ -43,29 +43,38 @@ No account is needed to check the air; you sign in only to share alerts.
 
 ## Architecture
 
+![VayuSaathi architecture](docs/architecture.png)
+
 ```mermaid
 flowchart LR
-  U[Browser<br/>Next.js app] -->|HTTPS| CF[CloudFront<br/>site · /api/*]
-  CF --> S3[(S3<br/>static site)]
-  CF --> APIGW[Amazon API Gateway<br/>throttling · Cognito authorizer]
-  U -->|SRP sign-in| COG
-  APIGW --> L1[AQI & areas]
-  APIGW --> L2[Recommendations<br/>& rules]
-  APIGW --> L8[Explain<br/>guardrails]
-  APIGW --> L3[Trends]
-  APIGW --> L4[Alerts & decisions]
-  APIGW --> L5[Notices<br/>drafts · audio]
-  APIGW --> L6[Auth]
-  L6 --> COG[Amazon Cognito]
-  L1 & L2 & L3 & L4 & L5 & L8 --> DDB[(DynamoDB<br/>readings · alerts)]
-  L1 & L2 & L4 & L5 & L8 --> RC[(DynamoDB<br/>RulesConfig)]
-  L1 & L2 & L4 & L5 & L8 -->|domain events| BUS{{EventBridge bus}}
-  BUS --> ARC[(Archive · 30 days)]
-  BUS --> EVL[CloudWatch event log]
-  L1 & L2 & L3 & L8 --> GAQ[(Google Air Quality API<br/>India NAQI · hourly history)]
+  subgraph People
+    U[Phone or browser<br/>Next.js static site · Cloudflare]
+    FAM[Family on WhatsApp<br/>Notices page]
+  end
+  U & FAM -->|HTTPS| APIGW[Amazon API Gateway<br/>throttling · Cognito authorizer]
+  U -->|SRP sign-in · TOTP| COG[Amazon Cognito<br/>pre-token trigger]
+  subgraph Lambda[AWS Lambda · Node.js 22 · arm64]
+    L1[Air quality & areas]
+    L9[Places<br/>search · hospitals]
+    L2[Advice, rules & plans]
+    L3[Trends]
+    L4[Alerts & decisions]
+    L5[Notices & audio]
+    L8[Explain]
+    L6[Accounts & profiles]
+  end
+  APIGW --> Lambda
+  L6 --> COG
+  Lambda --> DDB[(DynamoDB<br/>readings · alerts · profiles · rules)]
+  Lambda -->|domain events| BUS{{EventBridge bus}} --> ARC[(Archive · 30 days)]
   L4 --> SNS[Amazon SNS<br/>email]
-  L5 --> POLLY[Amazon Polly]
-  L5 & L8 --> SSM[SSM Parameter Store] -.-> GEM[(Google Gemini)]
+  L5 --> POLLY[Amazon Polly<br/>Hindi + English]
+  Lambda --> SSM[SSM Parameter Store<br/>encrypted keys]
+  Lambda --> CW[CloudWatch & X-Ray<br/>metrics · 7 alarms · tracing]
+  L1 & L2 & L3 --> GAQ[(Google Air Quality<br/>India AQI · history)]
+  L1 -.backup.-> IQ[(IQAir)]
+  L9 --> GP[(Google Places & Geocoding)]
+  L5 & L8 -.optional, guard-railed.-> GEM[(Google Gemini)]
 ```
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the data model, rules, events, guardrails, security and observability.
@@ -83,7 +92,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the data model, rules, events, guardr
 | Polly | Spoken English/Hindi notices |
 | SSM Parameter Store | Encrypted third-party API keys |
 | CloudWatch & X-Ray | 14-day logs, 7 alarms, tracing |
-| S3 + CloudFront | The website: a static Next.js export in a private bucket, served over HTTPS with security headers; `/api/*` is routed to API Gateway on the same address |
+| S3 + CloudFront (optional) | Ready in the template (`EnableWebsite=true`) to host the static site with security headers; off for now while the AWS account awaits CloudFront verification, so the site is served from Cloudflare |
 | SAM / CloudFormation | All infrastructure as code ([infrastructure/template.yaml](infrastructure/template.yaml)) |
 
 ## Data sources and limitations
@@ -135,7 +144,7 @@ cd infrastructure
 sam build
 sam deploy --guided --parameter-overrides "DataMode=live Stage=prod AlertEmail=you@example.com"
 cd .. && npm run seed:rules        # seed the RulesConfig table (safe to re-run; --force overwrites edits)
-npm run deploy:web                 # build the site and publish it to S3 + CloudFront (prints the URL)
+npm run deploy:web                 # only with EnableWebsite=true: publish the site to S3 + CloudFront
 ```
 
 Optional keys (stored by you in SSM Parameter Store, never in code):
