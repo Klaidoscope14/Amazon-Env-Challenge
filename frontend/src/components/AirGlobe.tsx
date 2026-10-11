@@ -39,8 +39,13 @@ function isInIndia(c: [number, number] | null): boolean {
   );
 }
 
-function cssVar(cs: CSSStyleDeclaration, name: string): string {
-  return cs.getPropertyValue(name).trim();
+/**
+ * A theme variable's value, or `fallback` when it isn't defined. The canvas
+ * throws on an empty colour string, so a stylesheet that is stale or still
+ * loading must not be able to take the whole page down.
+ */
+function cssVar(cs: CSSStyleDeclaration, name: string, fallback: string): string {
+  return cs.getPropertyValue(name).trim() || fallback;
 }
 
 /** Draws the globe: ocean, graticule, every country, country names when zoomed in. */
@@ -61,14 +66,14 @@ function drawGlobe(
 
   const cs = getComputedStyle(document.documentElement);
   const colors = {
-    oceanA: cssVar(cs, "--globe-ocean-a"),
-    oceanB: cssVar(cs, "--globe-ocean-b"),
-    land: cssVar(cs, "--globe-land"),
-    home: cssVar(cs, "--globe-land-home"),
-    border: cssVar(cs, "--globe-border"),
-    line: cssVar(cs, "--globe-line"),
-    rim: cssVar(cs, "--globe-rim"),
-    text: cssVar(cs, "--muted-strong"),
+    oceanA: cssVar(cs, "--globe-ocean-a", "#31283a"),
+    oceanB: cssVar(cs, "--globe-ocean-b", "#0b080e"),
+    land: cssVar(cs, "--globe-land", "#433a4b"),
+    home: cssVar(cs, "--globe-land-home", "#6b5262"),
+    border: cssVar(cs, "--globe-border", "rgba(14,11,16,0.9)"),
+    line: cssVar(cs, "--globe-line", "rgba(255,235,220,0.07)"),
+    rim: cssVar(cs, "--globe-rim", "rgba(255,179,143,0.5)"),
+    text: cssVar(cs, "--muted-strong", "#d9cfdc"),
   };
 
   const c = size / 2;
