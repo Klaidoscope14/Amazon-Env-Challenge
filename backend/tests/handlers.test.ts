@@ -246,7 +246,21 @@ describe("live readings and events", () => {
     expect(points["26.92,75.79"]).toMatchObject({ aqi: 233, dominant: "pm25", pm25: 100 });
     expect(points["26.92,75.79"]).not.toHaveProperty("usAqi");
     expect(points["26.93,75.80"]).toEqual(points["26.92,75.79"]);
-    expect(points["51.51,-0.13"]).toBeNull(); // outside India
+    // Outside India there is no Indian index, so the place gets an estimate
+    // from its particulates, flagged as one.
+    expect(points["51.51,-0.13"]).toMatchObject({ aqi: 233, dominant: "pm25", pm25: 100, estimated: true });
+    expect(points["26.92,75.79"]).not.toHaveProperty("estimated");
+  });
+
+  it("leaves places outside India empty when Google has no data", async () => {
+    googleDown = true;
+    try {
+      const res = await aqi(request("GET", "/api/v1/aqi/sites", { query: { points: "39.90,116.40" } }));
+      expect(res.statusCode).toBe(200);
+      expect(json(res).points["39.90,116.40"]).toBeNull();
+    } finally {
+      googleDown = false;
+    }
   });
 
   it("rejects malformed site lists", async () => {

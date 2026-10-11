@@ -2,6 +2,7 @@ import { GetParameterCommand, ParameterNotFound, SSMClient } from "@aws-sdk/clie
 import { z } from "zod";
 import { AQIReading, TrendPoint } from "./types.js";
 import { errorFields, log } from "./observability.js";
+import { indianAqiFromParticles } from "./aqi-scales.js";
 
 /*
  * Real-time air quality from the Google Air Quality API. We ask for India's
@@ -23,6 +24,7 @@ const HISTORY_CACHE_MS = 60 * 60 * 1000;
 const HISTORY_HOURS = 168;
 const CACHE_LIMIT = 200;
 export const GOOGLE_SOURCE = "Google Air Quality";
+export const GOOGLE_ESTIMATE_SOURCE = "Google Air Quality (estimated Indian AQI)";
 const INDIA_AQI = "ind_cpcb";
 
 // ---- Response validation ---------------------------------------------------
@@ -222,6 +224,59 @@ export async function getGoogleReading(
     return reading;
   } catch (err) {
     log("error", "google_aq_current_failed", errorFields(err));
+    return null;
+  }
+}
+
+/**
+ * Converts a current-conditions response for a place outside India into an
+ * estimated Indian AQI (exported for tests). Google publishes no Indian index
+ * there, so the PM2.5 / PM10 concentrations go through CPCB's breakpoints.
+ * Null when there is no particulate data.
+ */
+export function toEstimate(id: string, data: unknown): AQIReading | null {
+  const parsed = CurrentConditionsSchema.safeParse(data);
+  if (!parsed.success) throw new Error(`Google response failed validation: ${parsed.error.issues[0]?.message}`);
+  const pollutants = pollutantsOf(parsed.data);
+  const estimate = indianAqiFromParticles({ pm25: pollutants.pm25, pm10: pollutants.pm10 });
+  if (!estimate) return null;
+  return {
+    campus: id,
+    aqi: estimate.aqi,
+    dominantPollutant: estimate.dominant,
+    pollutants,
+    pollutantScale: "concentration",
+    source: GOOGLE_ESTIMATE_SOURCE,
+    stationName: id,
+    timestamp: new Date(parsed.data.dateTime).toISOString(),
+    fetchedAt: new Date().toISOString(),
+    dataMode: "live",
+  };
+}
+
+/**
+ * An estimated Indian AQI for a place outside India (the globe), or null when
+ * Google has no particulate data there. Cached per place like current readings.
+ */
+export async function getGoogleEstimate(
+  place: { lat: number; lon: number },
+  keyParam = googleKeyParamFromEnv()
+): Promise<AQIReading | null> {
+  const id = `est:${place.lat.toFixed(2)},${place.lon.toFixed(2)}`;
+  const hit = currentCache.get(id);
+  if (hit && Date.now() - hit.at < CURRENT_CACHE_MS) return hit.reading;
+  try {
+    const data = await post(
+      "currentConditions:lookup",
+      { ...requestBase(place.lat, place.lon), extraComputations: ["POLLUTANT_CONCENTRATION"] },
+      keyParam
+    );
+    const reading = toEstimate(id, data);
+    if (!reading) return null;
+    remember(currentCache, id, { reading, at: Date.now() });
+    return reading;
+  } catch (err) {
+    log("error", "google_aq_estimate_failed", errorFields(err));
     return null;
   }
 }

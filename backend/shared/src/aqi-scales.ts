@@ -47,3 +47,28 @@ export const IN: Partial<Record<ScalePollutant, Scale>> = {
   pm10: { conc: [0, 50, 100, 250, 350, 430, 510], index: [0, 50, 100, 200, 300, 400, 500] },
   o3: { conc: [0, 50, 100, 168, 208, 748, 1000], index: [0, 50, 100, 200, 300, 400, 500] },
 };
+
+/**
+ * An Indian AQI estimated from PM2.5 / PM10 concentrations, for places where
+ * no Indian index is published (anywhere outside India). Needs at least one
+ * particulate value, as CPCB does.
+ *
+ * Ozone is deliberately not used: CPCB's ozone index is an 8-hour average and
+ * an instantaneous reading would overstate it (the same reason IQAir's
+ * China-scale ozone is left out above). Particles are also instantaneous
+ * rather than 24-hour averages, so callers must label the result an estimate.
+ */
+export function indianAqiFromParticles(c: {
+  pm25?: number | null;
+  pm10?: number | null;
+}): { aqi: number; dominant: "pm25" | "pm10" } | null {
+  let best: { aqi: number; dominant: "pm25" | "pm10" } | null = null;
+  for (const pollutant of ["pm25", "pm10"] as const) {
+    const value = c[pollutant];
+    const scale = IN[pollutant];
+    if (!scale || typeof value !== "number" || !Number.isFinite(value) || value < 0) continue;
+    const index = interpolate(value, scale.conc, scale.index);
+    if (!best || index > best.aqi) best = { aqi: index, dominant: pollutant };
+  }
+  return best ? { aqi: Math.round(best.aqi), dominant: best.dominant } : null;
+}

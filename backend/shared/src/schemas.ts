@@ -99,7 +99,7 @@ export const MAX_ALERT_MESSAGE = 2000;
 export const MAX_PLANS = 12;
 const sitesMessage = `points must be up to ${MAX_SITES} "lat,lon" pairs separated by ";"`;
 
-/** GET /aqi/sites?points=28.61,77.21;19.08,72.88 — places anywhere (only those in India get a reading). */
+/** GET /aqi/sites?points=28.61,77.21;19.08,72.88 — places anywhere (India: the dashboard's reading; elsewhere: an estimate). */
 export const SitesQuerySchema = z.object({
   points: z
     .string({ error: sitesMessage })
