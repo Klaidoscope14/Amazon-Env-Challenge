@@ -24,6 +24,17 @@ import WhatsAppShare from "@/components/WhatsAppShare";
 
 const CPCB_URL = "https://cpcb.nic.in";
 
+/** Used only when GET /catalog is unreachable; the API's catalog is the source of truth. */
+const FALLBACK_DEFAULT_SCENARIO = "poor";
+const FALLBACK_SCENARIOS = [
+  { value: "good", label: "Good" },
+  { value: "satisfactory", label: "Satisfactory" },
+  { value: "moderate", label: "Moderate" },
+  { value: "poor", label: "Poor" },
+  { value: "veryPoor", label: "Very Poor" },
+  { value: "severe", label: "Severe" },
+];
+
 export default function DashboardPage() {
   // Remount per area so every piece of state belongs to one area.
   return <AreaGate>{(area) => <Dashboard key={area.id} area={area} />}</AreaGate>;
@@ -35,7 +46,11 @@ function Dashboard({ area }: { area: AreaInfo }) {
   // Demo scenarios (and the default one) come from the API's catalog.
   const catalog = useCatalog();
   const [chosenScenario, setScenario] = useState<string | null>(null);
-  const scenario = chosenScenario ?? catalog.data?.defaultDemoScenario;
+  // If the catalog can't be reached (e.g. an older deployment), presenter mode
+  // still works with the backend's standard scenario names.
+  const scenarioOptions = catalog.data?.demoScenarios ?? (catalog.isError ? FALLBACK_SCENARIOS : []);
+  const scenario =
+    chosenScenario ?? catalog.data?.defaultDemoScenario ?? (catalog.isError ? FALLBACK_DEFAULT_SCENARIO : undefined);
   const [trendHours, setTrendHours] = useState(24);
   const presenterParam = useSearchParam("presenter") !== null;
   const [presenterSeen, setPresenterSeen] = useState(false);
@@ -54,6 +69,8 @@ function Dashboard({ area }: { area: AreaInfo }) {
     queryFn: () => getAQI(area.id, activeScenario),
     enabled: ready,
     placeholderData: keepPreviousData,
+    // A 503 means "no valid reading right now": say so immediately, don't retry.
+    retry: (count, err) => !(err instanceof ApiError && err.status === 503) && count < 2,
   });
 
   const recQuery = useQuery({
@@ -99,7 +116,7 @@ function Dashboard({ area }: { area: AreaInfo }) {
                 onChange={(e) => setScenario(e.target.value)}
                 className="text-xs border border-purple-300 dark:border-purple-800 rounded px-2 py-1 bg-surface text-foreground"
               >
-                {(catalog.data?.demoScenarios ?? []).map((opt) => (
+                {scenarioOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>
