@@ -57,7 +57,7 @@ export default function SignUpPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-text"
                 placeholder="Dr. Jane Smith"
               />
             </div>
@@ -73,7 +73,7 @@ export default function SignUpPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-text"
                 placeholder="you@example.com"
               />
             </div>
@@ -91,7 +91,7 @@ export default function SignUpPage() {
                 required
                 minLength={8}
                 aria-describedby="signup-password-hint"
-                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent-text"
                 placeholder="••••••••"
               />
               <p id="signup-password-hint" className="mt-1 text-xs text-muted">
@@ -114,7 +114,7 @@ export default function SignUpPage() {
             Already have an account?{" "}
             <Link
               href="/login"
-              className="text-blue-600 hover:text-blue-700 font-medium"
+              className="text-accent-text hover:opacity-80 font-medium"
             >
               Sign In
             </Link>

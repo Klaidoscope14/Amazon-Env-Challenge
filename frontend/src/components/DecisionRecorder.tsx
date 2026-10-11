@@ -55,11 +55,11 @@ export default function DecisionRecorder({
     const at = recorded?.at ?? alert.decisionTimestamp;
     const by = recorded ? user?.name : alert.decisionBy;
     return (
-      <div className="mt-3 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 px-3 py-2">
-        <p className="text-xs text-blue-700 dark:text-blue-300 font-medium">Decision recorded</p>
-        <p className="text-sm text-blue-900 dark:text-blue-200 mt-0.5">{decision}</p>
+      <div className="mt-3 rounded-lg bg-surface-2 border border-border px-3 py-2">
+        <p className="text-xs text-accent-text font-medium">Decision recorded</p>
+        <p className="text-sm text-foreground mt-0.5">{decision}</p>
         {(at || by) && (
-          <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
+          <p className="text-xs text-accent-text mt-0.5">
             {by ? `by ${by}` : ""}
             {by && at ? " · " : ""}
             {formatTime(at)}
@@ -73,7 +73,7 @@ export default function DecisionRecorder({
     return (
       <Link
         href="/login?redirect=/alerts"
-        className="mt-3 inline-block text-sm text-muted hover:text-blue-700 underline"
+        className="mt-3 inline-block text-sm text-muted hover:opacity-80 underline"
       >
         Sign in to record a decision
       </Link>
@@ -84,7 +84,7 @@ export default function DecisionRecorder({
     return (
       <button
         onClick={() => setShowForm(true)}
-        className="mt-3 text-sm text-blue-700 hover:text-blue-900 dark:text-blue-200 font-medium"
+        className="mt-3 text-sm text-accent-text hover:text-foreground font-medium"
       >
         Record decision
       </button>

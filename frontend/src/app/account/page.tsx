@@ -23,7 +23,7 @@ export default function AccountPage() {
     return (
       <Card className="p-8 max-w-md mx-auto text-center">
         <p className="text-foreground font-medium">Sign in to manage your account.</p>
-        <Link href="/login?redirect=/account" className="mt-3 inline-block text-blue-600 font-medium">
+        <Link href="/login?redirect=/account" className="mt-3 inline-block text-accent-text font-medium">
           Sign in
         </Link>
       </Card>
@@ -132,7 +132,7 @@ export default function AccountPage() {
                 <code className="block break-all rounded bg-surface-2 px-2 py-1 font-mono text-xs text-foreground">
                   {setup.secret}
                 </code>
-                <a href={setup.otpauthUri} className="text-blue-600 font-medium">
+                <a href={setup.otpauthUri} className="text-accent-text font-medium">
                   Open in authenticator app (on this device)
                 </a>
               </div>

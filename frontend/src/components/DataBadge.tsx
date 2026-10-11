@@ -6,7 +6,7 @@ interface DataBadgeProps {
 
 const BADGE_STYLES: Record<string, string> = {
   live: "bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200 border-green-300 dark:border-green-800",
-  cached: "bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 border-blue-300 dark:border-blue-800",
+  cached: "bg-surface-2 text-muted-strong border-border-strong",
   demo: "bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-200 border-purple-300 dark:border-purple-800",
   stale: "bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 border-amber-300 dark:border-amber-800",
   unavailable: "bg-surface-2 text-foreground border-border-strong",

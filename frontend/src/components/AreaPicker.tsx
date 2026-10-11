@@ -80,7 +80,7 @@ export default function AreaPicker({ intro, onDone }: AreaPickerProps) {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="e.g. Delhi, Pune, Anand Vihar"
           autoComplete="off"
-          className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent-text"
         />
       </div>
 

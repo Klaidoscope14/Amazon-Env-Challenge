@@ -131,7 +131,7 @@ function Notice({ areaId, area }: { areaId: string; area?: AreaInfo }) {
           </section>
 
           {alert.decision && (
-            <p className="rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 px-3 py-2 text-sm text-blue-900 dark:text-blue-200">
+            <p className="rounded-lg bg-surface-2 border border-border px-3 py-2 text-sm text-foreground">
               <span className="font-medium">Action taken:</span> {alert.decision}
             </p>
           )}
@@ -196,7 +196,7 @@ function CurrentAir({ areaId }: { areaId: string }) {
         {body(current.data.hi)}
       </p>
       <p className="text-sm text-muted-strong leading-relaxed whitespace-pre-line">{body(current.data.en)}</p>
-      <Link href="/" className="inline-block text-sm font-medium text-blue-700 dark:text-blue-300 underline">
+      <Link href="/" className="inline-block text-sm font-medium text-accent-text underline">
         Plan your day with VayuSaathi
       </Link>
     </section>

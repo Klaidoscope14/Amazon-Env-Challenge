@@ -204,7 +204,7 @@ export default function AlertForm({
                 setAudience(e.target.value as Audience);
                 setConfirming(false);
               }}
-              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground bg-surface focus:outline-none focus:ring-2 focus:ring-accent-text"
             >
               {(catalog.data?.audiences ?? []).map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -229,7 +229,7 @@ export default function AlertForm({
                   setEditedEn(null);
                   setEditedHi(null);
                 }}
-                className="shrink-0 text-blue-700 underline"
+                className="shrink-0 text-accent-text underline"
               >
                 Reset to draft
               </button>
@@ -246,7 +246,7 @@ export default function AlertForm({
               onChange={(e) => setEditedEn(e.target.value)}
               disabled={draftQuery.isPending && editedEn === null}
               rows={6}
-              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-surface-2"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent-text disabled:bg-surface-2"
             />
             <p className={`text-xs mt-0.5 ${messageEn.length > MAX_MESSAGE ? "text-red-700 dark:text-red-300" : "text-muted"}`}>
               {messageEn.length}/{MAX_MESSAGE}
@@ -264,7 +264,7 @@ export default function AlertForm({
               onChange={(e) => setEditedHi(e.target.value)}
               disabled={draftQuery.isPending && editedHi === null}
               rows={6}
-              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-surface-2"
+              className="w-full rounded-lg border border-border-strong px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent-text disabled:bg-surface-2"
             />
             <p className={`text-xs mt-0.5 ${messageHi.length > MAX_MESSAGE ? "text-red-700 dark:text-red-300" : "text-muted"}`}>
               {messageHi.length}/{MAX_MESSAGE}
